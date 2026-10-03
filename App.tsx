@@ -9,6 +9,7 @@ import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
+import { StudioNavigationFrame } from './components/studio/StudioNavigationFrame';
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
@@ -706,7 +707,20 @@ const App: React.FC = () => {
     return <AppShell
         themeBackground={themePalette.appBackground}
         topBar={<StudioTopMenu model={studioMenuModel} />}
-        main={main}
+        main={(
+            <StudioNavigationFrame
+                language={language}
+                canvasView={canvasView}
+                projects={workflowProjects.map(project => ({ id: project.id, title: project.title }))}
+                activeProjectId={activeWorkflowProjectId}
+                onCanvasViewChange={setCanvasView}
+                onSelectProject={workflowSetActiveProject}
+                onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                onOpenSettings={() => setIsSettingsPanelOpen(true)}
+            >
+                {main}
+            </StudioNavigationFrame>
+        )}
         overlays={<>
             <Suspense fallback={null}>
                 <SettingsPanel
