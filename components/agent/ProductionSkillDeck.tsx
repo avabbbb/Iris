@@ -1,4 +1,4 @@
-import { BookOpen, Check, ChevronDown, Download, ExternalLink, Globe, Plus, RefreshCw, Search, Shuffle, Sparkles, Star, X } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, Download, ExternalLink, Globe, Minimize2, Plus, RefreshCw, Search, Shuffle, Sparkles, Star, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type RefObject } from 'react';
 import localforage from 'localforage';
@@ -16,6 +16,8 @@ import { buildProductionSkillStarterPrompt, productionSkillHandle } from '../../
 import type { SkillInputSlot } from '../../services/skillInputs';
 import { useSkillHubStore } from '../../stores/useSkillHubStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { translations } from '../../utils/translations';
+import { matchSlashCommands, type AgentSlashCommand } from './agentSlashCommands';
 
 const SKILL_ACCENTS = [
   ['#f4b452', '#df6b3f'],
@@ -129,6 +131,8 @@ export function ProductionSkillDeck({
   onOpenChange,
   searchQuery,
   keyboardRef,
+  commands = [],
+  onCommand,
 }: {
   attachment?: ProductionSkillAttachment;
   onChange: (attachment?: ProductionSkillAttachment) => void;
@@ -141,6 +145,10 @@ export function ProductionSkillDeck({
   searchQuery?: string;
   /** 输入框把方向键/Enter 转交给列表：↓ 进入列表，↑ 越过第一项回到输入框，Enter 选中高亮项。返回 true 表示已消费。 */
   keyboardRef?: { current: ((key: string) => boolean) | null };
+  /** 斜杠命令（/compact 等）：只在「/」打开的菜单里显示，排在 Skill 前面。 */
+  commands?: readonly AgentSlashCommand[];
+  /** 选中命令。run=true 表示输入已是完整命令名、直接执行；否则把命令写进输入框等用户补参数。 */
+  onCommand?: (command: AgentSlashCommand, options: { run: boolean }) => void;
 }) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -284,6 +292,12 @@ export function ProductionSkillDeck({
       .filter(skill => !favoriteIds.size || favoriteIds.has(skill.id));
   }, [localDeckSkills, query, activeTab, favoriteIds]);
 
+  // 命令只在「/」菜单（有 searchQuery）的本地页显示；高亮序号命令在前、Skill 在后。
+  const visibleCommands = useMemo(
+    () => (activeTab === 'local' && onCommand ? matchSlashCommands(commands, searchQuery) : []),
+    [activeTab, commands, onCommand, searchQuery],
+  );
+
   const welcomeSkills = useMemo(() => localDeckSkills.length
     ? Array.from({ length: Math.min(4, localDeckSkills.length) }, (_, index) => localDeckSkills[(shuffleOffset + index) % localDeckSkills.length])
     : [], [shuffleOffset, localDeckSkills]);
@@ -326,11 +340,20 @@ export function ProductionSkillDeck({
     if (!keyboardRef) return;
     keyboardRef.current = (key: string) => {
       if (!open || activeTab !== 'local') return false;
-      const count = filteredSkills.length;
+      const commandCount = visibleCommands.length;
+      const count = commandCount + filteredSkills.length;
       if (key === 'ArrowDown') { if (count) setHighlight(index => Math.min(index + 1, count - 1)); return true; }
       if (key === 'ArrowUp') { if (highlight < 0) return false; setHighlight(index => index - 1); return true; }
-      // 未进入列表时也吞掉 Enter，避免把半截 /xxx 当消息发出去。
-      if (key === 'Enter') { const skill = filteredSkills[highlight]; if (skill) void attach(skill); return true; }
+      if (key === 'Enter') {
+        if (highlight >= 0 && highlight < commandCount) { onCommand?.(visibleCommands[highlight], { run: false }); return true; }
+        const skill = filteredSkills[highlight - commandCount];
+        if (skill) { void attach(skill); return true; }
+        // 输入的正好是完整命令名（例如 /compact）：直接执行。
+        const exact = highlight < 0 ? visibleCommands.find(command => command.name.toLowerCase() === String(searchQuery || '').trim().toLowerCase()) : undefined;
+        if (exact) { onCommand?.(exact, { run: true }); return true; }
+        // 未进入列表时也吞掉 Enter，避免把半截 /xxx 当消息发出去。
+        return true;
+      }
       return false;
     };
     return () => { keyboardRef.current = null; };
@@ -355,6 +378,24 @@ export function ProductionSkillDeck({
       && point.x >= rect.left && point.x <= rect.right
       && point.y >= rect.top && point.y <= rect.bottom);
   };
+
+  const commandOffset = visibleCommands.length;
+  const renderCommandRow = (command: AgentSlashCommand, index: number) => (
+    <div
+      key={'command:' + command.id}
+      className={`agent-skill-picker__row agent-slash-command${index === highlight ? ' is-highlighted' : ''}`}
+      data-highlighted={index === highlight || undefined}
+      data-testid={'agent-slash-command-' + command.id}
+      ref={index === highlight ? (element: HTMLDivElement | null) => element?.scrollIntoView?.({ block: 'nearest' }) : undefined}
+      role="group"
+      aria-label={'/' + command.name}
+    >
+      <button type="button" className="agent-skill-picker__row-main" onClick={() => onCommand?.(command, { run: false })}>
+        <span className="agent-slash-command__mark" aria-hidden="true"><Minimize2 size={15} /></span>
+        <span><strong>/{command.name}{command.args && <em>{command.args}</em>}</strong><small>{command.description}</small></span>
+      </button>
+    </div>
+  );
 
   const renderRow = (skill: DeckSkill, index: number) => (
     <motion.div
@@ -479,8 +520,15 @@ export function ProductionSkillDeck({
                 )}
               </div>
               <div className="agent-skill-picker__list">
-                {activeTab === 'local' && filteredSkills.map((skill, index) => renderRow(skill, index))}
-                {activeTab === 'local' && !filteredSkills.length && (
+                {visibleCommands.length > 0 && (
+                  <div className="agent-slash-command__group" role="group" aria-label={translations[language].agentPanel.slashCommands}>
+                    <div className="agent-slash-command__label">{translations[language].agentPanel.slashCommands}</div>
+                    {visibleCommands.map((command, index) => renderCommandRow(command, index))}
+                    {filteredSkills.length > 0 && <div className="agent-slash-command__label">Skill</div>}
+                  </div>
+                )}
+                {activeTab === 'local' && filteredSkills.map((skill, index) => renderRow(skill, index + commandOffset))}
+                {activeTab === 'local' && !filteredSkills.length && !visibleCommands.length && (
                   <div className="agent-skill-picker__empty">
                     {registryStatus === 'unavailable'
                       ? copy.desktopScan

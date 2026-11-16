@@ -50,14 +50,27 @@ import { createMemoryTool, formatMemorySummary, MEMORY_TOOL_NAME, type AgentMemo
 import {
   BROWSER_AGENT_CONTEXT_WINDOW,
   classifyAgentRequestFailure,
+  compactionThresholdTokens,
   compactSession,
   DEFAULT_AGENT_COMPACTION_SETTINGS,
+  DEFAULT_KEEP_RECENT_TURNS,
   estimateRequestTokens,
+  estimateTextTokens,
   isContextOverflowMessage,
   OVERFLOW_KEEP_RECENT_TOKENS,
   shouldCompactContext,
   type AgentCompactionSettings,
+  type FlovartCompactionDetails,
 } from './agentCompaction';
+import {
+  learnedModelLimits,
+  MIN_MAX_OUTPUT_TOKENS,
+  modelContextWindow,
+  parseContextLimitFromError,
+  rememberModelLimits,
+  resolveContextWindow,
+  resolveMaxOutputTokens,
+} from './agentContextLimits';
 import { agentMemoryStoreBackend } from '../stores/useAgentMemoryStore';
 import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
 
@@ -200,18 +213,35 @@ export interface BrowserAgentTextRoute {
   timeouts?: Partial<{ firstChunkMs: number; idleMs: number; retries: number; retryBaseMs: number }>;
   baseUrl: string;
   apiKey: string;
+  /** 模型对象上声明的上下文窗口（模型列表接口的 context_length 等，可选）；缺省按 128K。 */
+  contextWindow?: number;
+}
+
+/** 当前线路的有效上下文窗口：学到的真实窗口 / 模型声明 / 默认 128K 取最可信的。 */
+export function routeContextWindow(route: Pick<BrowserAgentTextRoute, 'baseUrl' | 'model' | 'contextWindow'>, declared?: number): number {
+  return resolveContextWindow({ declared: declared ?? route.contextWindow, learned: learnedModelLimits(route)?.contextWindow, fallback: BROWSER_AGENT_CONTEXT_WINDOW });
+}
+
+/** 当前线路请求用的 max_tokens（默认 16384，按学到的输出上限 / 窗口下调）。 */
+export function routeMaxOutputTokens(route: Pick<BrowserAgentTextRoute, 'baseUrl' | 'model' | 'contextWindow'>, declared?: number): number {
+  const learned = learnedModelLimits(route);
+  const window = learned?.contextWindow ?? declared ?? route.contextWindow;
+  return resolveMaxOutputTokens({ contextWindow: window, learnedMaxOutput: learned?.maxOutputTokens });
 }
 
 export function resolveBrowserAgentTextRoute(keys: UserApiKey[]): BrowserAgentTextRoute | null {
   // 显式 agent-text 映射优先；没有时回退到默认文本 Key 的默认模型（见 agentTextRoutes）。
   const first = resolveAgentTextRoutes(keys)[0];
   if (!first) return null;
+  // 模型条目上的 contextWindow 是可选字段（模型列表接口返回时才有）：按结构读取，没有就不带。
+  const contextWindow = modelContextWindow((first.key.models || []).find(item => item.id === first.model));
   return {
     provider: first.key.provider,
     model: first.model,
     baseUrl: first.baseUrl,
     apiKey: first.key.key,
     ...(first.key.streamUsage === 'request' ? { streamUsage: 'request' as const } : {}),
+    ...(contextWindow ? { contextWindow } : {}),
   };
 }
 
@@ -411,7 +441,7 @@ export function buildBrowserAgentRequestBody(
   route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
   context: { systemPrompt?: string; messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
   thinkingLevel: AgentThinkingLevel = 'off',
-  options: { textOnly?: boolean } = {},
+  options: { textOnly?: boolean; maxTokens?: number } = {},
 ): Record<string, unknown> {
   const reasoning = buildReasoningParams(thinkingLevel, route);
   const messages = toOpenAIMessages(context.messages, {
@@ -433,7 +463,7 @@ export function buildBrowserAgentRequestBody(
     stream: true,
     // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致；Anthropic 开启思考时不允许改 temperature。
     ...(reasoning.dropTemperature ? {} : { temperature: 0.2 }),
-    max_tokens: 16384,
+    max_tokens: options.maxTokens ?? 16384,
     ...reasoning.params,
   };
 }
@@ -452,7 +482,7 @@ export const BROWSER_AGENT_STREAM_DEFAULTS = {
 /** 用户主动停止时写进助手消息的文案；面板据此显示「已中止」而不是红色错误卡。 */
 export const AGENT_ABORTED_MESSAGE = '已中止';
 /** 服务商报上下文超限时写进助手消息的文案（classifyAgentRequestFailure 认得它，内核据此压缩后重试一次）。 */
-export const AGENT_CONTEXT_OVERFLOW_MESSAGE = '对话上下文超出模型上限（context length exceeded）：可在会话菜单里「压缩上下文」后重试。';
+export const AGENT_CONTEXT_OVERFLOW_MESSAGE = '对话上下文超出模型上限（context length exceeded）：可输入 /compact 或在会话菜单里「压缩上下文」后重试。';
 
 class StreamStallError extends Error {
   constructor(readonly phase: 'first' | 'idle', readonly ms: number) {
@@ -518,6 +548,9 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
     // pi-agent-core 把 state.thinkingLevel 作为 options.reasoning 传进来（off 时为 undefined）。
     const requested = normalizeThinkingLevel((options as { reasoning?: unknown } | undefined)?.reasoning);
     let thinkingLevel: AgentThinkingLevel = requested !== 'off' && isReasoningUnsupported(route.model) ? 'off' : requested;
+    // max_tokens：默认 16384，学到真实窗口 / 输出上限后下调（模型对象的 contextWindow 由内核放在 model 上）。
+    const declaredWindow = modelContextWindow(model);
+    let maxTokens = routeMaxOutputTokens(route, declaredWindow);
     const userSignal = options?.signal;
     void (async () => {
       // 每次尝试一个新的 AbortController（不复用已 abort 的控制器）；用户停止通过 userSignal 级联。
@@ -546,7 +579,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
             let sentImages = false;
             const request = (level: AgentThinkingLevel) => {
               const textOnly = isRouteTextOnly(route);
-              const body = buildBrowserAgentRequestBody(route, context as never, level, { textOnly });
+              const body = buildBrowserAgentRequestBody(route, context as never, level, { textOnly, maxTokens });
               sentImages = !textOnly && hasImageParts(body.messages as Array<Record<string, unknown>>);
               return fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
                 method: 'POST',
@@ -573,6 +606,22 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
                 // 纯文本模型收到图片：记住这条线路，去掉图片内容重试一次（Agent 改按画布节点 id 引用）。
                 markRouteTextOnly(route);
                 response = await request(thinkingLevel);
+              }
+            }
+            if (!response.ok && response.status !== 429 && response.status < 500) {
+              const body = await response.clone().text().catch(() => '');
+              // 「maximum context length is N tokens」类报错：记住真实窗口 / 输出上限，下调 max_tokens 后重试一次。
+              // 输入本身已经超过窗口时下调输出没用，交给内核压缩重试（内核按学到的窗口算阈值）。
+              const parsed = parseContextLimitFromError(body);
+              if (parsed && (parsed.maxOutputTokens || classifyAgentRequestFailure(body) === 'context_overflow')) {
+                const learned = rememberModelLimits(route, parsed);
+                const window = learned.contextWindow ?? declaredWindow;
+                const next = resolveMaxOutputTokens({ contextWindow: window, learnedMaxOutput: learned.maxOutputTokens, inputTokens: parsed.inputTokens });
+                const inputFits = !parsed.inputTokens || !window || parsed.inputTokens + MIN_MAX_OUTPUT_TOKENS < window;
+                if (next < maxTokens && inputFits) {
+                  maxTokens = next;
+                  response = await request(thinkingLevel);
+                }
               }
             }
             if (!response.ok) {
@@ -1183,21 +1232,46 @@ export interface BrowserAgentKernelOptions {
   skillCatalog?: AgentSkillCatalog;
   /** 项目记忆；缺省用 useAgentMemoryStore（localforage），null 表示关闭。 */
   memory?: AgentMemoryBackend | null;
-  /** 模型上下文窗口（token），缺省 128K。 */
+  /** 模型上下文窗口（token）；缺省读 route.contextWindow，再没有按 128K。学到的真实窗口更小时以学到的为准。 */
   contextWindow?: number;
   /** 覆盖自动压缩设置（测试用）。 */
   compaction?: Partial<AgentCompactionSettings>;
 }
 
-/** 压缩前后在面板上显示的一条系统提示。 */
-function compactionNotice(entry: { id: string; tokensBefore?: number; timestamp?: string }): ReturnType<typeof snapshotMessage> {
-  const tokens = Number(entry.tokensBefore || 0);
+/** 快照里压缩记录的结构化信息：面板据此画「已压缩」卡片。 */
+export interface CompactionNoticeInfo {
+  tokensBefore: number;
+  tokensAfter?: number;
+  focus?: string;
+  reason?: FlovartCompactionDetails['reason'];
+}
+
+const formatK = (tokens: number) => (tokens >= 1000 ? `${Math.round(tokens / 1000)}K` : String(Math.max(0, Math.round(tokens))));
+
+/** 压缩前后在面板上显示的一条系统提示（text 供复制 / 旧面板；compaction 供卡片）。 */
+function compactionNotice(entry: { id: string; tokensBefore?: number; timestamp?: string; details?: unknown }): ReturnType<typeof snapshotMessage> & { compaction: CompactionNoticeInfo } {
+  const flovart = ((entry.details as { flovart?: FlovartCompactionDetails } | undefined)?.flovart) || {};
+  const tokens = Number(flovart.tokensBefore || entry.tokensBefore || 0);
+  const after = Number(flovart.tokensAfter || 0);
+  const range = tokens > 0 && after > 0 ? `约 ${formatK(tokens)} → ${formatK(after)} tokens` : tokens > 0 ? `约 ${formatK(tokens)} tokens 的早期对话` : '早期对话';
   return {
     id: entry.id,
     role: 'system',
-    text: tokens > 0 ? `已压缩上下文：约 ${Math.round(tokens / 1000)}K tokens 的早期对话整理成了摘要，技能已读记录与项目记忆保留。` : '已压缩上下文：早期对话整理成了摘要。',
+    text: `已压缩上下文：${range}整理成了摘要，技能已读记录与项目记忆保留。${flovart.focus ? `（重点：${flovart.focus}）` : ''}`,
     timestamp: entry.timestamp ? Date.parse(entry.timestamp) : undefined,
+    compaction: {
+      tokensBefore: tokens,
+      ...(after > 0 ? { tokensAfter: after } : {}),
+      ...(flovart.focus ? { focus: flovart.focus } : {}),
+      ...(flovart.reason ? { reason: flovart.reason } : {}),
+    },
   };
+}
+
+/** pi-agent-core prepareNextTurn 的上下文（只用到这几个字段）。 */
+interface MidTurnContext {
+  toolResults: unknown[];
+  context: { systemPrompt: string; messages: AgentMessage[]; tools?: unknown };
 }
 
 interface OverflowGuard {
@@ -1227,13 +1301,16 @@ export class BrowserAgentKernel {
   /** 当前分支里的压缩次数；技能已读记录按它判断原文是否还在上下文里。 */
   private compactionEpoch = 0;
   private readonly memory: AgentMemoryBackend | null;
-  private readonly contextWindow: number;
+  /** 调用方 / 模型对象声明的窗口；有效窗口见 contextWindow getter（学到的真实窗口更小时用学到的）。 */
+  private readonly declaredContextWindow: number | undefined;
   private readonly compactionSettings: AgentCompactionSettings;
   private overflowGuard: OverflowGuard | null = null;
   private compactionController: AbortController | null = null;
   private compacting = false;
   /** 每次停止 +1：压缩（模型调用）期间用户点了停止，就不再接着发这一轮。 */
   private cancelEpoch = 0;
+  /** 本轮回合中途压缩已无效（压不动或压完仍超阈值），send() 开始时重置。 */
+  private midTurnExhausted = false;
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
@@ -1241,7 +1318,7 @@ export class BrowserAgentKernel {
     this.route = options.route;
     this.skillCatalog = options.skillCatalog ?? new MergedSkillCatalog();
     this.memory = options.memory === undefined ? agentMemoryStoreBackend : options.memory;
-    this.contextWindow = options.contextWindow ?? BROWSER_AGENT_CONTEXT_WINDOW;
+    this.declaredContextWindow = options.contextWindow ?? options.route.contextWindow;
     this.compactionSettings = { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...(options.compaction || {}) };
     // 与 Node 内核一致：任务清单、技能读取、项目记忆是内核自带工具，调用方已提供同名工具时不重复注册。
     const builtins: AgentTool[] = [];
@@ -1261,6 +1338,21 @@ export class BrowserAgentKernel {
     this.confirm = options.confirm;
     this.initialSkillAttachment = options.skillAttachment ?? null;
     this.systemPrompt = options.systemPrompt ?? BROWSER_DEFAULT_SYSTEM_PROMPT;
+  }
+
+  /** 有效上下文窗口：学到的真实窗口 / 声明窗口 / 默认 128K。 */
+  get contextWindow(): number {
+    return routeContextWindow(this.route, this.declaredContextWindow);
+  }
+
+  /** 当前请求的 max_tokens。 */
+  get maxOutputTokens(): number {
+    return routeMaxOutputTokens(this.route, this.declaredContextWindow);
+  }
+
+  /** 自动压缩阈值（token）。 */
+  get compactionThreshold(): number {
+    return compactionThresholdTokens(this.contextWindow, this.compactionSettings);
   }
 
   subscribe(listener: (event: { type: string; [key: string]: unknown }) => void): () => void {
@@ -1363,7 +1455,7 @@ export class BrowserAgentKernel {
           input: ['text', 'image'],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           contextWindow: this.contextWindow,
-          maxTokens: 16_384,
+          maxTokens: this.maxOutputTokens,
         } as never,
         tools: wrappedTools as never,
         messages: context.messages,
@@ -1378,6 +1470,8 @@ export class BrowserAgentKernel {
       ),
       // 预期内失败由工具以 details.isError 标记，这里统一翻成 isError。
       afterToolCall: async ({ result }) => ((result as { details?: { isError?: boolean } } | undefined)?.details?.isError ? { isError: true } : undefined),
+      // 回合中途压缩：工具结果写回后、下一次调用模型前，估算超过阈值就先压缩再继续。
+      prepareNextTurnWithContext: async context => (await this.compactMidTurn(context as unknown as MidTurnContext)) as never,
     });
 
     this.unsubscribe = this.agent.subscribe(async event => {
@@ -1404,14 +1498,16 @@ export class BrowserAgentKernel {
     }
   }
 
-  /** 每轮发送前同步思考强度：模型的 reasoning 标记与 Agent 的 thinkingLevel 一起切换。 */
+  /** 每轮发送前同步思考强度与上下文上限：模型的 reasoning 标记、contextWindow / maxTokens（可能刚从报错里学到）。 */
   private syncThinkingLevel(): void {
     if (!this.agent) return;
     const level = this.currentThinkingLevel();
     this.agent.state.thinkingLevel = level;
-    const current = this.agent.state.model as unknown as { reasoning?: boolean };
-    if (Boolean(current.reasoning) !== (level !== 'off')) {
-      this.agent.state.model = { ...(this.agent.state.model as object), reasoning: level !== 'off' } as never;
+    const current = this.agent.state.model as unknown as { reasoning?: boolean; contextWindow?: number; maxTokens?: number };
+    const contextWindow = this.contextWindow;
+    const maxTokens = this.maxOutputTokens;
+    if (Boolean(current.reasoning) !== (level !== 'off') || current.contextWindow !== contextWindow || current.maxTokens !== maxTokens) {
+      this.agent.state.model = { ...(this.agent.state.model as object), reasoning: level !== 'off', contextWindow, maxTokens } as never;
     }
   }
 
@@ -1566,19 +1662,44 @@ export class BrowserAgentKernel {
     });
   }
 
+  /** 系统提示词 + 工具定义的估算 token（压缩后估算用）。 */
+  private overheadTokens(): number {
+    if (!this.agent) return 0;
+    return estimateTextTokens(this.agent.state.systemPrompt || '')
+      + estimateTextTokens(JSON.stringify(this.tools.map(tool => ({ name: tool.name, description: tool.description, parameters: tool.parameters }))));
+  }
+
   /** 压缩一次并把 Agent 的消息换成压缩后的上下文；没有可压缩的历史返回 null。 */
-  private async runCompaction(reason: 'threshold' | 'overflow' | 'manual'): Promise<{ tokensBefore: number } | null> {
+  private async runCompaction(
+    reason: NonNullable<FlovartCompactionDetails['reason']>,
+    options: { focus?: string } = {},
+  ): Promise<{ tokensBefore: number; tokensAfter: number } | null> {
     if (!this.session || !this.agent || !this.streamFn) return null;
     this.compacting = true;
     this.compactionController = new AbortController();
     let started = false;
+    const window = this.contextWindow;
+    // 小窗口（例如学到的 8K / 32K）不能照搬 20000 的保留量：最多保留窗口的 30%（溢出重试 25%）。
+    const keepRecentTokens = reason === 'overflow'
+      ? Math.min(OVERFLOW_KEEP_RECENT_TOKENS, Math.floor(window * 0.25))
+      : reason === 'manual'
+        ? Math.min(this.compactionSettings.keepRecentTokens, 2_000)
+        : Math.min(this.compactionSettings.keepRecentTokens, Math.floor(window * 0.3));
+    const focus = String(options.focus || '').trim();
     try {
       const outcome = await compactSession({
-        onStart: () => { started = true; this.emit({ type: 'compaction_start', reason }); },
+        onStart: () => { started = true; this.emit({ type: 'compaction_start', reason, ...(focus ? { focus } : {}) }); },
         session: this.session,
         streamFn: this.streamFn,
         model: this.agent.state.model,
-        keepRecentTokens: reason === 'overflow' ? OVERFLOW_KEEP_RECENT_TOKENS : this.compactionSettings.keepRecentTokens,
+        keepRecentTokens,
+        // 手动 /compact：保留最近几轮原文（最多占窗口一半），其余整理成摘要。
+        ...(reason === 'manual' ? { keepRecentTurns: DEFAULT_KEEP_RECENT_TURNS, keepRecentCap: Math.floor(window * 0.5) } : {}),
+        ...(reason === 'midturn' ? { keepCurrentStep: true } : {}),
+        focus,
+        reason,
+        overheadTokens: this.overheadTokens(),
+        estimateBefore: this.estimateContextTokens(),
         signal: this.compactionController.signal,
       });
       if (outcome) {
@@ -1587,8 +1708,15 @@ export class BrowserAgentKernel {
         this.agent.state.messages = (await this.session.buildContext()).messages;
         this.agent.state.systemPrompt = await this.composeSystemPrompt();
       }
-      if (started) this.emit({ type: 'compaction_end', reason, compacted: Boolean(outcome), tokensBefore: outcome?.tokensBefore ?? 0 });
-      return outcome ? { tokensBefore: outcome.tokensBefore } : null;
+      if (started) this.emit({
+        type: 'compaction_end',
+        reason,
+        compacted: Boolean(outcome),
+        tokensBefore: outcome?.tokensBefore ?? 0,
+        tokensAfter: outcome?.tokensAfter ?? 0,
+        ...(focus ? { focus } : {}),
+      });
+      return outcome ? { tokensBefore: outcome.tokensBefore, tokensAfter: outcome.tokensAfter } : null;
     } catch (error) {
       if (started) this.emit({ type: 'compaction_end', reason, compacted: false, error: displayError(error, '上下文压缩失败。') });
       throw error;
@@ -1598,12 +1726,39 @@ export class BrowserAgentKernel {
     }
   }
 
-  /** 手动「压缩上下文」：运行中不压缩；历史太短时返回 compacted=false。 */
-  async compactContext(): Promise<{ compacted: boolean; tokensBefore?: number }> {
+  /**
+   * 手动压缩（/compact [聚焦说明] 或会话菜单「压缩上下文」）：运行中不压缩；
+   * 聚焦说明拼进摘要要求；保留最近几轮原文；历史太短时返回 compacted=false。
+   */
+  async compactContext(focus?: string): Promise<{ compacted: boolean; tokensBefore?: number; tokensAfter?: number }> {
     if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
     if (this.agent.state.isStreaming || this.compacting) throw new Error('Agent 正在运行，请等这一轮结束后再压缩上下文。');
-    const outcome = await this.runCompaction('manual');
-    return outcome ? { compacted: true, tokensBefore: outcome.tokensBefore } : { compacted: false };
+    const outcome = await this.runCompaction('manual', { focus });
+    return outcome ? { compacted: true, tokensBefore: outcome.tokensBefore, tokensAfter: outcome.tokensAfter } : { compacted: false };
+  }
+
+  /**
+   * 回合中途压缩：pi 的循环在每次工具结果写回后调用（prepareNextTurn）。只有还要接着调用模型时
+   * （本步有工具结果）才检查；估算超过阈值就压缩，并把压缩后的上下文交回循环继续。失败或被停止时不改上下文。
+   */
+  private async compactMidTurn(context: MidTurnContext): Promise<{ context: MidTurnContext['context'] } | undefined> {
+    try {
+      if (!this.agent || this.compacting || this.midTurnExhausted || !context?.toolResults?.length) return undefined;
+      if (!shouldCompactContext(this.estimateContextTokens(), this.contextWindow, this.compactionSettings)) return undefined;
+      const cancelEpoch = this.cancelEpoch;
+      const outcome = await this.runCompaction('midturn');
+      if (!outcome || this.cancelEpoch !== cancelEpoch || !this.agent) {
+        // 没有可压缩的历史：这一轮不再每步重试。
+        if (!outcome) this.midTurnExhausted = true;
+        return undefined;
+      }
+      // 压完仍超阈值（当前这一步本身就很大）：这一轮不再中途压缩，避免每步都压一次；真溢出时还有溢出重试。
+      if (shouldCompactContext(this.estimateContextTokens(), this.contextWindow, this.compactionSettings)) this.midTurnExhausted = true;
+      return { context: { ...context.context, systemPrompt: this.agent.state.systemPrompt, messages: this.agent.state.messages.slice() } };
+    } catch {
+      // 已通过 compaction_end 报告；继续用原上下文（溢出时还有一次压缩重试）。
+      return undefined;
+    }
   }
 
   /** 发送前检查：估算超过阈值就先压缩；压缩失败不拦截发送（溢出时还有一次压缩重试）。 */
@@ -1728,6 +1883,7 @@ export class BrowserAgentKernel {
     }
 
     this.syncThinkingLevel();
+    this.midTurnExhausted = false;
     const agent = this.agent;
     agent.state.systemPrompt = await this.composeSystemPrompt();
     const cancelEpoch = this.cancelEpoch;
@@ -1764,7 +1920,7 @@ export class BrowserAgentKernel {
     projectId: string;
     boundProductionSkill: ProductionSkillAttachment | null;
     productionSkillBindingError: string | null;
-    messages: Array<ReturnType<typeof snapshotMessage>>;
+    messages: Array<ReturnType<typeof snapshotMessage> & { compaction?: CompactionNoticeInfo }>;
     running: boolean;
   }> {
     if (!this.session) throw new Error('Flovart Agent session is not open');
@@ -1777,7 +1933,7 @@ export class BrowserAgentKernel {
       productionSkillBindingError: this.productionSkillBindingError,
       messages: entries
         .filter(entry => entry.type === 'message' || entry.type === 'compaction')
-        .map(entry => (entry.type === 'compaction' ? compactionNotice(entry as { id: string; tokensBefore?: number; timestamp?: string }) : snapshotMessage(entry)))
+        .map(entry => (entry.type === 'compaction' ? compactionNotice(entry as { id: string; tokensBefore?: number; timestamp?: string; details?: unknown }) : snapshotMessage(entry)))
         .filter(message => message.role !== 'assistant' || message.text || message.thinking || message.error),
       running: Boolean(this.agent?.state.isStreaming),
     };

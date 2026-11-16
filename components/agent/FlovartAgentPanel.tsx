@@ -68,6 +68,9 @@ import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from 
 import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
 import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNav';
 import { quotePreview, withQuote } from './agentQuote';
+import { compactionTokensLine, type AgentCompactionInfo } from './AgentCompactionCard';
+import { agentSlashCommands, insertSlashCommand, type AgentSlashCommand } from './agentSlashCommands';
+import { parseCompactCommand } from '../../services/agentCompaction';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
@@ -134,7 +137,7 @@ function latestTurnFailed(snapshot: { messages: Array<{ role: string; error?: st
 }
 
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; compaction?: AgentCompactionInfo }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
@@ -149,7 +152,19 @@ function displayMessages(snapshot: {
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
     ...(message.role === 'tool' ? { toolName: message.toolName, toolCallId: message.toolCallId } : {}),
     ...(message.role === 'user' ? userReferences(message.text) : {}),
+    // 内置内核的压缩记录：画成「已压缩」卡片（显示压缩前后的大概 token 数与聚焦说明）。
+    ...(message.compaction ? { compaction: message.compaction, text: compactionDisplayText(message.compaction, language) } : {}),
   }));
+}
+
+/** 压缩卡片的纯文本（复制对话 / 时间轴预览用）。 */
+function compactionDisplayText(info: AgentCompactionInfo, language: 'en' | 'zho'): string {
+  const copy = translations[language].agentPanel;
+  if (info.error) return `${copy.compactCardFailed}：${info.error}`;
+  if (info.pending) return copy.compactCardPending;
+  const tokens = compactionTokensLine(info, language);
+  const focus = info.focus ? ` · ${copy.compactCardFocus}：${info.focus}` : '';
+  return `${copy.compactCardTitle}${tokens ? `（${tokens}）` : ''}${focus}`;
 }
 
 /** 用户消息里的画布引用：优先读带 nodeId 的「引用上下文」，旧消息只剩「引用：@…」时按名字。 */
@@ -304,6 +319,8 @@ const userApiKeysRef = useRef(userApiKeys);
   const [preferredModel, setPreferredModel] = useState<AgentModelSelection | null>(null);
   // ProductionSkillDeck 注册的键盘处理：返回 true 表示该按键已被 Skill 列表消费。
   const skillNav = useRef<((key: string) => boolean) | null>(null);
+  // 压缩进行中的实时卡片 id（compaction_start → compaction_end）。
+  const liveCompactionId = useRef('');
   const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean; installed?: boolean; evaluationNote?: string }) | null>(null);
   const presentConfirmation = (next: PendingConfirmation) => {
     const pending = next.id ? next : { ...next, id: crypto.randomUUID() };
@@ -734,6 +751,35 @@ const userApiKeysRef = useRef(userApiKeys);
       }, `tool-${event.toolCallId || ''}`);
       return;
     }
+    if (event.type === 'compaction_start') {
+      // 压缩进行中：先放一张「正在压缩」卡片，结束后换成结果；回合结束的快照会换成持久化的那张。
+      const id = 'compaction-live-' + crypto.randomUUID();
+      liveCompactionId.current = id;
+      const info: AgentCompactionInfo = {
+        tokensBefore: 0,
+        pending: true,
+        ...(event.reason ? { reason: event.reason as AgentCompactionInfo['reason'] } : {}),
+        ...(typeof event.focus === 'string' && event.focus ? { focus: event.focus } : {}),
+      };
+      setMessages(items => [...items, { id, role: 'system', text: compactionDisplayText(info, languageRef.current), compaction: info }]);
+      return;
+    }
+    if (event.type === 'compaction_end') {
+      const id = liveCompactionId.current;
+      liveCompactionId.current = '';
+      if (!id) return;
+      setMessages(items => {
+        if (!event.compacted && !event.error) return items.filter(item => item.id !== id);
+        return items.map(item => {
+          if (item.id !== id || !item.compaction) return item;
+          const info: AgentCompactionInfo = event.error
+            ? { ...item.compaction, pending: false, error: String(event.error) }
+            : { ...item.compaction, pending: false, tokensBefore: Number(event.tokensBefore) || 0, tokensAfter: Number(event.tokensAfter) || undefined };
+          return { ...item, compaction: info, text: compactionDisplayText(info, languageRef.current) };
+        });
+      });
+      return;
+    }
     if (event.type === 'session_switched') {
       const kernel = kernelRef.current;
       if (kernel) void kernel.snapshot().then(snapshot => {
@@ -779,19 +825,44 @@ const userApiKeysRef = useRef(userApiKeys);
     }
   };
 
-  /** 会话菜单「压缩上下文」：只对浏览器内置内核可用，运行中不压缩。 */
-  const handleCompactContext = async () => {
+  /**
+   * 手动压缩：/compact [聚焦说明] 或会话菜单「压缩上下文」。只对浏览器内置内核可用，运行中不压缩。
+   * 聚焦说明拼进摘要要求；最近几轮保留原文；完成后面板里出现「已压缩」卡片（快照里的压缩记录）。
+   */
+  const handleCompactContext = async (focus?: string) => {
     const kernel = kernelRef.current;
-    if (!kernel || sending) return;
     dispatchLayer({ type: 'close', layer: 'sessions' });
+    if (!kernel) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: t('agentPanel.compactUnsupported') }]);
+      return;
+    }
+    if (sending || turnRef.current.phase !== 'idle') {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: t('agentPanel.compactBusy') }]);
+      return;
+    }
+    stickToBottom.current = true;
     try {
-      const result = await kernel.compactContext();
+      const result = await kernel.compactContext(focus);
       const snapshot = await kernel.snapshot();
       setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current));
       flashCopied(result.compacted ? t('agentPanel.compactDone') : t('agentPanel.compactNotNeeded'));
     } catch (error) {
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+      setMessages(items => [...items.filter(item => !item.compaction?.pending), { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
+  };
+
+  /** 斜杠菜单里选中命令：run=true（输入已是完整的 /compact）直接执行，否则写进输入框等用户补聚焦说明。 */
+  const handleSlashCommand = (command: AgentSlashCommand, options: { run: boolean }) => {
+    dispatchLayer({ type: 'clearSlash' });
+    dispatchLayer({ type: 'close', layer: 'skill' });
+    if (command.id !== 'compact') return;
+    if (options.run) {
+      setPrompt('');
+      void handleCompactContext();
+      return;
+    }
+    setPrompt(current => insertSlashCommand(current, command));
+    focusComposer();
   };
 
   const openMemoryView = () => {
@@ -961,6 +1032,14 @@ const userApiKeysRef = useRef(userApiKeys);
   const send = async () => {
     const typed = prompt.trim();
     if (!typed && !quote && references.length === 0 && attachments.length === 0) return;
+    // /compact [聚焦说明]：不发给模型，走手动压缩（omp 风格）。
+    const compactCommand = !quote ? parseCompactCommand(typed) : null;
+    if (compactCommand) {
+      setPrompt('');
+      dispatchLayer({ type: 'closeAll' });
+      await handleCompactContext(compactCommand.focus);
+      return;
+    }
     // 引用回复：引文以 Markdown 引用块放在正文前，进入模型上下文，气泡里显示为引用块。
     const text = withQuote(typed, quote?.text);
     // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
@@ -1248,6 +1327,9 @@ const userApiKeysRef = useRef(userApiKeys);
       {pendingHere && pendingPlanCard}
     </>;
   };
+  // 斜杠命令只在输入框以「/」开头时出现（/compact 只认开头），且只对浏览器内置内核可用。
+  const slashCommands = /^\s*\/[^\s/]*$/.test(prompt) ? agentSlashCommands(language === 'en' ? 'en' : 'zho', { builtin: Boolean(kernelRef.current) }) : [];
+
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
@@ -1452,6 +1534,8 @@ const userApiKeysRef = useRef(userApiKeys);
             onOpenChange={next => dispatchLayer(next ? { type: 'open', layer: 'skill' } : { type: 'close', layer: 'skill' })}
             searchQuery={slashQuery ?? undefined}
             keyboardRef={skillNav}
+            commands={slashCommands}
+            onCommand={handleSlashCommand}
           />
           {mentionOpen && <div className="agent-reference-picker" role="listbox" aria-label="@ 引用节点和资产">
             <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? `替换“${replaceTarget.label}”为…` : mentionQuery ? `搜索“${mentionQuery}”` : '引用节点或我的素材'}</span></div>

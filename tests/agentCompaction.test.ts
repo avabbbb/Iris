@@ -19,16 +19,18 @@ const assistant = (text: string, totalTokens = 0, stopReason = 'stop') => ({
 }) as unknown as AgentMessage;
 
 describe('compaction thresholds (modeled on oh-my-pi)', () => {
-  it('reserves max(15% window, 16384) and triggers past window - reserve', () => {
+  it('triggers at 80% of the window, never past window - max(15% window, 16384)', () => {
     expect(budgetReserveTokens(128_000, { enabled: true, keepRecentTokens: 20_000 })).toBe(19_200);
-    expect(compactionThresholdTokens(128_000)).toBe(108_800);
+    expect(compactionThresholdTokens(128_000)).toBe(102_400);
+    expect(compactionThresholdTokens(200_000)).toBe(160_000);
     expect(compactionThresholdTokens(32_000)).toBe(32_000 - 16_384);
-    expect(shouldCompactContext(108_800, 128_000)).toBe(false);
-    expect(shouldCompactContext(108_801, 128_000)).toBe(true);
+    expect(shouldCompactContext(102_400, 128_000)).toBe(false);
+    expect(shouldCompactContext(102_401, 128_000)).toBe(true);
   });
 
   it('falls back to the proportional reserve on tiny windows and honours percentages', () => {
-    expect(compactionThresholdTokens(16_000)).toBe(16_000 - 2_400);
+    expect(compactionThresholdTokens(16_000)).toBe(12_800);
+    expect(compactionThresholdTokens(8_000)).toBe(6_400);
     expect(compactionThresholdTokens(100_000, { enabled: true, keepRecentTokens: 1, thresholdPercent: 50 })).toBe(50_000);
     expect(shouldCompactContext(10_000_000, 128_000, { enabled: false, keepRecentTokens: 1 })).toBe(false);
   });

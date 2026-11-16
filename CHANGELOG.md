@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Agent 上下文压缩（omp 风格 `/compact`）：输入框打「/」时斜杠菜单里新增 `/compact [聚焦说明]`（排在 Skill 前面，键盘可选；只对内置 Agent 显示），例如 `/compact 保留接口设计的讨论`，聚焦说明拼进摘要要求；手动压缩保留最近 2 轮原文，其余整理成摘要；面板里压缩记录改为「已压缩」卡片，显示压缩前后大概 token 数（约 96K → 14K）、聚焦说明与触发原因，压缩进行中先显示「正在压缩」。自动压缩阈值改为按模型上下文窗口计算（约 80%，且不超过窗口减预留）：窗口读模型对象上可选的 `contextWindow`，没有时按 128K。工具调用循环里新增回合中途压缩：工具结果写回后、下一次调用模型前估算超阈值就先压缩再继续（保留当前这一步原文，压不动时本轮不再重试）。服务商报「maximum context length is N tokens」一类错误时学习真实窗口与输出上限（按 baseUrl + 模型记在本机 30 天），下调 `max_tokens`（原来写死 16384）后重试一次，之后的阈值与 `max_tokens` 都按学到的值算；输入本身超窗时不做无用重试，交给溢出压缩重试。新增 `services/agentContextLimits.ts`、`components/agent/AgentCompactionCard.tsx`、`components/agent/agentSlashCommands.ts`；测试 `tests/agentCompactCommand.test.ts`、`tests/agentCompactCommandUi.test.tsx`。未接真实模型验证。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 
 - 生成计划卡随会话保存：用户做出选择的计划卡按「项目 + 会话」存本机（只存命令、节点 id、门禁明细、选择、时间与轮次，进度回来后按画布实时节点重新推导），切换会话、刷新页面后挂回原来那一轮；删除会话时一起清掉。

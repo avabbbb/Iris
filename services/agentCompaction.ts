@@ -5,12 +5,17 @@
 //   packages/agent/src/compaction/compaction.ts（effectiveReserveTokens / resolveBudgetReserveTokens / resolveThresholdTokens）
 //   packages/ai/src/error/flags.ts（CONTEXT_OVERFLOW_EVIDENCE_PATTERNS、429 否决、isContextOverflow）
 // 按本仓库需要自写与删减，没有逐字复制。
-import { compact, prepareCompaction } from '@earendil-works/pi-agent-core';
+import { compact, estimateTokens as piEstimateTokens, prepareCompaction } from '@earendil-works/pi-agent-core';
 import type { AgentMessage, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { DEFAULT_CONTEXT_WINDOW } from './agentContextLimits';
 
-/** 浏览器内核默认按 128K 上下文估算（与 buildAgent 里 model.contextWindow 一致）。 */
-export const BROWSER_AGENT_CONTEXT_WINDOW = 128_000;
+/** 模型没有 contextWindow、也没学到真实窗口时，浏览器内核按 128K 估算。 */
+export const BROWSER_AGENT_CONTEXT_WINDOW = DEFAULT_CONTEXT_WINDOW;
+/** 自动压缩的默认阈值：上下文窗口的 80%（同时不超过「窗口 − 预留」）。 */
+export const DEFAULT_COMPACTION_THRESHOLD_RATIO = 0.8;
+/** 手动 /compact 至少保留最近几轮原文（一轮 = 一条用户消息及其后的回复与工具调用）。 */
+export const DEFAULT_KEEP_RECENT_TURNS = 2;
 /** oh-my-pi / pi 的默认预留：摘要提示词 + 输出。 */
 export const DEFAULT_RESERVE_TOKENS = 16_384;
 /** 压缩后保留的最近上下文（oh-my-pi 默认 20000）。 */
@@ -22,7 +27,7 @@ export interface AgentCompactionSettings {
   enabled: boolean;
   /** 显式预留；缺省按 oh-my-pi：max(15% 窗口, 16384)，小窗口退回 15%。 */
   reserveTokens?: number;
-  /** 百分比阈值（1-99）；<=0 用预留策略。 */
+  /** 百分比阈值（1-99）；缺省或 <=0 用默认 80%（且不超过窗口减预留）。 */
   thresholdPercent?: number;
   keepRecentTokens: number;
 }
@@ -47,13 +52,18 @@ export function budgetReserveTokens(contextWindow: number, settings: AgentCompac
   return reserve;
 }
 
-/** 触发压缩的 token 数：百分比优先，否则窗口减预留。 */
+/**
+ * 触发压缩的 token 数：显式百分比优先；否则取 min(窗口 × 80%, 窗口 − 预留)，
+ * 大窗口按 80% 留出摘要与输出空间，小窗口由预留兜底（预留不足时退回 15% 比例预留）。
+ */
 export function compactionThresholdTokens(contextWindow: number, settings: AgentCompactionSettings = DEFAULT_AGENT_COMPACTION_SETTINGS): number {
   const percent = settings.thresholdPercent;
   if (typeof percent === 'number' && Number.isFinite(percent) && percent > 0) {
     return Math.floor(contextWindow * (Math.min(99, Math.max(1, percent)) / 100));
   }
-  return Math.max(0, Math.min(contextWindow - 1, contextWindow - budgetReserveTokens(contextWindow, settings)));
+  const reserved = contextWindow - budgetReserveTokens(contextWindow, settings);
+  const ratio = Math.floor(contextWindow * DEFAULT_COMPACTION_THRESHOLD_RATIO);
+  return Math.max(0, Math.min(contextWindow - 1, ratio, reserved));
 }
 
 export function shouldCompactContext(contextTokens: number, contextWindow: number, settings: AgentCompactionSettings = DEFAULT_AGENT_COMPACTION_SETTINGS): boolean {
@@ -211,10 +221,105 @@ export function isContextOverflowMessage(message: AgentMessage | undefined | nul
 export const COMPACTION_INSTRUCTIONS = '用中文撰写摘要。必须保留：用户的创作目标与已确认的约束（时长、画幅、风格、语言）；'
   + '画布上已创建 / 已确认的节点 id、锚点编号（A01/S01…）与生成结果状态；已读取的技能名称及其关键规则；未完成的待办与下一步。';
 
+/** 手动 /compact 的聚焦说明拼进摘要要求（pi 的 compact() 会以「Additional focus: …」接在摘要提示词后）。 */
+export function buildCompactionInstructions(focus?: string | null): string {
+  const value = String(focus || '').replace(/\s+/g, ' ').trim().slice(0, 1_000);
+  return value
+    ? `${COMPACTION_INSTRUCTIONS}\n用户对这次压缩的要求（优先满足，相关细节尽量原样保留）：${value}`
+    : COMPACTION_INSTRUCTIONS;
+}
+
+/**
+ * 解析 /compact [聚焦说明]：不是 /compact 命令时返回 null。
+ * `/compact`、`/compact 保留接口设计的讨论`、`/compact\n多行说明` 都认；`/compactx` 不认。
+ */
+export function parseCompactCommand(input: string): { focus: string } | null {
+  const match = /^\s*\/compact(?:\s+([\s\S]*))?$/i.exec(String(input || ''));
+  if (!match) return null;
+  return { focus: String(match[1] || '').trim() };
+}
+
+/** 压缩记录里 Flovart 附加的字段（放在 compaction entry 的 details 里，随会话持久化）。 */
+export interface FlovartCompactionDetails {
+  /** 压缩前下一次请求的估算（与 tokensAfter 同一口径：含系统提示词与工具定义）。 */
+  tokensBefore?: number;
+  tokensAfter?: number;
+  focus?: string;
+  reason?: 'threshold' | 'overflow' | 'manual' | 'midturn';
+}
+
 export interface CompactionOutcome {
   tokensBefore: number;
+  /** 压缩后下一次请求的估算 token（摘要 + 保留原文 + 系统提示词 / 工具定义开销）。 */
+  tokensAfter: number;
   summaryChars: number;
   firstKeptEntryId: string;
+}
+
+type BranchEntries = Awaited<ReturnType<Session['getBranch']>>;
+
+function entryMessage(entry: BranchEntries[number]): AgentMessage | undefined {
+  return entry.type === 'message' && 'message' in entry ? (entry as { message?: AgentMessage }).message : undefined;
+}
+
+/**
+ * 保留最近 N 轮原文需要的 token 预算：从最近一次压缩之后的消息里，自后向前数到第 N 条用户消息，
+ * 把这段的估算 token 作为保留预算。最多保留「轮数 − 1」轮（总得有东西可压），上限 cap（避免一轮超长时什么都压不掉）。
+ */
+export function keepRecentTokensForTurns(entries: BranchEntries, turns: number, cap: number): number {
+  if (turns <= 0) return 0;
+  // 上一次压缩保留的原文（firstKeptEntryId 起）仍在上下文里，从那里开始数。
+  let start = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index].type !== 'compaction') continue;
+    const keptId = (entries[index] as { firstKeptEntryId?: string }).firstKeptEntryId;
+    const kept = keptId ? entries.findIndex(entry => entry.id === keptId) : -1;
+    start = kept >= 0 ? kept : index + 1;
+    break;
+  }
+  // 至少要留一轮给摘要：只有 k 轮时最多保留 k − 1 轮原文。
+  const userTurns = entries.slice(start).filter(entry => (entryMessage(entry) as { role?: string } | undefined)?.role === 'user').length;
+  const keep = Math.min(turns, userTurns - 1);
+  if (keep <= 0) return 0;
+  let tokens = 0;
+  let seen = 0;
+  for (let index = entries.length - 1; index >= start; index -= 1) {
+    const message = entryMessage(entries[index]);
+    if (!message) continue;
+    // 用 pi 自己的估算：findCutPoint 按同一口径累计，预算恰好等于这几轮时切点正好落在第 N 条用户消息上。
+    tokens += piEstimateTokens(message);
+    if ((message as { role?: string }).role === 'user') {
+      seen += 1;
+      if (seen >= keep) break;
+    }
+  }
+  return Math.min(cap, tokens);
+}
+
+/** 最后一条助手消息到末尾（当前这一步的工具调用 + 结果）的 pi 估算 token。 */
+export function currentStepTokens(entries: BranchEntries): number {
+  let tokens = 0;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const message = entryMessage(entries[index]);
+    if (!message) continue;
+    tokens += piEstimateTokens(message);
+    const role = (message as { role?: string }).role;
+    if (role === 'assistant' || role === 'user') break;
+  }
+  return tokens;
+}
+
+/** 压缩后的估算：摘要 + 保留的原文（firstKeptEntryId 起）+ 固定开销。 */
+function estimateTokensAfter(entries: BranchEntries, summary: string, firstKeptEntryId: string | undefined, overheadTokens: number): number {
+  let kept = 0;
+  const index = firstKeptEntryId ? entries.findIndex(entry => entry.id === firstKeptEntryId) : -1;
+  if (index >= 0) {
+    for (const entry of entries.slice(index)) {
+      const message = entryMessage(entry);
+      if (message) kept += estimateMessageTokens(message);
+    }
+  }
+  return estimateTextTokens(summary) + kept + Math.max(0, overheadTokens);
 }
 
 /** 把 StreamFn 包成 compact() 需要的 models.completeSimple（只用到这一个方法）。 */
@@ -249,16 +354,37 @@ export async function compactSession(input: {
   streamFn: StreamFn;
   model: unknown;
   keepRecentTokens?: number;
+  /**
+   * 回合中途压缩：保留当前这一步（最后一条助手消息及其工具结果）原文。pi 的切点不能落在工具结果上，
+   * 工具结果本身超过保留预算时会退回「什么都不压」，所以预算至少要盖住这一步。
+   */
+  keepCurrentStep?: boolean;
+  /** 保留最近几轮原文（按这几轮的估算 token 作为保留预算，不超过 keepRecentCap）。 */
+  keepRecentTurns?: number;
+  /** 保留最近几轮时的 token 上限（调用方按窗口给出），缺省 60000。 */
+  keepRecentCap?: number;
   signal?: AbortSignal;
   instructions?: string;
+  /** 手动 /compact 的聚焦说明；会拼进 instructions，并记进压缩记录。 */
+  focus?: string;
+  reason?: FlovartCompactionDetails['reason'];
+  /** 系统提示词 + 工具定义的估算 token，用于算压缩后大约多少 token。 */
+  overheadTokens?: number;
+  /** 调用方按同一口径估算的压缩前 token（含开销、优先用服务端 usage）；缺省用 pi 的估算。 */
+  estimateBefore?: number;
   /** 确认有可压缩的历史、即将调用模型生成摘要时回调（用于面板显示「正在压缩」）。 */
   onStart?: () => void;
 }): Promise<CompactionOutcome | null> {
   const entries = await input.session.getBranch();
+  const baseKeep = input.keepRecentTokens ?? DEFAULT_KEEP_RECENT_TOKENS;
+  // 指定了保留轮数：按这几轮的实际大小保留（只有一轮可保留时退回 keepRecentTokens）。
+  const turnsBudget = input.keepRecentTurns ? keepRecentTokensForTurns(entries, input.keepRecentTurns, input.keepRecentCap ?? 60_000) : 0;
+  let keepRecentTokens = turnsBudget > 0 ? turnsBudget : baseKeep;
+  if (input.keepCurrentStep) keepRecentTokens = Math.max(keepRecentTokens, currentStepTokens(entries));
   const prepared = prepareCompaction(entries, {
     enabled: true,
     reserveTokens: DEFAULT_RESERVE_TOKENS,
-    keepRecentTokens: input.keepRecentTokens ?? DEFAULT_KEEP_RECENT_TOKENS,
+    keepRecentTokens,
   });
   if (prepared.ok === false) throw new Error((prepared as { error: Error }).error.message);
   const preparation = prepared.value;
@@ -268,7 +394,7 @@ export async function compactSession(input: {
     preparation,
     completeSimpleViaStream(input.streamFn) as never,
     input.model as never,
-    input.instructions ?? COMPACTION_INSTRUCTIONS,
+    input.instructions ?? buildCompactionInstructions(input.focus),
     input.signal,
   );
   if (result.ok === false) throw new Error(`上下文压缩失败：${(result as { error: Error }).error.message}`);
@@ -276,6 +402,11 @@ export async function compactSession(input: {
   if (!value.summary.trim()) throw new Error('上下文压缩失败：模型没有返回摘要。');
   // 不写 retainedTail：带 retainedTail 的压缩会让 getBranch 停在压缩点，下一次压缩时保留尾部既不在旧摘要里也不在新输入里。
   // 只记 firstKeptEntryId，保留的消息仍是普通 entry，再次压缩时会被正确纳入摘要。
-  await input.session.appendCompaction(value.summary, value.firstKeptEntryId, value.tokensBefore, value.details, false, value.usage);
-  return { tokensBefore: value.tokensBefore, summaryChars: value.summary.length, firstKeptEntryId: value.firstKeptEntryId || '' };
+  const tokensAfter = estimateTokensAfter(entries, value.summary, value.firstKeptEntryId, input.overheadTokens ?? 0);
+  const focus = String(input.focus || '').trim();
+  const tokensBefore = input.estimateBefore && input.estimateBefore > 0 ? input.estimateBefore : value.tokensBefore;
+  const flovart: FlovartCompactionDetails = { tokensBefore, tokensAfter, ...(focus ? { focus } : {}), ...(input.reason ? { reason: input.reason } : {}) };
+  const details = { ...((value.details as object | undefined) || {}), flovart };
+  await input.session.appendCompaction(value.summary, value.firstKeptEntryId, value.tokensBefore, details, false, value.usage);
+  return { tokensBefore, tokensAfter, summaryChars: value.summary.length, firstKeptEntryId: value.firstKeptEntryId || '' };
 }

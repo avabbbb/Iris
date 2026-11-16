@@ -3,6 +3,7 @@ import { Copy, GitBranch, Quote } from 'lucide-react';
 import { AgentMarkdown } from './AgentMarkdown';
 import { AgentWorkingOrb } from '../agent/AgentWorkingOrb';
 import { AgentToolSteps } from '../agent/AgentToolSteps';
+import { AgentCompactionCard, type AgentCompactionInfo } from '../agent/AgentCompactionCard';
 import { AgentMediaTiles, AgentMentionPill, findReferenceNode } from '../agent/AgentMediaTiles';
 import { splitMentions, stripReferenceLine, type AgentMessageReference } from '../agent/agentMessageRefs';
 import type { WorkflowNode } from './types';
@@ -44,6 +45,8 @@ export interface WorkflowAgentDisplayMessage {
   /** 工具调用的真实起止时间（毫秒时间戳），用于步骤行的用时；快照恢复的卡片没有。 */
   startedAt?: number;
   endedAt?: number;
+  /** 上下文压缩记录（role 为 system）：显示为「已压缩」卡片而不是一行系统提示。 */
+  compaction?: AgentCompactionInfo;
 }
 
 type MessageSegment =
@@ -128,6 +131,8 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
         const footer = renderTurnFooter && turn >= 0 && turns[index + 1] !== turn ? renderTurnFooter(turn) : null;
         const body = segment.kind === 'tools'
         ? <AgentToolSteps key={segment.key} tools={segment.tools} language={language} running={running} />
+        : segment.message.compaction
+        ? <div key={segment.message.id} className="workflow-agent__message workflow-agent__message--compaction" data-message-id={segment.message.id}><AgentCompactionCard info={segment.message.compaction} language={language} /></div>
         : ((message: WorkflowAgentDisplayMessage) => (
           <div
             key={message.id}
