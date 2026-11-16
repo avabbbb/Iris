@@ -25,6 +25,7 @@ import { UserScriptAdapterSection } from './settings/UserScriptAdapterSection';
 import { buildConfigBundle, parseConfigBundle } from '../services/configMigration';
 import { importUserScriptProviders } from '../services/userScriptAuthoring';
 import { ExtensionPairingSection } from './settings/ExtensionPairingSection';
+import { DeepSeekExtensionsSection } from './settings/DeepSeekExtensionsSection';
 import { WebDavSettingsTab } from './settings/WebDavSettingsTab';
 import { LocalStorageTab } from './settings/LocalStorageTab';
 import { ChannelList } from './settings/ChannelList';
@@ -1378,6 +1379,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             />
                         </div>
                     </section>
+                    <DeepSeekExtensionsSection isDark={isDark} t={t} />
                     </>
                 )}
 

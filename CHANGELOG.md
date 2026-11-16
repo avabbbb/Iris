@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- DeepSeek 服务端扩展（只对 Base URL 为 api.deepseek.com 的线路生效，`services/deepseekExtensions.ts`）：设置「API」页新增三个开关——服务端会话标题（`title:{enabled:true}`，默认开，会话还没有标题时才带，`delta.title` 写进会话标题）、DeepSeek 联网搜索（`tools` 里声明 `{"type":"deepseek_web_search"}`，默认关，开启时该请求去掉 `flovart_web_search`，二选一）、安全审核（顶层 `safety_check:{level:'high'}`，默认关，注明面向公众的应用官方要求开启、开启后 temperature 等参数被忽略）。助手消息的 `server_tool_calls` 随会话保存并在多轮里原样回传；拒答（`finish_reason: content_filter`、`delta.refusal`、`400 Content Exists Risk`）显示统一拒答文案，该轮（拒答 + 紧邻的提问）不进入下一轮上下文。兼容探测：服务端返回 `other tools cannot be used together with …` 时按 provider+model 记住 24 小时并立即去掉扩展重试一次，之后标题改为本轮结束后单独发一次无工具短请求（仍失败用首条消息），联网回到 `flovart_web_search`，设置里提示安全审核当前未生效（可「重新探测」）。新增手动探测脚本 `scripts/probe-deepseek-ext.mjs`（读 `DEEPSEEK_API_KEY`）。沙箱无 Key，均为 mock fetch 测试，未经真实接口验证。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 
 - 生成计划卡随会话保存：用户做出选择的计划卡按「项目 + 会话」存本机（只存命令、节点 id、门禁明细、选择、时间与轮次，进度回来后按画布实时节点重新推导），切换会话、刷新页面后挂回原来那一轮；删除会话时一起清掉。

@@ -59,6 +59,26 @@ import {
   type AgentCompactionSettings,
 } from './agentCompaction';
 import { agentMemoryStoreBackend } from '../stores/useAgentMemoryStore';
+import {
+  applyDeepSeekExtensions,
+  classifyDeepSeekExtensionRejection,
+  DeepSeekStreamCollector,
+  dropRefusedRounds,
+  finalizeDeepSeekMessage,
+  hasDeepSeekExtensions,
+  isDeepSeekContentRiskRejection,
+  isDeepSeekOfficialRoute,
+  loadDeepSeekExtensionSettings,
+  markDeepSeekExtensionCompat,
+  planDeepSeekExtensions,
+  serverToolCallsEcho,
+  sessionTitleFromEntries,
+  toRefusalMessage,
+  DeepSeekSessionTitler,
+  SESSION_TITLE_ENTRY,
+  type DeepSeekExtensionPlan,
+  type DeepSeekStreamHooks,
+} from './deepseekExtensions';
 import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
 
 // ---------------------------------------------------------------------------
@@ -86,6 +106,9 @@ const sessionsKey = (projectId: string) => `flovart.agent.sessions.${projectId}`
 
 /** 从会话第一条用户消息派生标题，最多取 24 字。 */
 function deriveTitle(entries: unknown[]): string {
+  // DeepSeek 服务端标题（或降级补发拿到的标题）优先，见 deepseekExtensions.SESSION_TITLE_ENTRY。
+  const serverTitle = sessionTitleFromEntries(entries);
+  if (serverTitle) return serverTitle;
   for (const entry of entries as Array<{ type?: string; message?: { role?: string; content?: Array<{ type?: string; text?: string }> } }>) {
     if (entry?.type === 'message' && entry.message?.role === 'user') {
       const text = (entry.message.content || []).filter(block => block.type === 'text').map(block => block.text || '').join(' ').trim();
@@ -266,6 +289,8 @@ export interface OpenAIMessageOptions {
   reasoningEcho?: ReasoningEcho;
   /** DeepSeek：没有思考的 assistant 也补 reasoning_content: ''。 */
   emptyReasoningContent?: boolean;
+  /** DeepSeek 官方线路：assistant 的 server_tool_calls 原样回传（见 deepseekExtensions）。 */
+  serverToolCalls?: boolean;
 }
 
 function toOpenAIMessage(message: AgentMessage, options: OpenAIMessageOptions = {}): Record<string, unknown> {
@@ -301,6 +326,7 @@ function toOpenAIMessage(message: AgentMessage, options: OpenAIMessageOptions = 
         ? { reasoning_content: echoed.join('\n') }
         : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+      ...(options.serverToolCalls ? serverToolCallsEcho(message) : {}),
     };
   }
   if (!hasContent(message)) return { role: 'user', content: '' };
@@ -345,7 +371,8 @@ export function toOpenAIMessages(messages: AgentMessage[], options: OpenAIMessag
     pending = [];
     emitImages();
   };
-  for (const message of messages) {
+  // 安全审核拒答的轮次不进入下一轮上下文。
+  for (const message of dropRefusedRounds(messages)) {
     const converted = toOpenAIMessage(message, options);
     if (converted.role === 'tool') {
       const id = String(converted.tool_call_id || '');
@@ -411,14 +438,15 @@ export function buildBrowserAgentRequestBody(
   route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
   context: { systemPrompt?: string; messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
   thinkingLevel: AgentThinkingLevel = 'off',
-  options: { textOnly?: boolean } = {},
+  options: { textOnly?: boolean; deepseek?: DeepSeekExtensionPlan } = {},
 ): Record<string, unknown> {
   const reasoning = buildReasoningParams(thinkingLevel, route);
   const messages = toOpenAIMessages(context.messages, {
     reasoningEcho: reasoningEchoFor(route),
     emptyReasoningContent: requiresEmptyReasoningContent(route),
+    serverToolCalls: isDeepSeekOfficialRoute(route),
   });
-  return {
+  const body = {
     model: route.model,
     // DeepSeek / Kimi 的工具循环要求原样回传 reasoning_content，其它服务不回传。
     // 系统提示词固定在最前（稳定前缀，见 withSystemPrompt）。
@@ -436,7 +464,10 @@ export function buildBrowserAgentRequestBody(
     max_tokens: 16384,
     ...reasoning.params,
   };
+  // DeepSeek 服务端扩展（title / deepseek_web_search / safety_check），字段见 deepseekExtensions.applyDeepSeekExtensions。
+  return options.deepseek ? applyDeepSeekExtensions(body, options.deepseek) : body;
 }
+
 
 /** 流式卡住检测与瞬时失败重试的默认值；route.timeouts 可覆盖（基准与测试用）。 */
 export const BROWSER_AGENT_STREAM_DEFAULTS = {
@@ -501,7 +532,7 @@ function withSystemPrompt(messages: Array<Record<string, unknown>>, systemPrompt
   return prompt ? [{ role: 'system', content: prompt }, ...messages] : messages;
 }
 
-export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn {
+export function createBrowserAgentStream(route: BrowserAgentTextRoute, deepseekHooks: DeepSeekStreamHooks = {}): StreamFn {
   const limits = { ...BROWSER_AGENT_STREAM_DEFAULTS, ...(route.timeouts || {}) };
   return async (model, context, options) => {
     const stream = createAssistantMessageEventStream();
@@ -544,9 +575,15 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           try {
             arm('first');
             let sentImages = false;
+            let sentExtensions = false;
             const request = (level: AgentThinkingLevel) => {
               const textOnly = isRouteTextOnly(route);
-              const body = buildBrowserAgentRequestBody(route, context as never, level, { textOnly });
+              const deepseek = isDeepSeekOfficialRoute(route) ? planDeepSeekExtensions(route, (deepseekHooks.settings ?? loadDeepSeekExtensionSettings)(), {
+                hasFunctionTools: Boolean((context as { tools?: unknown[] }).tools?.length),
+                wantTitle: Boolean(deepseekHooks.wantTitle?.()),
+              }) : undefined;
+              sentExtensions = Boolean(deepseek && hasDeepSeekExtensions(deepseek));
+              const body = buildBrowserAgentRequestBody(route, context as never, level, { textOnly, deepseek });
               sentImages = !textOnly && hasImageParts(body.messages as Array<Record<string, unknown>>);
               return fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
                 method: 'POST',
@@ -558,6 +595,15 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
               }, body, route.streamUsage);
             };
             let response = await request(thinkingLevel);
+            if (!response.ok && sentExtensions) {
+              const body = await response.clone().text().catch(() => '');
+              const mode = classifyDeepSeekExtensionRejection(response.status, body);
+              if (mode) {
+                // 扩展与 function 工具不能共存（或模型不认扩展）：按 provider+model 记 24h，去掉扩展立即重试一次。
+                markDeepSeekExtensionCompat(route, mode, body);
+                response = await request(thinkingLevel);
+              }
+            }
             if (!response.ok && thinkingLevel !== 'off') {
               const body = await response.clone().text().catch(() => '');
               if (isReasoningRejection(response.status, body)) {
@@ -575,6 +621,17 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
                 response = await request(thinkingLevel);
               }
             }
+            if (!response.ok && isDeepSeekOfficialRoute(route)) {
+              const body = await response.clone().text().catch(() => '');
+              if (isDeepSeekContentRiskRejection(response.status, body)) {
+                // 输入未通过内容审核（400 Content Exists Risk）：按拒答显示，这一轮不进入下一轮上下文。
+                clearTimeout(stallTimer);
+                const refused = toRefusalMessage({ ...startMessage, timestamp: Date.now() }) as AssistantMessage;
+                stream.push({ type: 'done', reason: 'stop', message: refused });
+                stream.end(refused);
+                return;
+              }
+            }
             if (!response.ok) {
               const body = await response.text().catch(() => '');
               if (response.status === 408 || response.status === 429 || response.status >= 500) {
@@ -588,6 +645,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
             let thinkingOpen = false;
             const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
             let finishReason = '';
+            const extensionOutput = new DeepSeekStreamCollector();
 
             const invalidToolCalls: string[] = [];
             const partial = (strict = false) => {
@@ -625,6 +683,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
               let json: { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>; usage?: unknown };
               try { json = JSON.parse(data); } catch { continue; }
               usage.feed(json);
+              extensionOutput.feed(json);
               const delta = json.choices?.[0]?.delta || {};
               // DeepSeek / Qwen / vLLM 用 reasoning_content，OpenRouter 等用 reasoning（字符串）。
               const reasoningDelta = typeof delta.reasoning_content === 'string' ? delta.reasoning_content
@@ -676,7 +735,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
               throw new Error('模型返回的工具参数不完整或不是合法 JSON（' + invalidToolCalls.join('、') + truncated + '），未执行任何工具，画布未改动。');
             }
             const tokens = usage.result();
-            const message: AssistantMessage = {
+            const settled: AssistantMessage = {
               ...finalMessage,
               ...(tokens ? { usage: {
                 ...EMPTY_USAGE,
@@ -688,6 +747,9 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
               stopReason: finishReason === 'tool_calls' ? 'toolUse' : finishReason === 'length' ? 'length' : 'stop',
               timestamp: Date.now(),
             };
+            // 扩展输出：拒答（content_filter / delta.refusal）换成统一文案，server_tool_calls 挂上以便下一轮原样回传。
+            const message = finalizeDeepSeekMessage(settled, extensionOutput) as AssistantMessage;
+            if (extensionOutput.title && !extensionOutput.refused) deepseekHooks.onTitle?.(extensionOutput.title);
             stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'length' | 'toolUse', message });
             stream.end(message);
             return;
@@ -1234,6 +1296,8 @@ export class BrowserAgentKernel {
   private compacting = false;
   /** 每次停止 +1：压缩（模型调用）期间用户点了停止，就不再接着发这一轮。 */
   private cancelEpoch = 0;
+  /** DeepSeek 服务端会话标题（只对 api.deepseek.com 生效，见 deepseekExtensions）。 */
+  private readonly titler: DeepSeekSessionTitler;
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
@@ -1261,6 +1325,19 @@ export class BrowserAgentKernel {
     this.confirm = options.confirm;
     this.initialSkillAttachment = options.skillAttachment ?? null;
     this.systemPrompt = options.systemPrompt ?? BROWSER_DEFAULT_SYSTEM_PROMPT;
+    this.titler = new DeepSeekSessionTitler({ route: this.route, save: record => this.saveSessionTitle(record) });
+  }
+
+  private async saveSessionTitle(record: { title: string; source: string }): Promise<void> {
+    if (!this.session) return;
+    await this.session.appendCustomEntry(SESSION_TITLE_ENTRY, record);
+    await this.repo?.persist(this.session);
+    this.emit({ type: 'session_title', title: record.title, source: record.source });
+  }
+
+  /** 测试用：等 DeepSeek 降级标题请求结束。 */
+  async titleSettled(): Promise<void> {
+    await this.titler.settled();
   }
 
   subscribe(listener: (event: { type: string; [key: string]: unknown }) => void): () => void {
@@ -1296,6 +1373,7 @@ export class BrowserAgentKernel {
       .filter(entry => entry.type === 'custom' && entry.customType === SKILL_READ_ENTRY && entry.data)
       .map(entry => entry.data as SkillReadRecord));
     this.compactionEpoch = entries.filter(entry => entry.type === 'compaction').length;
+    this.titler.reset(entries);
   }
 
   async openSession(): Promise<unknown> {
@@ -1347,7 +1425,7 @@ export class BrowserAgentKernel {
     this.unsubscribe?.();
     this.unsubscribe = null;
     const thinkingLevel = this.currentThinkingLevel();
-    this.streamFn = createBrowserAgentStream(this.route);
+    this.streamFn = createBrowserAgentStream(this.route, this.titler.hooks());
     this.agent = new Agent({
       initialState: {
         thinkingLevel,
@@ -1756,6 +1834,8 @@ export class BrowserAgentKernel {
     } finally {
       this.overflowGuard = null;
     }
+    // DeepSeek：本轮没拿到服务端标题时补发一次无工具短请求（不阻塞返回）。
+    if (this.agent === agent) void this.titler.afterTurn(agent.state.messages);
     return this.snapshot();
   }
 
