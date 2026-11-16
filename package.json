@@ -81,6 +81,7 @@
     "@tiptap/suggestion": "^3.20.0",
     "@zip.js/zip.js": "^2.8.26",
     "antd": "^6.4.4",
+    "aws4fetch": "1.0.20",
     "embla-carousel-react": "^8.6.0",
     "fast-xml-parser": "^5.10.1",
     "imagetracerjs": "^1.2.6",

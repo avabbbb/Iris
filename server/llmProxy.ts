@@ -16,6 +16,14 @@
  * - only a fixed set of request headers is forwarded (no cookies);
  * - nothing about the request (keys, prompts) is logged.
  *
+ * Timeouts (magpie #8): there is deliberately NO total-duration timeout — a
+ * long reasoning stream is healthy as long as bytes keep arriving. Instead an
+ * upstream that makes no progress (no response headers, or no body bytes while
+ * we are waiting for the next chunk) for `idleTimeoutMs` is aborted. For SSE
+ * responses we also emit `: keepalive` comment lines while the upstream is
+ * silent, so idle-connection reapers between the browser and the edge do not
+ * drop a stream that is merely thinking (see relayUpstreamBody).
+ *
  * BYOK note: the user's API key passes through this proxy in transit (TLS on
  * both legs). It is never stored or logged.
  */
@@ -73,6 +81,19 @@ const FORWARDED_RESPONSE_HEADERS = [
 ] as const;
 
 export const LLM_PROXY_MAX_BODY_BYTES = 32 * 1024 * 1024;
+/**
+ * No-progress timeout: abort when the upstream sends nothing (headers or body
+ * bytes) for this long. Generous because non-streaming requests to reasoning
+ * models legitimately stay silent until the whole answer is ready.
+ */
+export const LLM_PROXY_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+/** SSE keepalive interval while the upstream is silent. Keepalives do not count as upstream progress. */
+export const LLM_PROXY_SSE_KEEPALIVE_MS = 15 * 1000;
+/**
+ * SSE comment line (spec: lines starting with ':' are ignored by EventSource
+ * and by every OpenAI-compatible stream parser; OpenRouter sends the same kind).
+ */
+const SSE_KEEPALIVE = new TextEncoder().encode(': keepalive\n\n');
 export const LLM_PROXY_USER_AGENT = 'flovart-web/0.3 (+https://github.com/avabbbb/Flovart)';
 
 function jsonError(status: number, message: string, code: string): Response {
@@ -113,6 +134,101 @@ export interface LlmProxyOptions {
   /** Extra allowed origins (e.g. a preview domain). */
   allowedOrigins?: readonly string[];
   fetchImpl?: typeof fetch;
+  /** Override LLM_PROXY_IDLE_TIMEOUT_MS (tests / env). */
+  idleTimeoutMs?: number;
+  /** Override LLM_PROXY_SSE_KEEPALIVE_MS (tests); 0 disables keepalives. */
+  sseKeepAliveMs?: number;
+}
+
+/** Abort when either the client goes away or our idle timer fires. */
+function linkedAbort(clientSignal: AbortSignal | undefined): AbortController {
+  const controller = new AbortController();
+  if (clientSignal) {
+    if (clientSignal.aborted) controller.abort(clientSignal.reason);
+    else clientSignal.addEventListener('abort', () => controller.abort(clientSignal.reason), { once: true });
+  }
+  return controller;
+}
+
+/** True when the bytes forwarded so far end on an SSE event boundary (blank line). */
+function endsOnEventBoundary(tail: number[]): boolean {
+  const n = tail.length;
+  if (n >= 2 && tail[n - 1] === 0x0a && tail[n - 2] === 0x0a) return true;
+  if (n >= 4 && tail[n - 1] === 0x0a && tail[n - 2] === 0x0d && tail[n - 3] === 0x0a && tail[n - 4] === 0x0d) return true;
+  return false;
+}
+
+export class UpstreamIdleTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`Upstream made no progress for ${Math.round(ms / 1000)}s`);
+    this.name = 'UpstreamIdleTimeoutError';
+  }
+}
+
+/**
+ * Pass the upstream body through unchanged, with a no-progress timeout and SSE
+ * keepalives. Timers only run while we are waiting on the upstream (inside
+ * pull), so a slow *client* (backpressure) never counts as upstream silence.
+ * A keepalive is only inserted on an event boundary so it can never split an
+ * event the upstream is halfway through sending.
+ */
+export function relayUpstreamBody(
+  body: ReadableStream<Uint8Array>,
+  opts: { sse: boolean; idleTimeoutMs: number; keepAliveMs: number; abortUpstream: (reason: unknown) => void },
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  let tail: number[] = [];
+  let sentAny = false;
+  let finished = false;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) return;
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      let keepTimer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<'idle'>((resolve) => { idleTimer = setTimeout(() => resolve('idle'), opts.idleTimeoutMs); });
+      if (opts.sse && opts.keepAliveMs > 0) {
+        const tick = () => {
+          if (finished) return;
+          if (!sentAny || endsOnEventBoundary(tail)) controller.enqueue(SSE_KEEPALIVE);
+          keepTimer = setTimeout(tick, opts.keepAliveMs);
+        };
+        keepTimer = setTimeout(tick, opts.keepAliveMs);
+      }
+      try {
+        const result = await Promise.race([reader.read(), idle]);
+        if (result === 'idle') {
+          finished = true;
+          const err = new UpstreamIdleTimeoutError(opts.idleTimeoutMs);
+          opts.abortUpstream(err);
+          reader.cancel(err).catch(() => {});
+          controller.error(err);
+          return;
+        }
+        if (result.done) {
+          finished = true;
+          controller.close();
+          return;
+        }
+        const chunk = result.value;
+        if (chunk.byteLength > 0) {
+          sentAny = true;
+          tail = [...tail, ...chunk.subarray(Math.max(0, chunk.byteLength - 4))].slice(-4);
+        }
+        controller.enqueue(chunk);
+      } catch (err) {
+        finished = true;
+        controller.error(err);
+      } finally {
+        clearTimeout(idleTimer);
+        clearTimeout(keepTimer);
+      }
+    },
+    cancel(reason) {
+      finished = true;
+      opts.abortUpstream(reason);
+      return reader.cancel(reason).catch(() => {});
+    },
+  });
 }
 
 export async function handleLlmProxy(request: Request, options: LlmProxyOptions = {}): Promise<Response> {
@@ -171,19 +287,29 @@ export async function handleLlmProxy(request: Request, options: LlmProxyOptions 
   }
 
   const doFetch = options.fetchImpl ?? fetch;
+  const idleTimeoutMs = options.idleTimeoutMs ?? LLM_PROXY_IDLE_TIMEOUT_MS;
+  // Client abort (stop button / tab close) and the no-progress timer both cancel the upstream call.
+  const upstreamAbort = linkedAbort(request.signal);
+  let headersTimedOut = false;
+  const headersTimer = setTimeout(() => {
+    headersTimedOut = true;
+    upstreamAbort.abort(new UpstreamIdleTimeoutError(idleTimeoutMs));
+  }, idleTimeoutMs);
   let upstreamResponse: Response;
   try {
     upstreamResponse = await doFetch(upstream.toString(), {
       method,
       headers,
       body,
-      // Client abort (stop button / tab close) cancels the upstream call too.
-      signal: request.signal,
+      signal: upstreamAbort.signal,
       redirect: 'manual',
     });
   } catch (error) {
     if (request.signal?.aborted) return jsonError(499, 'Client closed request', 'client_closed');
+    if (headersTimedOut) return jsonError(504, 'Upstream did not respond in time', 'upstream_idle_timeout');
     return jsonError(502, 'Upstream request failed', 'upstream_unreachable');
+  } finally {
+    clearTimeout(headersTimer);
   }
 
   const responseHeaders = new Headers({ 'cache-control': 'no-store', 'x-flovart-proxy': '1' });
@@ -191,12 +317,22 @@ export async function handleLlmProxy(request: Request, options: LlmProxyOptions 
     const value = upstreamResponse.headers.get(name);
     if (value) responseHeaders.set(name, value);
   }
-  if ((upstreamResponse.headers.get('content-type') || '').includes('text/event-stream')) {
+  const sse = (upstreamResponse.headers.get('content-type') || '').includes('text/event-stream');
+  if (sse) {
     responseHeaders.set('cache-control', 'no-cache, no-transform');
     responseHeaders.set('x-accel-buffering', 'no');
   }
-  // Body is streamed through untouched: SSE chunks and error JSON both pass as-is.
-  return new Response(upstreamResponse.body, {
+  // Body bytes are streamed through untouched (SSE chunks and error JSON both pass as-is);
+  // the only addition is `: keepalive` comment lines between SSE events while the upstream is silent.
+  const relayed = upstreamResponse.body
+    ? relayUpstreamBody(upstreamResponse.body, {
+      sse,
+      idleTimeoutMs,
+      keepAliveMs: options.sseKeepAliveMs ?? LLM_PROXY_SSE_KEEPALIVE_MS,
+      abortUpstream: (reason) => upstreamAbort.abort(reason),
+    })
+    : null;
+  return new Response(relayed, {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,

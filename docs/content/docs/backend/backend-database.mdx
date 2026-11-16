@@ -4,7 +4,9 @@ title: 后端数据库结构
 
 # 后端数据库结构
 
-Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建表。本文件随表结构变化同步更新。
+Flovart Hub 线上跑在 Cloudflare Pages Functions（`server/hub/`、`functions/api/v1/`），数据库是 D1（SQLite），表结构以 `migrations/*.sql` 为准（`wrangler d1 migrations apply`，部署见 `docs/deploy-cloudflare-hub.md`）。旧 Go 后端（`backend/`，PostgreSQL + GORM AutoMigrate）待下线，下表的字段和它一一对应。本文件随表结构变化同步更新。
+
+D1 与 PostgreSQL 的类型对应：uuid → TEXT（Function 里 `crypto.randomUUID()` 生成，小写）；`text[]` → TEXT 存 JSON 数组，按 `json_each` 过滤；timestamptz → TEXT（ISO-8601 UTC）；varchar 长度上限由服务层校验。D1 默认开启外键约束。密码列存 `pbkdf2_sha256$<迭代数>$<salt>$<hash>`（D1 版不再用 bcrypt）。D1 版 users 另有 `status`（active / suspended / deleted）与 `token_version` 两列（Go 模型里已有，旧文档漏记），另加索引 `prompt_packs(created_at, id)`、`prompt_items(pack_id, sort, id)`、`prompt_likes(pack_id)`。
 
 ## users — 共享生态用户
 

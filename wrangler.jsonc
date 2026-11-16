@@ -2,5 +2,34 @@
   "name": "flovart",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-07-01",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Flovart Hub (functions/api/v1, TS port of backend/). Setup: docs/deploy-cloudflare-hub.md
+  "d1_databases": [
+    {
+      "binding": "HUB_DB",
+      "database_name": "flovart-hub",
+      // Placeholder: replace with the id printed by `npx wrangler d1 create flovart-hub`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "HUB_BUCKET",
+      // Placeholder: the bucket created with `npx wrangler r2 bucket create flovart-hub-uploads`.
+      "bucket_name": "flovart-hub-uploads"
+    }
+  ],
+  "vars": {
+    // Same semantics as the Go CORS_ALLOW: "*" | "loopback" | "off" | comma-separated origins.
+    "CORS_ALLOW": "*",
+    "JWT_EXP_HOURS": "168",
+    // Uploads stay disabled (503 存储未配置) until these and the R2 API token secrets are set.
+    "R2_ACCOUNT_ID": "",
+    "R2_BUCKET": "flovart-hub-uploads",
+    "R2_PUBLIC_BASE": ""
+  }
+  // Secrets (never commit): `npx wrangler pages secret put JWT_SECRET`,
+  // `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
 }

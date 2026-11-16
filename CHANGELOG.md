@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Hub 后端改写为 TypeScript，跑在 Cloudflare Pages Functions + D1 + R2（`server/hub/`、`functions/api/v1/[[path]].ts`、`migrations/0001_init.sql`）：路由、`{ code, data, msg }` 响应、错误文案、分页筛选与 Go 版逐条对齐；JWT HS256 用 Web Crypto，密码改 PBKDF2-SHA256（3 万次迭代，按免费版 10ms CPU 取值，哈希里记迭代数，以后调高会在登录时自动重哈希）；上传仍是预签名直传 R2（aws4fetch 签名，确认走 R2 绑定）。前端 Hub 地址默认同源 `/api/v1`，`VITE_HUB_BASE_URL` 可覆盖。Go 版的仓库 / 服务 / 中间件测试移植到 vitest（Node 内置 SQLite 跑真实迁移）。部署步骤见 `docs/deploy-cloudflare-hub.md`；`backend/`、`Dockerfile`、`render.yaml` 暂留。
+- LLM 代理流式响应：不设总时长超时，改为「无进展」超时（5 分钟内上游既没回响应头也没新字节才中断，响应头超时返回 504 `upstream_idle_timeout`）；SSE 在上游静默时每 15 秒在事件之间插入 `: keepalive` 注释行，防止中间链路按空闲断开（`server/llmProxy.ts`）。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 
 - 生成计划卡随会话保存：用户做出选择的计划卡按「项目 + 会话」存本机（只存命令、节点 id、门禁明细、选择、时间与轮次，进度回来后按画布实时节点重新推导），切换会话、刷新页面后挂回原来那一轮；删除会话时一起清掉。

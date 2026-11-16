@@ -112,3 +112,7 @@ eval/references/*.html
 
 # Judge runs (results.jsonl / summary.json / report.md) are generated evidence.
 eval/judge/results/
+
+# Cloudflare wrangler local state / secrets
+.wrangler/
+.dev.vars
