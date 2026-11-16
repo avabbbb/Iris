@@ -83,4 +83,13 @@ describe('AgentModelPicker', () => {
     fireEvent.click(retry);
     expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high');
   });
+
+  it('lists only the levels the model supports and maps a stored level to the nearest one', () => {
+    localStorage.removeItem('flovart.agent.thinking');
+    render(<AgentThinkingSelect model="deepseek-v4-pro" modelInfo={{ id: 'deepseek-v4-pro', thinkingLevels: ['off', 'high', 'max'], thinkingSource: 'api' }} language="zho" />);
+    const select = screen.getByRole('combobox', { name: '思考强度' });
+    expect(Array.from((select as HTMLSelectElement).options).map(option => option.textContent)).toEqual(['不思考', '高', '最大']);
+    fireEvent.change(select, { target: { value: 'max' } });
+    expect(readAgentThinkingLevel('deepseek-v4-pro')).toBe('max');
+  });
 });

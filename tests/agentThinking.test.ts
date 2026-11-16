@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
+  availableThinkingLevels,
   buildReasoningParams,
+  LEARNED_LEVELS_TTL_MS,
+  parseSupportedThinkingValues,
+  resolveRequestThinkingLevel,
+  thinkingLevelAfterRejection,
   clearReasoningUnsupported,
   effectiveAgentThinkingLevel,
   isReasoningRejection,
@@ -55,7 +60,9 @@ describe('agent thinking settings', () => {
     const storage = memoryStorage();
     storage.setItem('flovart.agent.thinking', '{not json');
     expect(readAgentThinkingLevel('m', storage)).toBe('off');
-    expect(normalizeThinkingLevel('xhigh')).toBe('high');
+    expect(normalizeThinkingLevel('xhigh')).toBe('xhigh');
+    expect(normalizeThinkingLevel('max')).toBe('max');
+    expect(normalizeThinkingLevel('none')).toBe('off');
     expect(normalizeThinkingLevel(undefined)).toBe('off');
   });
 });
@@ -173,5 +180,70 @@ describe('browser agent stream with thinking', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(message.stopReason).toBe('error');
     expect(isReasoningUnsupported('m-err')).toBe(false);
+  });
+});
+
+describe('dynamic thinking levels per model', () => {
+  beforeEach(() => localStorage.removeItem('flovart.agent.thinking'));
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('clamps the requested level to the nearest supported one, ties going up', () => {
+    const storage = memoryStorage();
+    const model = { id: 'gw-model', thinkingLevels: ['off', 'low', 'high'] as const, thinkingSource: 'api' as const };
+    expect(resolveRequestThinkingLevel({ ...model, thinkingLevels: [...model.thinkingLevels] }, 'medium', storage)).toBe('high');
+    expect(resolveRequestThinkingLevel({ ...model, thinkingLevels: [...model.thinkingLevels] }, 'minimal', storage)).toBe('low');
+    expect(resolveRequestThinkingLevel({ ...model, thinkingLevels: [...model.thinkingLevels] }, 'max', storage)).toBe('high');
+    expect(resolveRequestThinkingLevel({ ...model, thinkingLevels: [...model.thinkingLevels] }, 'off', storage)).toBe('off');
+    expect(resolveRequestThinkingLevel({ id: 'v4', thinkingLevels: ['off', 'high', 'max'] }, 'xhigh', storage)).toBe('max');
+  });
+
+  it('sends xhigh / max as-is and uses the toggle shape for on/off models', () => {
+    expect(buildReasoningParams('xhigh', { provider: 'openai' }).params).toEqual({ reasoning_effort: 'xhigh' });
+    expect(buildReasoningParams('max', { provider: 'openrouter' }).params).toEqual({ reasoning: { effort: 'max' } });
+    expect(buildReasoningParams('max', { provider: 'anthropic' })).toEqual({ params: { thinking: { type: 'adaptive' }, output_config: { effort: 'max' } }, dropTemperature: true });
+    expect(buildReasoningParams('high', { provider: 'openai_compatible', baseUrl: 'https://api.moonshot.cn/v1' }, { mode: 'toggle' }).params).toEqual({ thinking: { type: 'enabled' } });
+    expect(buildReasoningParams('high', { provider: 'openrouter' }, { mode: 'toggle' }).params).toEqual({ reasoning: { enabled: true } });
+    expect(buildReasoningParams('high', { provider: 'qwen' }, { mode: 'toggle' }).params).toEqual({ enable_thinking: true });
+    const body = buildBrowserAgentRequestBody(
+      { provider: 'openai_compatible', model: 'deepseek-v4-pro', baseUrl: 'https://api.deepseek.com', modelInfo: { id: 'deepseek-v4-pro', thinkingLevels: ['off', 'high', 'max'], thinkingSource: 'api' } },
+      { messages: [userMessage] },
+      'max',
+    );
+    expect(body).toMatchObject({ reasoning_effort: 'max' });
+  });
+
+  it('parses "Supported values are ..." and remembers them for one hour', () => {
+    const storage = memoryStorage();
+    const body = '{"error":{"message":"Unsupported value: \'reasoning_effort\' does not support \'minimal\' with this model. Supported values are: \'low\', \'medium\', and \'high\'."}}';
+    expect(parseSupportedThinkingValues(body)).toEqual(['low', 'medium', 'high']);
+    expect(parseSupportedThinkingValues('Invalid reasoning effort. Supported values are none, low, high, xhigh')).toEqual(['off', 'low', 'high', 'xhigh']);
+    expect(parseSupportedThinkingValues('bad request')).toBeNull();
+
+    const now = Date.now();
+    expect(thinkingLevelAfterRejection('gw-x', 'minimal', 400, body, storage)).toBe('low');
+    expect(availableThinkingLevels('gw-x', storage, now + 1000)).toMatchObject({ levels: ['low', 'medium', 'high'], source: 'learned' });
+    expect(availableThinkingLevels('gw-x', storage, now + LEARNED_LEVELS_TTL_MS + 5000).source).not.toBe('learned');
+    // 当前档已在支持列表里：不再重试。
+    expect(thinkingLevelAfterRejection('gw-x', 'low', 400, body, storage)).toBeNull();
+  });
+
+  it('retries the stream with the nearest supported level and keeps it for the next turn', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      bodies.push(body);
+      if (body.reasoning_effort === 'max') {
+        return new Response(JSON.stringify({ error: { message: "Invalid value for 'reasoning_effort': Supported values are 'low', 'medium', 'high' and 'xhigh'." } }), { status: 400 });
+      }
+      return sse([{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }]);
+    }));
+    const { message } = await runStream('gpt-5.6-sol', 'max');
+    expect(bodies.map(body => body.reasoning_effort)).toEqual(['max', 'xhigh']);
+    expect(message.stopReason).toBe('stop');
+    expect(isReasoningUnsupported('gpt-5.6-sol')).toBe(false);
+
+    bodies.length = 0;
+    await runStream('gpt-5.6-sol', 'max');
+    expect(bodies.map(body => body.reasoning_effort)).toEqual(['xhigh']);
   });
 });

@@ -4,15 +4,14 @@ import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '.
 import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
 import {
-  AGENT_THINKING_LEVELS,
-  agentThinkingVersion,
   clearReasoningUnsupported,
   isReasoningUnsupported,
   readAgentThinkingLevel,
-  subscribeAgentThinking,
   writeAgentThinkingLevel,
   type AgentThinkingLevel,
 } from '../../services/agentThinking';
+import { clampThinkingLevel, fetchedModelToItem, type ModelThinkingInput } from '../../services/modelThinkingLevels';
+import { ThinkingLevelBadge, thinkingLevelText, thinkingSourceText, useModelThinking } from './ThinkingLevelBadge';
 
 type Lang = 'en' | 'zho';
 const ui = (language: Lang, zho: string, en: string) => (language === 'en' ? en : zho);
@@ -27,30 +26,30 @@ function keyModels(key: UserApiKey): ModelItem[] {
   return text.length ? text : items;
 }
 
-const THINKING_LABEL: Record<AgentThinkingLevel, [string, string]> = {
-  off: ['不思考', 'Off'],
-  minimal: ['极简', 'Minimal'],
-  low: ['低', 'Low'],
-  medium: ['中', 'Medium'],
-  high: ['高', 'High'],
-};
-
-/** 思考强度选择器：选择按模型记住，并成为新的全局默认；已知不支持的模型显示「不支持」并禁用。 */
-export function AgentThinkingSelect({ model, language }: { model: string; language: Lang }) {
-  useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
+/**
+ * 思考强度选择器：只列出该模型可用的档位（API 字段 → 注册表 → 规则表，见 modelThinkingLevels）。
+ * 选择按模型记住，并成为新的全局默认；存的档位不在列表里时就近显示。必须思考的模型把「不思考」换成「默认」。
+ * 已知不支持的模型显示「不支持」并禁用。
+ */
+export function AgentThinkingSelect({ model, modelInfo, language }: { model: string; modelInfo?: ModelThinkingInput; language: Lang }) {
+  const thinking = useModelThinking(modelInfo && modelInfo.id === model ? modelInfo : model);
   const unsupported = isReasoningUnsupported(model);
-  const level = readAgentThinkingLevel(model);
+  const stored = readAgentThinkingLevel(model);
+  const options: AgentThinkingLevel[] = thinking.mandatory ? ['off', ...thinking.levels.filter(level => level !== 'off')] : thinking.levels;
+  const level = stored === 'off' ? 'off' : clampThinkingLevel(stored, options.filter(item => item !== 'off').length ? options.filter(item => item !== 'off') : options);
   const label = ui(language, '思考强度', 'Thinking effort');
+  const noThinking = !thinking.mandatory && thinking.levels.every(item => item === 'off');
   const title = unsupported
     ? ui(language, '该模型不支持思考强度参数（已自动关闭）；点击可重新尝试', 'This model rejected the thinking parameter; click to retry')
-    : label;
+    : `${label}（${ui(language, '来源', 'source')}：${thinkingSourceText(thinking.source, language)}）`;
+  const optionText = (item: AgentThinkingLevel) => item === 'off' && thinking.mandatory ? ui(language, '默认', 'Default') : thinkingLevelText(item, language, thinking.mode);
   return (
-    <label className={`agent-thinking-select${unsupported ? ' is-unsupported' : ''}${level !== 'off' && !unsupported ? ' is-active' : ''}`} title={title}>
+    <label className={`agent-thinking-select${unsupported || noThinking ? ' is-unsupported' : ''}${level !== 'off' && !unsupported ? ' is-active' : ''}`} title={title} data-thinking-source={thinking.source}>
       <Brain size={13} aria-hidden="true" />
       {unsupported
         ? <button type="button" aria-label={label} onClick={() => clearReasoningUnsupported(model)}>{ui(language, '不支持', 'Unsupported')}</button>
-        : <select aria-label={label} value={level} onChange={event => writeAgentThinkingLevel(model, event.target.value as AgentThinkingLevel)}>
-            {AGENT_THINKING_LEVELS.map(item => <option key={item} value={item}>{ui(language, THINKING_LABEL[item][0], THINKING_LABEL[item][1])}</option>)}
+        : <select aria-label={label} value={level} disabled={noThinking} onChange={event => writeAgentThinkingLevel(model, event.target.value as AgentThinkingLevel)}>
+            {options.map(item => <option key={item} value={item}>{optionText(item)}</option>)}
           </select>}
     </label>
   );
@@ -111,7 +110,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         setError(result.error || ui(language, '没有拉取到模型，请检查 URL 和 Key', 'No models found. Check the URL and key.'));
         return;
       }
-      const models: ModelItem[] = result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }));
+      const models: ModelItem[] = result.models.map(fetchedModelToItem);
       const capabilities = [...new Set<AICapability>(models.map(model => model.capability))];
       const firstText = models.find(model => model.capability === 'text') || models[0];
       // 新 Key 接管 Agent：先清掉其他 Key 的 agent-text 映射。
@@ -178,6 +177,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
                     return (
                       <button key={model.id} type="button" role="option" aria-selected={selected} onClick={() => select(group.key.id, model.id)}>
                         <span><strong>{model.name || model.id}</strong>{model.name && model.name !== model.id && <small>{model.id}</small>}</span>
+                        <ThinkingLevelBadge model={model} language={language} />
                         {selected && <Check size={14} />}
                       </button>
                     );
@@ -189,7 +189,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         </div>
       )}
     </div>
-    {current && <AgentThinkingSelect model={current.model} language={language} />}
+    {current && <AgentThinkingSelect model={current.model} modelInfo={current.key.models?.find(item => item.id === current.model)} language={language} />}
     </>
   );
 }

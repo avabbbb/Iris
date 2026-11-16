@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Agent 思考强度按模型动态：档位扩到 none(不思考) < minimal < low < medium < high < xhigh < max，可用档位按来源依次取——① 服务商 /models 字段（OpenRouter `reasoning.supported_efforts` / `mandatory` / `supported_parameters`、Anthropic `capabilities.effort`、Google `thinking`、`supported_reasoning_levels`、Kimi `supports_thinking_type` / `think_efforts.default_effort`），连同 `context_length` / `context_window` 与最大输出一起随模型保存，重新拉模型时刷新；② pi-ai 内置注册表（`getSupportedThinkingLevels`，懒加载分包）；③ `services/thinkingLevelFallback.ts` 的 id 规则表。发送前就近夹到模型支持的档位（距离相同取高档）；xhigh / max 按各家接口原样发送（OpenAI `reasoning_effort`、OpenRouter `reasoning.effort`、Anthropic 新模型 adaptive thinking + `output_config.effort`），不再压成 high；开关型模型发 `thinking.type=enabled` / `reasoning.enabled`。报错带「Supported values are …」时解析并记住 1 小时，用最近一档重试。Agent 模型选择器、渠道模型选择、设置页模型列表只显示该模型可用的档位。真实服务商接口未在沙箱里验证。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 
 - 生成计划卡随会话保存：用户做出选择的计划卡按「项目 + 会话」存本机（只存命令、节点 id、门禁明细、选择、时间与轮次，进度回来后按画布实时节点重新推导），切换会话、刷新页面后挂回原来那一轮；删除会话时一起清掉。

@@ -10,6 +10,7 @@ import {
 } from '../services/aiGateway';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { refreshAllProviderModels } from '../services/modelFetcher';
+import { fetchedModelToItem } from '../services/modelThinkingLevels';
 import {
     isLikelyRunningHubModelEndpoint,
     normalizeRunningHubModelEndpoint,
@@ -269,7 +270,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             setUserApiKeys(prev => prev.map(k => {
                 const fetched = results.get(k.id);
                 if (!fetched || fetched.length === 0) return k;
-                const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                const modelItems = fetched.map(fetchedModelToItem);
                 return mergeSuggestedProductRouteMappings(mergeFetchedModelsIntoKey(k, modelItems));
             }));
         }).catch(() => { /* silent background refresh failure */ });
@@ -309,7 +310,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             .then(results => {
                 const fetched = results.get(nextKey.id);
                 if (fetched && fetched.length > 0) {
-                    const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                    const modelItems = fetched.map(fetchedModelToItem);
                     setUserApiKeys(prev => prev.map(k =>
                         k.id === nextKey.id ? mergeSuggestedProductRouteMappings(mergeFetchedModelsIntoKey(k, modelItems)) : k
                     ));

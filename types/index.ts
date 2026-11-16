@@ -126,7 +126,24 @@ export interface ModelItem {
   name: string;
   /** 模型自身的输出能力；由 Provider 模型列表返回或用户配置，避免再次从名称猜测。 */
   capability?: AICapability;
+  /** 思考强度档位（从低到高，'off' 即 none）；来自服务商 /models 返回，没有时留空，由注册表 / 规则表补齐。 */
+  thinkingLevels?: ModelThinkingLevel[];
+  /** 档位数据来源：api = 服务商模型列表字段。 */
+  thinkingSource?: 'api';
+  /** effort = 可选强度；toggle = 只有开 / 关（发 thinking.type=enabled / reasoning.enabled）。 */
+  thinkingMode?: 'effort' | 'toggle';
+  /** 服务商声明必须思考（不能关）。 */
+  thinkingMandatory?: boolean;
+  /** 服务商声明的默认档位。 */
+  defaultThinkingLevel?: ModelThinkingLevel;
+  /** 上下文窗口（tokens），来自 /models 的 context_length / context_window 等字段。 */
+  contextWindow?: number;
+  /** 单次最大输出 tokens。 */
+  maxOutputTokens?: number;
 }
+
+/** 统一的思考强度档位，按强度升序：off(none) < minimal < low < medium < high < xhigh < max。 */
+export type ModelThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export type ProductModelMode =
   | 'text-to-image'

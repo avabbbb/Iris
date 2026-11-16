@@ -7,7 +7,8 @@
 import localforage from 'localforage';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
-import type { AIProvider, AICapability } from '../types';
+import type { AIProvider, AICapability, ModelThinkingLevel } from '../types';
+import { normalizeThinkingLevelName, sortThinkingLevels, type ModelCapabilityFields } from './modelThinkingLevels';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
 import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhProbeApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
 import {
@@ -26,7 +27,141 @@ export interface FetchedModel {
     inputModalities?: string[];
     outputModalities?: string[];
     supportedParameters?: string[];
+    /** 以下字段来自服务商模型列表（见 readModelCapabilityFields），随 ModelItem 持久化。 */
+    thinkingLevels?: ModelThinkingLevel[];
+    thinkingSource?: 'api';
+    thinkingMode?: 'effort' | 'toggle';
+    thinkingMandatory?: boolean;
+    defaultThinkingLevel?: ModelThinkingLevel;
+    contextWindow?: number;
+    maxOutputTokens?: number;
 }
+
+export type { ModelCapabilityFields } from './modelThinkingLevels';
+
+function positiveInt(...values: unknown[]): number | undefined {
+    for (const value of values) {
+        const n = typeof value === 'string' ? Number(value) : value;
+        if (typeof n === 'number' && Number.isFinite(n) && n > 0) return Math.floor(n);
+    }
+    return undefined;
+}
+
+/** 档位来源可能是字符串数组、{ effort | value | level | name } 数组，或 { low: { supported: true } } 这类对象。 */
+function readLevelList(raw: unknown): ModelThinkingLevel[] {
+    if (Array.isArray(raw)) {
+        return sortThinkingLevels(raw.map(item => (item && typeof item === 'object')
+            ? (item as any).effort ?? (item as any).value ?? (item as any).level ?? (item as any).name ?? (item as any).id
+            : item));
+    }
+    if (raw && typeof raw === 'object') {
+        const entries = Object.entries(raw as Record<string, unknown>)
+            .filter(([key, value]) => normalizeThinkingLevelName(key) && key !== 'default'
+                && (value === true || (value && typeof value === 'object' && (value as any).supported !== false)));
+        return sortThinkingLevels(entries.map(([key]) => key));
+    }
+    return [];
+}
+
+/**
+ * 从服务商 /models 条目读思考档位与上下文大小（各家字段不同，见下）。读不到的字段不出现。
+ * - OpenRouter：reasoning.supported_efforts / reasoning.mandatory，supported_parameters 含 reasoning / reasoning_effort；
+ *   context_length、top_provider.context_length / max_completion_tokens。
+ * - Anthropic：capabilities.effort（{ low: { supported } … } 或数组）、capabilities.thinking.supported；max_input_tokens / max_tokens。
+ * - Google：thinking（布尔）、inputTokenLimit / outputTokenLimit。
+ * - 通用：supported_reasoning_levels（字符串或 { effort } 数组）、reasoning_efforts / supported_reasoning_efforts、
+ *   context_window、max_output_tokens。
+ * - Kimi：supports_thinking_type（开关型）、think_efforts（档位）与 think_efforts.default_effort。
+ */
+export function readModelCapabilityFields(raw: any): ModelCapabilityFields {
+    if (!raw || typeof raw !== 'object') return {};
+    const out: ModelCapabilityFields = {};
+    const reasoning = raw.reasoning && typeof raw.reasoning === 'object' ? raw.reasoning : undefined;
+    const caps = raw.capabilities && typeof raw.capabilities === 'object' ? raw.capabilities : undefined;
+    const thinkEfforts = raw.think_efforts && typeof raw.think_efforts === 'object' ? raw.think_efforts : undefined;
+    const params: string[] | undefined = Array.isArray(raw.supported_parameters) ? raw.supported_parameters : undefined;
+
+    let levels: ModelThinkingLevel[] = [];
+    let supported: boolean | undefined;
+    let mandatory: boolean | undefined;
+    let toggle = false;
+    let defaultLevel: ModelThinkingLevel | undefined;
+
+    // 1. 显式档位列表（按可信度依次尝试）
+    const levelSources: unknown[] = [
+        reasoning?.supported_efforts,
+        reasoning?.efforts,
+        raw.supported_reasoning_levels,
+        raw.supported_reasoning_efforts,
+        raw.reasoning_efforts,
+        caps?.effort?.levels,
+        caps?.effort,
+        caps?.reasoning_effort,
+        thinkEfforts?.supported_efforts ?? thinkEfforts?.efforts ?? thinkEfforts?.levels,
+        thinkEfforts && !Array.isArray(thinkEfforts) ? Object.fromEntries(Object.entries(thinkEfforts).filter(([key]) => !/default/i.test(key))) : undefined,
+    ];
+    for (const source of levelSources) {
+        if (source && typeof source === 'object' && !Array.isArray(source) && (source as any).supported === false) { supported = false; continue; }
+        const list = readLevelList(source);
+        if (list.length) { levels = list; supported = true; break; }
+    }
+
+    // 2. 布尔 / 开关型
+    if (typeof reasoning?.mandatory === 'boolean') mandatory = reasoning.mandatory;
+    if (typeof raw.always_thinks === 'boolean' && raw.always_thinks) mandatory = true;
+    if (typeof caps?.thinking?.supported === 'boolean' && supported === undefined) supported = caps.thinking.supported;
+    if (typeof caps?.thinking === 'boolean' && supported === undefined) supported = caps.thinking;
+    if (typeof raw.thinking === 'boolean' && supported === undefined) supported = raw.thinking;
+    const kimiType = raw.supports_thinking_type;
+    if (kimiType !== undefined && kimiType !== null && kimiType !== false) {
+        const types = (Array.isArray(kimiType) ? kimiType : [kimiType]).map(item => String(item).toLowerCase());
+        if (!types.some(item => /^(false|none|disabled?|unsupported)$/.test(item))) {
+            supported = true;
+            if (!levels.length) toggle = true;
+            if (types.length && types.every(item => /^(enabled|always|forced|true)$/.test(item)) && Array.isArray(kimiType)) mandatory = true;
+        } else if (supported === undefined) {
+            supported = false;
+        }
+    }
+    if (params && supported === undefined) {
+        if (params.some(p => /^(reasoning|reasoning_effort|include_reasoning|thinking)$/.test(p))) supported = true;
+        else supported = false;
+    }
+    if (reasoning && supported === undefined && Object.keys(reasoning).length) supported = true;
+
+    const defaultRaw = thinkEfforts?.default_effort ?? reasoning?.default_effort ?? raw.default_reasoning_level ?? raw.default_reasoning_effort ?? caps?.effort?.default;
+    const parsedDefault = normalizeThinkingLevelName(defaultRaw);
+    if (parsedDefault) defaultLevel = parsedDefault;
+
+    if (levels.length) {
+        // 声明了不必须思考，档位里却没有 none：补上 off，用户可以关。
+        if (mandatory === false && !levels.includes('off')) levels = ['off', ...levels];
+        if (mandatory === undefined && levels.includes('off')) mandatory = false;
+        out.thinkingLevels = levels;
+        out.thinkingSource = 'api';
+        out.thinkingMode = 'effort';
+    } else if (supported === false) {
+        out.thinkingLevels = ['off'];
+        out.thinkingSource = 'api';
+    } else if (supported === true && toggle) {
+        out.thinkingLevels = mandatory ? ['high'] : ['off', 'high'];
+        out.thinkingSource = 'api';
+        out.thinkingMode = 'toggle';
+    }
+    // supported === true 但没给档位（如 Google thinking: true）：只记必须与否，档位交给注册表 / 规则表。
+    if (mandatory !== undefined && (out.thinkingLevels?.length || supported)) out.thinkingMandatory = mandatory;
+    if (defaultLevel) out.defaultThinkingLevel = defaultLevel;
+
+    const contextWindow = positiveInt(raw.context_length, raw.context_window, raw.contextWindow, raw.max_context_length,
+        raw.max_input_tokens, raw.inputTokenLimit, raw.top_provider?.context_length);
+    const maxOutputTokens = positiveInt(raw.max_output_tokens, raw.max_completion_tokens, raw.top_provider?.max_completion_tokens,
+        raw.outputTokenLimit, raw.max_tokens, raw.maxTokens);
+    if (contextWindow) out.contextWindow = contextWindow;
+    if (maxOutputTokens) out.maxOutputTokens = maxOutputTokens;
+    return out;
+}
+
+export { fetchedModelToItem, refreshModelCapabilityFields } from './modelThinkingLevels';
 
 export interface FetchModelsResult {
     ok: boolean;
@@ -295,6 +430,7 @@ async function fetchGoogleModels(apiKey: string, baseUrl?: string): Promise<Fetc
                     name: m.displayName || id,
                     capability,
                     description: m.description?.slice(0, 120),
+                    ...(capability === 'text' ? readModelCapabilityFields(m) : {}),
                 };
             });
         return { ok: true, models, modelDiscovery: 'available', endpointFlavor: 'google', capabilitySummary: summarizeCapabilities(models), effectiveBaseUrl: base };
@@ -385,6 +521,7 @@ async function fetchOpenAICompatibleModels(
                         inputModalities: m.architecture?.input_modalities,
                         outputModalities: m.architecture?.output_modalities,
                         supportedParameters: m.supported_parameters,
+                        ...readModelCapabilityFields(m),
                     };
                 });
             return {
@@ -568,7 +705,8 @@ export const FREE_KEY_LINKS: { provider: AIProvider; label: string; url: string;
 // ── 模型缓存 ──────────────────────────────────────
 const MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 小时
 // 缓存 key 带版本：模型目录/展示逻辑变更时 bump，强制旧缓存失效重拉
-const CACHE_KEY_PREFIX = 'modelCacheV3.';
+// V4：模型条目带上思考档位 / 上下文窗口字段。
+const CACHE_KEY_PREFIX = 'modelCacheV4.';
 const modelCacheStorage = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
 
 interface CachedModels {
