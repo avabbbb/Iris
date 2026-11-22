@@ -82,12 +82,14 @@ export class ManagedIrisAgentClient {
     emit: (event: IrisAgentTurnEvent) => void,
     signal?: AbortSignal,
     skillAttachment?: ProductionSkillAttachment | null,
+    /** 本轮 id：Agent 只把这一轮的事件推给本连接，取消也能精确到这一轮（含仍在排队时）。 */
+    turnId?: string,
   ): Promise<void> {
     const response = await fetch(`${this.connection.url}/agent/flovart/turn`, {
       method: 'POST',
       signal,
       headers: headers(this.connection, true),
-      body: JSON.stringify({ projectId, prompt, skillAttachment: skillAttachment || null }),
+      body: JSON.stringify({ projectId, prompt, skillAttachment: skillAttachment || null, ...(turnId ? { turnId } : {}) }),
     });
     if (!response.ok) throw await responseError(response);
     const reader = response.body?.getReader();
@@ -131,11 +133,12 @@ export class ManagedIrisAgentClient {
     }
   }
 
-  async cancel(projectId: string): Promise<void> {
+  /** 给了 turnId 只取消这一轮（排队中的直接出队）；不给则取消该项目正在执行的回合。 */
+  async cancel(projectId: string, turnId?: string): Promise<void> {
     const response = await fetch(`${this.connection.url}/agent/flovart/cancel`, {
       method: 'POST',
       headers: headers(this.connection, true),
-      body: JSON.stringify({ projectId }),
+      body: JSON.stringify({ projectId, ...(turnId ? { turnId } : {}) }),
     });
     if (!response.ok) throw await responseError(response);
   }

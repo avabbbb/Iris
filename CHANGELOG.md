@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- 本机托管 Agent 的回合按 turnId 路由：`/agent/iris/turn` 接受 `turnId`（缺省由 Agent 生成），SSE 只推本轮事件并先发 `turn` 事件；`/agent/iris/cancel` 带 `turnId` 时只取消这一轮，排队中的回合直接出队不再启动；客户端在排队阶段断开也会出队。不带 `turnId` 的旧客户端行为不变。
 
 ## 0.1.1 — Iris closed beta / Iris 内测版 (2026-11-22)
 - 更名为 Iris 后的第一个发行版。原计划用 0.1.0，但仓库开启了不可变 Release，Flovart 时代 v0.1.0 标签名被保留无法复用，因此从 0.1.1 起（Flovart 时代的 0.1.0 – 0.3.0 及其 Release 已下架，Git 标签归档在 `archive/flovart/*`）。v0.x 为内测预发布，不进入稳定自动更新频道。

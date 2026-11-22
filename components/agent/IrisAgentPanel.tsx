@@ -208,6 +208,8 @@ const userApiKeysRef = useRef(userApiKeys);
   }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
+  // 托管 Agent 当前回合的 id：停止只取消这一轮。
+  const managedTurnId = useRef<string | undefined>(undefined);
   type PendingConfirmation = { id?: string; summary: string; resolve: (verdict: AgentConfirmVerdict) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean; turnIndex?: number };
   // 生成计划卡：用户做出选择后仍留在这一轮里，按画布节点实时显示「生成中 n/N → 已完成」。
   type TrackedRunPlan = { id: string; request: AgentConfirmRequest; decision: RunPlanDecision; decidedAt: number; turnIndex: number };
@@ -1329,10 +1331,16 @@ const userApiKeysRef = useRef(userApiKeys);
         // 我的 Skill 只存在浏览器里，本机 Agent 的包注册表解析不到：把指令随本轮文本带过去，不绑定包。
         const userSkill = isUserSkillAttachment(skillAttachment);
         const managedText = userSkill && skillAttachment ? skillSystemContext(skillAttachment) + '\n\n' + mediaText : mediaText;
-        await client.current!.turn(project.id, managedText, event => {
-          if ((event.type === 'error' && !isAbortMessage(event.message)) || (event.type === 'snapshot' && latestTurnFailed(event.snapshot))) failed = true;
-          handleEvent(event, assistantId);
-        }, controller.signal, userSkill ? undefined : skillAttachment);
+        const remoteTurnId = crypto.randomUUID();
+        managedTurnId.current = remoteTurnId;
+        try {
+          await client.current!.turn(project.id, managedText, event => {
+            if ((event.type === 'error' && !isAbortMessage(event.message)) || (event.type === 'snapshot' && latestTurnFailed(event.snapshot))) failed = true;
+            handleEvent(event, assistantId);
+          }, controller.signal, userSkill ? undefined : skillAttachment, remoteTurnId);
+        } finally {
+          if (managedTurnId.current === remoteTurnId) managedTurnId.current = undefined;
+        }
       }
       activity.current(failed ? 'error' : 'done');
     } catch (error) {
@@ -1378,7 +1386,7 @@ const userApiKeysRef = useRef(userApiKeys);
     setPendingAsk(undefined);
     abort.current?.abort();
     activity.current('idle');
-    const cancelled = kernelRef.current ? kernelRef.current.cancel() : client.current?.cancel(project.id);
+    const cancelled = kernelRef.current ? kernelRef.current.cancel() : client.current?.cancel(project.id, managedTurnId.current);
     void Promise.resolve(cancelled).catch(() => undefined).finally(() => dispatchTurn({ type: 'settled', turnId }));
   };
 

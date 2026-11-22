@@ -611,11 +611,20 @@ export function startHttpServer() {
             console.error('[iris-agent] SSE write failed:', error);
           }
         };
-        const unsubscribe = await iris.subscribe(projectId, event => {
+        // 每轮一个 turnId（客户端给或服务端生成）：事件只转发本轮的，取消可精确到排队中的这一轮。
+        // 先订阅再入队，回合一开始的事件不会漏。非法 turnId 由 send 拒绝并作为 error 事件返回。
+        const turnId = body.turnId === undefined || body.turnId === null || body.turnId === '' ? crypto.randomUUID() : String(body.turnId);
+        if (iris.turnState(turnId)) {
+          // 同一 turnId 已在排队或执行：不再订阅，否则会收到那一轮的流。
+          emit('error', { message: `回合 ${turnId} 已在排队或执行`, code: 'TURN_ID_IN_USE', turnId });
+          response.end();
+          return;
+        }
+        const unsubscribe = await iris.subscribeTurn(projectId, turnId, event => {
           const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
           if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
           if (update?.type === 'thinking_delta') emit('thinking-delta', { delta: update.delta });
-          if (event.type === 'agent_start') emit('status', { running: true });
+          if (event.type === 'agent_start') emit('status', { running: true, turnId });
           if (event.type === 'tool_execution_start') emit('tool-start', {
             id: event.toolCallId,
             name: event.toolName,
@@ -633,11 +642,17 @@ export function startHttpServer() {
             isError: event.isError,
           });
         });
+        const run = iris.send(projectId, String(body.prompt || ''), [], body.skillAttachment, { turnId });
+        // 客户端在排队阶段就断开：这一轮没人收流，直接出队，不再启动。执行中的回合仍由显式 cancel 停止。
+        response.on('close', () => {
+          if (!response.writableFinished && iris.turnState(turnId) === 'queued') void iris.cancel(projectId, turnId);
+        });
+        if (iris.turnState(turnId)) emit('turn', { turnId, state: iris.turnState(turnId) });
         try {
-          const snapshot = await iris.send(projectId, String(body.prompt || ''), [], body.skillAttachment);
-          emit('snapshot', snapshot);
+          const snapshot = await run;
+          emit('snapshot', { ...snapshot, turnId });
         } catch (error) {
-          emit('error', { message: error instanceof Error ? error.message : String(error) });
+          emit('error', { message: error instanceof Error ? error.message : String(error), ...(error?.code ? { code: error.code } : {}), turnId });
         } finally {
           unsubscribe();
           response.end();
@@ -646,8 +661,8 @@ export function startHttpServer() {
       }
       if (iris && request.method === 'POST' && (url.pathname === '/agent/iris/cancel' || url.pathname === '/agent/flovart/cancel')) {
         const body = await readBody(request);
-        await iris.cancel(String(body.projectId || 'default'));
-        return json(response, 200, { ok: true });
+        const outcome = await iris.cancel(String(body.projectId || 'default'), body.turnId);
+        return json(response, 200, { ok: true, ...outcome });
       }
       return json(response, 404, { ok: false, error: 'not found' });
     } catch (error) {
