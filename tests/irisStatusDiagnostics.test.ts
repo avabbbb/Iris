@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildStatusDiagnostics as buildDiagnostics, maskSecret } from '../tools/iris/local-status.js';
 import { applyStdinNodeIds, formatCliResponse, nodeIdsFromNdjson, waitForAgentTask } from '../tools/iris/cli-output.js';
@@ -7,15 +8,17 @@ const buildStatusDiagnostics = buildDiagnostics as unknown as (input: Record<str
 const files = (present: Record<string, string>) => (path: string) => (present[path] ? { exists: true, modifiedAt: present[path], bytes: 10 } : { exists: false });
 
 describe('status diagnostics', () => {
+  // 配置路径会被 path.resolve：Windows 上 '/x/agent.json' 变成 'D:\\x\\agent.json'，夹具按同一规则取路径。
+  const agentJson = resolve('/x/agent.json');
   const env = { IRIS_AGENT_CONFIG: '/x/agent.json', IRIS_WEB_DISCOVERY: '/x/web.json' } as never;
 
   it('masks the token and reports credential source, binding and file times', () => {
     const diagnostics = buildStatusDiagnostics({
       env, connection: { url: 'http://127.0.0.1:1', token: 'secret-token-1234' }, agentState: 'ready',
       health: { clients: 1, hasWorkflow: true, activeProjectId: 'p1', clientId: 'c1', revision: '7', activeHostWriter: { agentIdentity: 'codex', hostSessionId: 'h', projectId: 'p1' } },
-      statFile: files({ '/x/agent.json': '2026-11-16T03:00:00.000Z' }),
+      statFile: files({ [agentJson]: '2026-11-16T03:00:00.000Z' }),
     });
-    expect(diagnostics.credential).toEqual({ source: 'env:IRIS_AGENT_CONFIG', configPath: '/x/agent.json', token: '****1234', agentUrl: 'http://127.0.0.1:1' });
+    expect(diagnostics.credential).toEqual({ source: 'env:IRIS_AGENT_CONFIG', configPath: agentJson, token: '****1234', agentUrl: 'http://127.0.0.1:1' });
     expect(diagnostics.binding).toEqual({ projectId: 'p1', clientId: 'c1', revision: 7, writer: { agentIdentity: 'codex', hostSessionId: 'h', projectId: 'p1' } });
     expect(diagnostics.stateFiles.map(file => [file.name, file.exists, file.modifiedAt])).toEqual([['agent.json', true, '2026-11-16T03:00:00.000Z'], ['web.json', false, undefined]]);
     expect(diagnostics.workspaceUnavailableReason).toBeNull();
@@ -23,7 +26,7 @@ describe('status diagnostics', () => {
   });
 
   it('names the first reason WORKSPACE_UNAVAILABLE would happen', () => {
-    const reason = (input: Record<string, unknown>) => buildStatusDiagnostics({ env, statFile: files({ '/x/agent.json': 't' }), ...input }).workspaceUnavailableReason?.code;
+    const reason = (input: Record<string, unknown>) => buildStatusDiagnostics({ env, statFile: files({ [agentJson]: 't' }), ...input }).workspaceUnavailableReason?.code;
     expect(buildStatusDiagnostics({ env, statFile: files({}) }).workspaceUnavailableReason?.code).toBe('AGENT_CONFIG_MISSING');
     expect(reason({ agentState: 'auth_failed' })).toBe('AGENT_AUTH_FAILED');
     expect(reason({ agentState: 'offline' })).toBe('AGENT_OFFLINE');
