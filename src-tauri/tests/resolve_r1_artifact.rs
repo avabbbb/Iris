@@ -127,6 +127,13 @@ fn resolve_fixture_task_returns_a_durable_verified_png_path() {
     let expected_sha256 = hex::encode(Sha256::digest(&bytes));
     assert_eq!(payload.mime_type, "image/png");
     assert_eq!(payload.bytes, bytes);
+    // 桌面 IPC 的二进制帧：[u32 BE mime 长度][mime][文件字节]，内容与 read_artifact 一致。
+    let frame = reopened
+        .read_artifact_frame(task_id)
+        .expect("read artifact frame after Runtime reopen");
+    let mime_len = u32::from_be_bytes(frame[..4].try_into().expect("frame header")) as usize;
+    assert_eq!(&frame[4..4 + mime_len], b"image/png");
+    assert_eq!(&frame[4 + mime_len..], bytes.as_slice());
     assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
     assert_eq!(located["taskId"], task_id);
     assert_eq!(located["mimeType"], "image/png");
@@ -175,6 +182,10 @@ fn same_size_artifact_tampering_is_rejected_by_locate_and_read() {
         .read_artifact(task_id)
         .expect_err("artifact read must reject same-size tampering");
     assert_eq!(read_error.code, "RUNTIME_UNAVAILABLE");
+    let frame_error = runtime
+        .read_artifact_frame(task_id)
+        .expect_err("artifact frame must reject same-size tampering");
+    assert_eq!(frame_error.code, "RUNTIME_UNAVAILABLE");
 }
 
 #[test]

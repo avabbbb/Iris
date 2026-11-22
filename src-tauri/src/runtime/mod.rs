@@ -192,6 +192,35 @@ impl ProductionRuntime {
         Ok(RuntimeArtifactPayload { mime_type, bytes })
     }
 
+    /// 给桌面 IPC 用的二进制帧：`[u32 BE mime 长度][mime UTF-8][文件字节]`。
+    /// 文件直接读进带前缀的缓冲区，不经 JSON 数组，也不多拷一份；完整性校验与 read_artifact 相同。
+    pub fn read_artifact_frame(&self, task_id: &str) -> Result<Vec<u8>, RuntimeError> {
+        let (path, mime_type, expected_sha256, expected_byte_size) = self.artifact_file(task_id)?;
+        let unreadable =
+            || RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact cannot be read");
+        let mime = mime_type.as_bytes();
+        let header_len = 4 + mime.len();
+        let capacity = usize::try_from(expected_byte_size)
+            .ok()
+            .and_then(|size| size.checked_add(header_len))
+            .ok_or_else(unreadable)?;
+        let mut frame = Vec::with_capacity(capacity);
+        frame.extend_from_slice(&(mime.len() as u32).to_be_bytes());
+        frame.extend_from_slice(mime);
+        std::fs::File::open(path)
+            .and_then(|mut file| file.read_to_end(&mut frame))
+            .map_err(|_| unreadable())?;
+        let body = &frame[header_len..];
+        let actual_sha256 = hex::encode(Sha256::digest(body));
+        if body.len() as u64 != expected_byte_size || actual_sha256 != expected_sha256 {
+            return Err(RuntimeError::new(
+                "RUNTIME_UNAVAILABLE",
+                "Media artifact failed integrity verification",
+            ));
+        }
+        Ok(frame)
+    }
+
     pub fn locate_artifact(&self, task_id: &str) -> Result<Value, RuntimeError> {
         let (path, mime_type, expected_sha256, expected_byte_size) = self.artifact_file(task_id)?;
         let mut file = std::fs::File::open(&path).map_err(|_| {
@@ -1310,8 +1339,11 @@ pub fn runtime_execute(
 pub fn runtime_artifact_read(
     runtime: tauri::State<'_, Arc<ProductionRuntime>>,
     task_id: String,
-) -> Result<RuntimeArtifactPayload, RuntimeError> {
-    runtime.read_artifact(&task_id)
+) -> Result<tauri::ipc::Response, RuntimeError> {
+    // 原始二进制响应：前端拿到 ArrayBuffer，大视频不再被序列化成 JSON 数字数组。
+    runtime
+        .read_artifact_frame(&task_id)
+        .map(tauri::ipc::Response::new)
 }
 
 #[tauri::command]
