@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { cutStore, getCutProject } from '../../services/cut/cutStore';
 import type { CutMediaEngine } from '../../services/cut/mediaEngine';
 import { resolveSnap, type SnapPoint } from '../../services/cut/snapping';
+import { drawWaveform, sliceWaveform, type CutWaveform } from '../../services/cut/waveform';
 import { clipEnd, clipSpeed, findSource, projectDuration, updateClip, type CutClip, type CutProject, type CutTrack } from '../../services/cut/timeline';
 
 type Lang = 'zho' | 'en';
@@ -65,6 +66,38 @@ function Thumb({ engine, sourceId, kind, time, revision }: { engine: CutMediaEng
     return () => { alive = false; };
   }, [engine, sourceId, kind, time, revision]);
   return <canvas ref={ref} width={96} height={54} className="cut-clip__thumb" />;
+}
+
+/**
+ * 片段上的音频波形：音频片段画满，视频片段（有声）画在底部一条。按片段的入点、素材跨度和像素宽度重采样，
+ * 改速度 / 修剪 / 缩放都会重画；音量改变按比例缩放竖条高度。
+ */
+function ClipWaveform({ engine, clip, width, revision, strip }: { engine: CutMediaEngine | null; clip: CutClip; width: number; revision: number; strip: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [waveform, setWaveform] = useState<CutWaveform | null>(null);
+  const sourceId = clip.sourceId;
+  useEffect(() => {
+    let alive = true;
+    setWaveform(null);
+    if (!engine || !sourceId || !engine.has(sourceId)) return;
+    void engine.waveform(sourceId).then(result => { if (alive) setWaveform(result); });
+    return () => { alive = false; };
+  }, [engine, sourceId, revision]);
+  const pixels = Math.max(1, Math.min(4096, Math.round(width)));
+  const span = clip.duration * clipSpeed(clip);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !waveform) return;
+    const ratio = Math.min(2, globalThis.devicePixelRatio || 1);
+    canvas.width = Math.round(pixels * ratio);
+    canvas.height = Math.round(canvas.clientHeight * ratio) || (strip ? 24 : 48);
+    // 每 2 个 CSS 像素一根竖条。
+    const values = sliceWaveform(waveform, clip.in, clip.in + span, Math.max(1, Math.floor(pixels / 2)));
+    drawWaveform(ctx, values, canvas.width, canvas.height, { volume: clip.volume });
+  }, [waveform, pixels, clip.in, span, clip.volume, strip]);
+  if (!waveform) return null;
+  return <canvas ref={ref} className={`cut-clip__wave${strip ? ' is-strip' : ''}`} aria-hidden data-testid="cut-clip-wave" />;
 }
 
 interface Drag {
@@ -250,6 +283,9 @@ export function CutTimeline(props: CutTimelineProps) {
                         onDoubleClick={() => { if (clip.kind === 'text' || clip.kind === 'subtitle') setEditing(clip.id); }}
                       >
                         {clip.sourceId && !isOffline && width > 40 && <ClipThumbs engine={engine} clip={clip} project={project} width={width} revision={mediaRevision} />}
+                        {clip.sourceId && !isOffline && width > 12 && (clip.kind === 'audio' || (clip.kind === 'video' && source?.hasAudio)) && (
+                          <ClipWaveform engine={engine} clip={clip} width={width} revision={mediaRevision} strip={clip.kind === 'video'} />
+                        )}
                         {editing === clip.id ? <InlineText clip={clip} onDone={() => setEditing(null)} /> : (
                           <span className="cut-clip__label">
                             {clip.kind === 'video' ? <Film size={11} /> : clip.kind === 'image' ? <ImageIcon size={11} /> : clip.kind === 'audio' ? <Music size={11} /> : clip.kind === 'subtitle' ? <Captions size={11} /> : <Type size={11} />}

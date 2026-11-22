@@ -26,6 +26,7 @@ import {
 import { audioSegments, type CutEncoder, type CutFrameStream, type CutRenderBackend, type Drawable } from './render';
 import type { CutClip, CutProject, CutSource, CutSourceKind } from './timeline';
 import { deleteProxyFile, readProxyFile, writeProxyFile } from './proxyStore';
+import { CUT_PEAKS_PER_SECOND, CutPeakAccumulator, type CutWaveform } from './waveform';
 import { createCutExportTarget, type CutExportTarget } from './exportTarget';
 
 export interface CutProbe { duration: number; width?: number; height?: number; hasAudio: boolean }
@@ -99,6 +100,7 @@ export class CutMediaEngine implements CutRenderBackend {
   private audioTracks = new Map<string, Promise<InputAudioTrack | null>>();
   private images = new Map<string, Promise<ImageBitmap | null>>();
   private thumbs = new Map<string, Promise<ImageBitmap | null>>();
+  private waveforms = new Map<string, Promise<CutWaveform | null>>();
   private streams = new Set<SinkFrameStream>();
   private disposed = false;
 
@@ -242,6 +244,31 @@ export class CutMediaEngine implements CutRenderBackend {
     return ctx.startRendering();
   }
 
+  /**
+   * 素材的音频波形（峰值）。整段解码一次、边解码边取峰值，不保留 PCM；结果按素材缓存，换素材或释放引擎时丢弃。
+   * 没有音轨或解码失败返回 null。
+   */
+  waveform(sourceId: string): Promise<CutWaveform | null> {
+    const cached = this.waveforms.get(sourceId);
+    if (cached) return cached;
+    const job: Promise<CutWaveform | null> = (async () => {
+      const track = await this.audioTrack(sourceId);
+      if (!track || this.disposed) return null;
+      const duration = await track.computeDuration().catch(() => 0);
+      const accumulator = new CutPeakAccumulator(CUT_PEAKS_PER_SECOND, duration);
+      const sink = new AudioBufferSink(track);
+      for await (const wrapped of sink.buffers()) {
+        if (this.disposed || this.waveforms.get(sourceId) !== job) return null;
+        const { buffer } = wrapped;
+        const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index));
+        accumulator.push(wrapped.timestamp, buffer.sampleRate, channels);
+      }
+      return accumulator.result();
+    })().catch(() => null);
+    this.waveforms.set(sourceId, job);
+    return job;
+  }
+
   private proxyKey(sourceId: string) { return `${sourceId}#proxy`; }
 
   proxyInfo(sourceId: string): { status: 'none' | 'generating' | 'ready'; height?: number; progress?: number } {
@@ -322,6 +349,7 @@ export class CutMediaEngine implements CutRenderBackend {
     this.inputs.delete(sourceId);
     this.videoTracks.delete(sourceId);
     this.audioTracks.delete(sourceId);
+    this.waveforms.delete(sourceId);
     void this.images.get(sourceId)?.then(bitmap => bitmap?.close());
     this.images.delete(sourceId);
     for (const key of [...this.thumbs.keys()]) {
