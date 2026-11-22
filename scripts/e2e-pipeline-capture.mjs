@@ -27,6 +27,13 @@ const base = `http://localhost:${server.address().port}/`;
 const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
 const pipeline = new Pipeline({ home: process.env.IRIS_PIPELINE_HOME });
 const agent = { caller: 'codex' };
+// MCP / 外部 Agent 填的 confirmed 不生效：拿到 approvalId → 模拟用户在 UI 批准 → 同参数同 mutationId 重试。
+const approved = async (command, args, context) => {
+  const first = await pipeline.execute(command, args, context);
+  if (first.error?.code !== 'CONFIRMATION_REQUIRED') return first;
+  pipeline.grantApproval(first.error.details.approval.approvalId);
+  return pipeline.execute(command, args, context);
+};
 const checks = [];
 const check = (name, condition, details) => {
   if (!condition) throw new Error(`断言失败：${name}\n${JSON.stringify(details, null, 2)}`);
@@ -34,7 +41,7 @@ const check = (name, condition, details) => {
   console.log(`  ✓ ${name}`);
 };
 try {
-  const start = await pipeline.execute('pipeline.run.start', { projectId: 'proj-capture', brief: { keyLine: '截图进去，宣传片出来', aspect: '16:9' }, budget: { maxTasks: 3, maxRounds: 2 }, budgetConfirmed: true }, { ...agent, mutationId: 'start' });
+  const start = await approved('pipeline.run.start', { projectId: 'proj-capture', brief: { keyLine: '截图进去，宣传片出来', aspect: '16:9' }, budget: { maxTasks: 3, maxRounds: 2 }, budgetConfirmed: true }, { ...agent, mutationId: 'start' });
   check('run 创建', start.ok, start);
   const runId = start.result.runId;
   const steps = [
@@ -50,7 +57,7 @@ try {
   const outside = await pipeline.execute('capture.ui', { runId, url: pathToFileURL('/etc/hosts').href, confirmed: true }, { ...agent, mutationId: 'cap-outside' });
   check('拒绝授权文件夹以外的 file://', outside.error?.code === 'PATH_NOT_AUTHORIZED', outside);
 
-  const shots = await pipeline.execute('capture.ui', { runId, url: base, steps, viewport: { width: 1280, height: 720 }, confirmed: true }, { ...agent, mutationId: 'cap-1' });
+  const shots = await approved('capture.ui', { runId, url: base, steps, viewport: { width: 1280, height: 720 }, confirmed: true }, { ...agent, mutationId: 'cap-1' });
   check('localhost 截图成功', shots.ok, shots);
   const images = shots.result.artifacts;
   check('按步骤得到两张截图', images.length === 2 && images.every(item => item.captureKind === 'screenshot'), images);
@@ -59,10 +66,10 @@ try {
   const replay = await pipeline.execute('capture.ui', { runId, url: base, steps, viewport: { width: 1280, height: 720 }, confirmed: true }, { ...agent, mutationId: 'cap-1' });
   check('同一 mutationId 重放不重复采集', replay.ok && replay.step?.seq === shots.step?.seq, { replay: replay.step, first: shots.step });
 
-  const fileShot = await pipeline.execute('capture.ui', { runId, url: pathToFileURL(join(authorized, 'demo.html')).href, confirmed: true }, { ...agent, mutationId: 'cap-file' });
+  const fileShot = await approved('capture.ui', { runId, url: pathToFileURL(join(authorized, 'demo.html')).href, confirmed: true }, { ...agent, mutationId: 'cap-file' });
   check('授权文件夹内的 file:// 可以截图（未写 screenshot 步骤时自动补一张）', fileShot.ok && fileShot.result.artifacts.length === 1, fileShot);
 
-  const video = await pipeline.execute('capture.ui', { runId, url: base, mode: 'video', viewport: { width: 1280, height: 720 }, steps: [{ action: 'wait', ms: 600 }, { action: 'click', selector: '#go' }, { action: 'waitFor', selector: '#done' }, { action: 'wait', ms: 800 }], confirmed: true }, { ...agent, mutationId: 'cap-video' });
+  const video = await approved('capture.ui', { runId, url: base, mode: 'video', viewport: { width: 1280, height: 720 }, steps: [{ action: 'wait', ms: 600 }, { action: 'click', selector: '#go' }, { action: 'waitFor', selector: '#done' }, { action: 'wait', ms: 800 }], confirmed: true }, { ...agent, mutationId: 'cap-video' });
   check('录屏成功并转成 MP4', video.ok && video.result.artifacts[0]?.captureKind === 'recording' && /\.mp4$/.test(video.result.artifacts[0].path), video);
   check('录屏有时长', (video.result.artifacts[0].media?.durationMs || 0) > 1000, video.result.artifacts[0].media);
 

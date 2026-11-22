@@ -17,6 +17,7 @@ import { alignLines, readEvidenceWords, synthesizeLine, toHypitTranscript, trans
 import { findingsSignature, REVIEW_VERDICTS, validateFindings } from './review.js';
 import { PIPELINE_COMMAND_NAMES, PIPELINE_COMMANDS, PIPELINE_WRITE_COMMANDS } from './commands.js';
 import { normalizeCaptureArgs, runCapture } from './capture.js';
+import { ApprovalStore, USER_CONFIRM_FIELDS } from './approvals.js';
 
 export const PIPELINE_CALLERS = Object.freeze(['built-in', 'codex', 'claude-code', 'dsh', 'cli', 'mcp', 'user']);
 
@@ -85,16 +86,67 @@ const READ_TOOLS = new Set(['pipeline.run.get', 'asset.list', 'media.probe', 'me
 export class Pipeline {
   constructor({ home, store } = {}) {
     this.store = store || new PipelineStore({ home });
+    this.approvals = new ApprovalStore(this.store.home);
   }
 
   close() { this.store.close(); }
 
   async execute(command, rawArgs = {}, context = {}) {
+    let gate;
+    let result;
     try {
-      return await this.#execute(command, rawArgs, context);
+      gate = this.#confirmationGate(command, rawArgs, context);
+      result = await this.#execute(command, gate.args, gate.context);
     } catch (error) {
-      return { ok: false, error: toError(error) };
+      result = { ok: false, error: toError(error) };
     }
+    if (gate?.pending && result?.ok === false && result.error?.code === 'CONFIRMATION_REQUIRED') {
+      const approval = this.approvals.request({ ...gate.pending, summary: result.error.message });
+      result = {
+        ...result,
+        error: {
+          ...result.error,
+          message: `${result.error.message}。确认必须由用户在 Iris 界面批准（approvalId=${approval.id}），批准后用相同参数重试；调用方自行填写的确认字段不生效。`,
+          details: { ...(result.error.details || {}), approval: { approvalId: approval.id, status: approval.status, expiresAt: approval.expiresAt } },
+        },
+      };
+    }
+    return result;
+  }
+
+  /**
+   * 用户确认闸：USER_CONFIRM_FIELDS 中的确认字段只有可信入口（人在终端的 CLI，context.trustedConfirmation）才直接生效。
+   * 内置 Agent 与 MCP 等模型驱动入口填的值被丢弃，改为消费一条用户批准的、绑定 command + runId + 参数摘要的一次性审批。
+   * 参数摘要不含确认字段与 mutationId，所以“未确认 → 用户批准 → 同参数重试”可沿用同一个 mutationId。
+   */
+  #confirmationGate(command, rawArgs, context) {
+    const field = USER_CONFIRM_FIELDS[command];
+    const args = { ...(rawArgs || {}) };
+    if (!field) return { args, context };
+    if (context.trustedConfirmation === true) return { args, context: { ...context, userApproved: args[field] === true } };
+    delete args[field];
+    const { mutationId: _mutation, caller: _caller, idempotencyKey: _key, ...bound } = args;
+    const runId = typeof args.runId === 'string' && args.runId.trim() ? args.runId.trim() : null;
+    const argsDigest = approvalDigest(command, bound);
+    const approved = this.approvals.consume({ command, runId, argsDigest });
+    return {
+      args,
+      context: { ...context, userApproved: Boolean(approved) },
+      pending: approved ? null : { command, runId, argsDigest, caller: normalizeCaller(context.caller ?? rawArgs?.caller) },
+    };
+  }
+
+  /** 宿主 UI 专用（不在 Agent 工具面上）：列出 / 批准 / 拒绝待确认操作。 */
+  listApprovals(filter) { return this.approvals.listPending(filter); }
+  grantApproval(approvalId) {
+    const record = this.approvals.grant(approvalId);
+    if (!record) fail('APPROVAL_NOT_FOUND', `找不到待批准的操作或已过期：${approvalId}`);
+    return record;
+  }
+  denyApproval(approvalId) {
+    const record = this.approvals.deny(approvalId);
+    if (!record) fail('APPROVAL_NOT_FOUND', `找不到待批准的操作或已过期：${approvalId}`);
+    return record;
   }
 
   async #execute(command, rawArgs, context) {
@@ -108,7 +160,7 @@ export class Pipeline {
     delete args.idempotencyKey;
     if (definition.write && !mutationId) fail('INVALID_ARGUMENT', `${command} 需要 mutationId，重试才不会重复执行`);
 
-    if (command === 'pipeline.run.start') return this.#startRun(args, { caller, mutationId });
+    if (command === 'pipeline.run.start') return this.#startRun(args, { caller, mutationId, userApproved: context.userApproved === true });
     if (command === 'pipeline.run.get') return { ok: true, result: this.trace(requireString(args.runId, 'runId'), args.since) };
     if (command === 'asset.list') {
       return {
@@ -132,10 +184,14 @@ export class Pipeline {
       if (step.status === 'succeeded') {
         return { ok: true, result: step.result, step: stepReceipt(step, { replayed: true }) };
       }
-      if (step.status === 'running' && definition.paid && args.voice?.route !== 'fake' && !context.confirmResubmit) {
-        // 付费调用中断后不知道 Provider 是否已收单：先标记 unknown_submit，由用户确认再重提。
-        step = this.store.finishStep(step.id, { status: 'unknown_submit', error: { code: 'UNKNOWN_SUBMIT', message: '上次提交结果未知' } });
-        fail('UNKNOWN_SUBMIT', '上次付费提交中断，结果未知；确认后用 confirmResubmit 重提', { details: { stepId: step.id } });
+      // 付费调用中断（running）或已判定结果未知（unknown_submit）时，不知道 Provider 是否已收单：
+      // 每次重试都要求显式 confirmResubmit，未知状态不会因为“再试一次”被静默清除。
+      const livePaid = definition.paid && args.voice?.route !== 'fake';
+      if (livePaid && (step.status === 'running' || step.status === 'unknown_submit') && context.confirmResubmit !== true) {
+        if (step.status === 'running') {
+          step = this.store.finishStep(step.id, { status: 'unknown_submit', error: { code: 'UNKNOWN_SUBMIT', message: '上次提交结果未知' } });
+        }
+        fail('UNKNOWN_SUBMIT', '上次付费提交中断，结果未知（可能已扣费）；先核对 Provider 账单 / 任务，确认后用 confirmResubmit 重提', { details: { stepId: step.id, ...(step.error?.providerRequestId ? { providerRequestId: step.error.providerRequestId } : {}) } });
       }
       // 本地确定性步骤（或失败 / 未知后经确认）：在原 Step 上恢复执行，不新增 Step。
       step = this.store.restartStep(step.id);
@@ -147,7 +203,7 @@ export class Pipeline {
     if (definition.paid) reservation = this.#reserve(run, step, command, args);
 
     try {
-      const outcome = await this.#handlers[command].call(this, run, args, { step, caller, signal: context.signal });
+      const outcome = await this.#handlers[command].call(this, run, args, { step, caller, signal: context.signal, userApproved: context.userApproved === true });
       const costMicros = outcome.costMicros ?? 0;
       if (reservation) this.store.ledger(run.id, { stepId: step.id, kind: 'confirm', amountMicros: costMicros, tasks: reservation.tasks, note: command });
       const finished = this.store.finishStep(step.id, { status: 'succeeded', result: outcome.result, artifactIds: outcome.artifactIds || [], costMicros });
@@ -157,9 +213,12 @@ export class Pipeline {
       }
       return { ok: true, result: outcome.result, step: stepReceipt(finished) };
     } catch (error) {
-      if (reservation) this.store.ledger(run.id, { stepId: step.id, kind: 'release', amountMicros: reservation.amountMicros, tasks: reservation.tasks, note: error?.code || 'failed' });
-      const status = error?.code === 'CANCELED' ? 'canceled' : 'failed';
-      const finished = this.store.finishStep(step.id, { status, error: toError(error) });
+      // Provider 已收单但结果未知（超时、断网）：保留预留额度并标 unknown_submit，重试必须走 confirmResubmit。
+      const unknownSubmit = Boolean(definition.paid) && (error?.code === 'PROVIDER_UNKNOWN_SUBMIT' || error?.code === 'UNKNOWN_SUBMIT');
+      if (reservation && !unknownSubmit) this.store.ledger(run.id, { stepId: step.id, kind: 'release', amountMicros: reservation.amountMicros, tasks: reservation.tasks, note: error?.code || 'failed' });
+      const status = unknownSubmit ? 'unknown_submit' : error?.code === 'CANCELED' ? 'canceled' : 'failed';
+      const stepError = { ...toError(error), ...(error?.providerRequestId ? { providerRequestId: String(error.providerRequestId) } : {}) };
+      const finished = this.store.finishStep(step.id, { status, error: stepError });
       if (error instanceof CapabilityError || error?.code === 'CAPABILITY_UNAVAILABLE') {
         this.store.updateRun(run.id, {
           status: 'blocked',
@@ -203,7 +262,7 @@ export class Pipeline {
   }
 
   // ---------------- pipeline.run.start ----------------
-  #startRun(args, { caller, mutationId }) {
+  #startRun(args, { caller, mutationId, userApproved }) {
     const argsDigest = sha256Text(canonicalJson({ command: 'pipeline.run.start', args }));
     const existing = this.store.findStartStep(mutationId);
     if (existing) {
@@ -222,7 +281,7 @@ export class Pipeline {
       maxRounds: positiveInt(budgetInput.maxRounds ?? 3, 'budget.maxRounds'),
       ...(budgetInput.maxCostMicros !== undefined ? { maxCostMicros: positiveInt(budgetInput.maxCostMicros, 'budget.maxCostMicros') } : {}),
     };
-    if (args.budgetConfirmed !== true) {
+    if (!userApproved) {
       return {
         ok: false,
         error: {
@@ -356,9 +415,9 @@ export class Pipeline {
       return { result: { artifacts: imported }, artifactIds: imported.map(item => item.artifactId) };
     },
 
-    'capture.ui': async function captureUi(run, args, { step, signal }) {
+    'capture.ui': async function captureUi(run, args, { step, signal, userApproved }) {
       const plan = normalizeCaptureArgs(args);
-      if (args.confirmed !== true) {
+      if (!userApproved) {
         fail('CONFIRMATION_REQUIRED', `capture.ui 会在本机启动无头浏览器打开 ${plan.url}；用户确认后带 confirmed: true 重试`);
       }
       const outputs = await runCapture(plan, { scratchPath: name => this.store.scratchPath(name), signal });
@@ -630,10 +689,10 @@ export class Pipeline {
       };
     },
 
-    'run.archive': async function archive(run, args, { step }) {
+    'run.archive': async function archive(run, args, { step, userApproved }) {
       const outputDir = requireString(args.outputDir, 'outputDir');
       if (!isAbsolute(outputDir)) fail('INVALID_ARGUMENT', 'outputDir 必须是绝对路径');
-      if (args.confirmed !== true) {
+      if (!userApproved) {
         return Promise.reject(new PipelineError('CONFIRMATION_REQUIRED', `归档会写入 ${outputDir}；用户确认后带 confirmed: true 重试`));
       }
       const include = new Set(args.include || ['final', 'spec', 'stems', 'rejected', 'reviews']);
@@ -756,6 +815,10 @@ function safeName(text) {
 
 // 进程内按 home 复用一个 Pipeline（CLI 每次调用一个进程；Agent 会话常驻）。
 const instances = new Map();
+function approvalDigest(command, args) {
+  return sha256Text(canonicalJson({ command, args }));
+}
+
 export function getPipeline(home) {
   const key = home || '';
   if (!instances.has(key)) instances.set(key, new Pipeline({ home }));

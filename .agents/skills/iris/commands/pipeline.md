@@ -19,8 +19,15 @@ user sees the same run as a card in the Canvas drawer's run log.
   `reviewRoundId` it may only touch the clips that review's findings point at.
 - `composition.render --preset final` needs a passing review of that version.
 - Commands that start local processes or write outside the run ask once:
-  `capture.ui` and `run.archive` fail with `CONFIRMATION_REQUIRED` until the
-  user agrees and you resend with `confirmed: true`.
+  `pipeline.run.start`, `capture.ui` and `run.archive` fail with
+  `CONFIRMATION_REQUIRED` and an `approval.approvalId`. Over MCP (and for the
+  built-in agent) a `confirmed` / `budgetConfirmed` you fill in is ignored: ask
+  the user to approve it in Iris (Agent → Video pipeline), then resend the same
+  arguments. Approvals are single-use and bound to those exact arguments. A
+  human running the CLI may pass the flag directly.
+- A paid step that returns `UNKNOWN_SUBMIT` may already have been charged. Do
+  not retry it on your own; the user checks the provider first and resends
+  with `--confirm-resubmit`.
 - Image clips may carry `motion: { type, amount?, ease?, flash? }` with type
   `push`, `pull`, `pan-left`, `pan-right`, `tilt-up`, `tilt-down`, `shake`,
   `impact` or `none`. Only `engine: remotion` renders every type; ffmpeg draws

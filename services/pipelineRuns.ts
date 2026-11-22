@@ -113,6 +113,36 @@ export async function fetchPipelineArtifact(connection: Connection, artifactId: 
   return response.blob();
 }
 
+/** 待用户批准的 pipeline 操作（预算确认、capture.ui、写用户目录的归档）。模型只能发起，批准只走这里。 */
+export interface PipelineApproval {
+  id: string;
+  command: string;
+  runId: string | null;
+  summary: string;
+  caller: string;
+  status: 'pending' | 'granted';
+  createdAt: number;
+  expiresAt: number;
+}
+
+export async function fetchPipelineApprovals(connection: Connection, fetchImpl: typeof fetch = fetch) {
+  const response = await agentGet(connection, '/pipeline/approvals', fetchImpl);
+  const body = await response.json() as { approvals?: PipelineApproval[] };
+  return body.approvals || [];
+}
+
+export async function decidePipelineApproval(connection: Connection, approvalId: string, decision: 'grant' | 'deny', fetchImpl: typeof fetch = fetch) {
+  const response = await fetchImpl(new URL(`/pipeline/approvals/${encodeURIComponent(approvalId)}/${decision}`, connection.url).toString(), {
+    method: 'POST',
+    headers: { 'x-flovart-agent-token': connection.token },
+  });
+  const body = await response.json().catch(() => ({})) as { ok?: boolean; error?: { message?: string } | string };
+  if (!response.ok || body.ok === false) {
+    const detail = typeof body.error === 'string' ? body.error : body.error?.message;
+    throw new Error(detail || 'Approval failed: ' + response.status);
+  }
+}
+
 const PRESET_RANK: Record<string, number> = { final: 3, draft: 2, still: 1 };
 
 export interface PipelineVersionRender {

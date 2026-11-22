@@ -336,6 +336,29 @@ export function startHttpServer() {
           throw error;
         }
       }
+      // Agent 视频流水线用户审批：只给 Iris 界面用，不登记为任何 Agent 工具。模型只能发起审批请求（CONFIRMATION_REQUIRED），不能批准。
+      if (url.pathname === '/pipeline/approvals' || url.pathname.startsWith('/pipeline/approvals/')) {
+        const { getPipeline } = await importIrisPipelineModule('index');
+        const pipeline = getPipeline();
+        try {
+          if (request.method === 'GET' && url.pathname === '/pipeline/approvals') {
+            return json(response, 200, { ok: true, approvals: pipeline.listApprovals(url.searchParams.get('runId') ? { runId: url.searchParams.get('runId') } : {}) });
+          }
+          const decision = /^\/pipeline\/approvals\/(apr_[0-9a-f-]{36})\/(grant|deny)$/.exec(url.pathname);
+          if (request.method === 'POST' && decision) {
+            // 批准只接受已授权的 Iris 页面来源（浏览器带 Origin）；无 Origin 的本机脚本 / CLI 不能替用户批准。
+            if (decision[2] === 'grant' && !authorizedOrigins(config).includes(request.headers.origin)) {
+              return json(response, 403, { ok: false, error: { code: 'APPROVAL_ORIGIN_REQUIRED', message: '只能在 Iris 界面批准' } });
+            }
+            const approval = decision[2] === 'grant' ? pipeline.grantApproval(decision[1]) : pipeline.denyApproval(decision[1]);
+            return json(response, 200, { ok: true, approval });
+          }
+          return json(response, 404, { ok: false, error: 'not found' });
+        } catch (error) {
+          const code = error?.code || 'PIPELINE_ERROR';
+          return json(response, code === 'APPROVAL_NOT_FOUND' ? 404 : 500, { ok: false, error: { code, message: error?.message || String(error) } });
+        }
+      }
       // Agent 视频流水线：抽屉“运行日志”按 run 分组读取 trace；只读，写操作仍只走命令边界。
       if (request.method === 'GET' && url.pathname.startsWith('/pipeline/')) {
         const { getPipeline } = await importIrisPipelineModule('index');

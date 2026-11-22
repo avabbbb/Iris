@@ -259,6 +259,8 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
         caller: args.caller || 'cli',
         ...(mutationId ? { mutationId: String(mutationId) } : {}),
         confirmResubmit: args.confirmResubmit === true || args['confirm-resubmit'] === true,
+        // CLI 是人在终端的入口：--confirmed / --budget-confirmed 直接生效。模型驱动的入口（内置 Agent、MCP）不设此项，需用户在 UI 批准。
+        trustedConfirmation: true,
       });
       printCliResponse(result.ok, command, result.ok ? { ...result.result, ...(result.step ? { step: result.step } : {}) } : null, result.ok ? null : result.error, { runtime: 'pipeline' });
     } catch (error) {

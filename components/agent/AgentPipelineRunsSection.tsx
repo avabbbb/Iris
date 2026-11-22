@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Clapperboard, LayoutGrid, RefreshCw } from 'lucide-react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
+  decidePipelineApproval,
+  fetchPipelineApprovals,
   fetchPipelineArtifact,
   fetchPipelineRuns,
   fetchPipelineTrace,
   pickVersionRenders,
+  type PipelineApproval,
   type PipelineRunSummary,
   type PipelineTrace,
 } from '../../services/pipelineRuns';
@@ -87,6 +90,8 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
   const [traces, setTraces] = useState<Record<string, PipelineTrace>>({});
   const [placing, setPlacing] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<PipelineApproval[]>([]);
+  const [deciding, setDeciding] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -96,7 +101,12 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
         setRuns([]);
         return;
       }
-      setRuns(await fetchPipelineRuns(connection));
+      const [nextRuns, nextApprovals] = await Promise.all([
+        fetchPipelineRuns(connection),
+        fetchPipelineApprovals(connection).catch(() => [] as PipelineApproval[]),
+      ]);
+      setRuns(nextRuns);
+      setApprovals(nextApprovals);
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -127,6 +137,24 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
       await loadTrace(runId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  };
+
+  // 用户审批：Agent 只能发起（CONFIRMATION_REQUIRED + approvalId），批准后 Agent 用相同参数重试才会执行。
+  const decide = async (approval: PipelineApproval, decision: 'grant' | 'deny') => {
+    setDeciding(approval.id);
+    try {
+      const connection = await getManagedAgentConnection();
+      if (!connection) throw new Error(zh ? '未连接本机 Agent' : 'Local agent not connected');
+      await decidePipelineApproval(connection, approval.id, decision);
+      setApprovals(current => current.filter(item => item.id !== approval.id));
+      setNotice(decision === 'grant'
+        ? (zh ? '已批准。让 Agent 用相同参数重试即可执行，批准只生效一次。' : 'Approved. The agent can retry with the same arguments; approval is single-use.')
+        : (zh ? '已拒绝。' : 'Denied.'));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setDeciding(null);
     }
   };
 
@@ -164,6 +192,28 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
       </div>
       {error ? <p style={{ color: 'var(--isl-coral-deep)' }}>{error}</p> : null}
       {notice ? <p data-testid="agent-pipeline-notice" style={{ color: 'var(--isl-ink-soft)' }}>{notice}</p> : null}
+      {approvals.length ? (
+        <ul className="flex flex-col gap-2" data-testid="pipeline-approvals">
+          {approvals.map(approval => (
+            <li key={approval.id} className="rounded-lg border px-3 py-2" style={{ borderColor: '#e5a50a' }} data-testid="pipeline-approval-card">
+              <div className="flex items-center gap-2">
+                <strong>{zh ? '待你批准' : 'Needs your approval'}</strong>
+                <span style={{ color: 'var(--isl-ink-soft)' }}>{approval.command}</span>
+                <span style={{ color: 'var(--isl-ink-ghost)' }}>{approval.caller}</span>
+              </div>
+              <p className="py-1" style={{ color: 'var(--isl-ink)' }}>{approval.summary}</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => void decide(approval, 'grant')} disabled={deciding !== null} className="rounded border px-2 py-0.5" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)' }}>
+                  {zh ? '批准' : 'Approve'}
+                </button>
+                <button type="button" onClick={() => void decide(approval, 'deny')} disabled={deciding !== null} className="rounded border px-2 py-0.5" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)' }}>
+                  {zh ? '拒绝' : 'Deny'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {runs.length === 0 ? (
         <p className="agent-section-empty">
           {zh ? '还没有流水线 run。Agent 调用 pipeline.run.start 后会出现在这里。' : 'No pipeline runs yet. They appear here after an agent calls pipeline.run.start.'}

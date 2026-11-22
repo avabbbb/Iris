@@ -62,6 +62,13 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   let counter = 0;
   const mid = label => `m-${label}-${counter += 1}`;
   const call = (command, args, context = agent) => pipeline.execute(command, args, context);
+  // 模型填的 confirmed / budgetConfirmed 不生效：先拿到 CONFIRMATION_REQUIRED 的 approvalId，模拟用户在 UI 批准后同参数重试。
+  const approved = async (command, args, context = agent) => {
+    const first = await call(command, args, context);
+    if (first.error?.code !== 'CONFIRMATION_REQUIRED') return first;
+    pipeline.grantApproval(first.error.details.approval.approvalId);
+    return call(command, args, context);
+  };
   const checks = [];
   const check = (name, condition, details) => {
     assert(condition, name, details);
@@ -77,7 +84,7 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   };
   const budget = { maxTasks: 12, maxRounds: 3 };
   expectError(await call('pipeline.run.start', { projectId: 'proj-demo', brief, budget }, { ...agent, mutationId: 'start-unconfirmed' }), 'CONFIRMATION_REQUIRED', '未确认预算');
-  const start = ok(await call('pipeline.run.start', { projectId: 'proj-demo', brief, budget, budgetConfirmed: true }, { ...agent, mutationId: 'start-1' }), 'run.start');
+  const start = ok(await approved('pipeline.run.start', { projectId: 'proj-demo', brief, budget, budgetConfirmed: true }, { ...agent, mutationId: 'start-1' }), 'run.start');
   const runId = start.runId;
   const runGet = ok(await call('pipeline.run.get', { runId }), 'run.get');
   check('run.get 返回 runId 与 brief artifact', runGet.run.id === runId && runGet.run.briefArtifactId === start.briefArtifactId);
@@ -220,7 +227,7 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   // ---------- 8. 归档 ----------
   log('8. run.archive');
   expectError(await call('run.archive', { runId, outputDir: archiveDir }, { ...agent, mutationId: mid('archive-unconfirmed') }), 'CONFIRMATION_REQUIRED', '未确认写用户目录');
-  const archive = ok(await call('run.archive', { runId, outputDir: archiveDir, confirmed: true }, { ...agent, mutationId: 'archive-1' }), 'archive');
+  const archive = ok(await approved('run.archive', { runId, outputDir: archiveDir, confirmed: true }, { ...agent, mutationId: 'archive-1' }), 'archive');
   const manifest = JSON.parse(readFileSync(join(archive.directory, 'manifest.json'), 'utf8'));
   const kinds = new Set(manifest.files.map(file => file.path.split('/')[0]));
   check('归档包含成片 / 各版 spec / 独立音轨 / 废片 / 评审', ['final', 'spec', 'stems', 'rejected', 'reviews.md'].every(kind => kinds.has(kind)), [...kinds]);
@@ -241,7 +248,7 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
 
   // ---------- 10. 边界 ----------
   log('10. 边界：缺依赖 / 轮数上限 / 预算');
-  const edge = ok(await call('pipeline.run.start', { projectId: 'proj-demo', brief: { ...brief, keyLine: '边界测试' }, budget: { maxTasks: 1, maxRounds: 1 }, budgetConfirmed: true }, { ...agent, mutationId: 'start-edge' }), 'edge run');
+  const edge = ok(await approved('pipeline.run.start', { projectId: 'proj-demo', brief: { ...brief, keyLine: '边界测试' }, budget: { maxTasks: 1, maxRounds: 1 }, budgetConfirmed: true }, { ...agent, mutationId: 'start-edge' }), 'edge run');
   const edgeShot = ok(await call('asset.import', { runId: edge.runId, path: fixtures.shotA }, { ...agent, mutationId: 'edge-import' }), 'edge import').artifacts[0];
   ok(await call('composition.patch', { runId: edge.runId, baseVersion: 0, ops: [{ op: 'add', track: 'visual', clip: { id: 'only', kind: 'image', artifactId: edgeShot.artifactId, startMs: 0, durationMs: 1500 } }] }, { ...agent, mutationId: 'edge-v1' }), 'edge v1');
   const savedFfmpeg = process.env.IRIS_FFMPEG;

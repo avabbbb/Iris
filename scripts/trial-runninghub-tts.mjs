@@ -24,7 +24,7 @@ spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', 
 
 const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
 const pipeline = new Pipeline({ home });
-const ctx = mutationId => ({ caller: 'cli', mutationId });
+const ctx = mutationId => ({ caller: 'cli', mutationId, trustedConfirmation: true });
 const ok = (response, label) => {
   if (!response?.ok) { console.error(`${label} 失败`, JSON.stringify(response?.error, null, 2)); process.exit(1); }
   return response.result;
