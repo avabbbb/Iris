@@ -11,6 +11,8 @@ import { listStoredUserScriptProviders, parseUserScriptDefinition } from './user
  */
 export const CONFIG_BUNDLE_KIND = 'iris-config';
 export const CONFIG_BUNDLE_VERSION = 1;
+/** 改名前 Flovart 导出的迁移包。 */
+export const LEGACY_CONFIG_BUNDLE_KINDS = ['flovart-config'] as const;
 
 export interface ConfigBundleV1 {
   kind: typeof CONFIG_BUNDLE_KIND;
@@ -93,7 +95,9 @@ export function parseConfigBundle(text: string): ParsedConfigBundle {
     throw new Error('不是 Iris 配置迁移文件。');
   }
   const bundle = parsed as { kind?: unknown; schemaVersion?: unknown; apiKeys?: unknown; providerScripts?: unknown };
-  if (bundle.kind !== CONFIG_BUNDLE_KIND || bundle.schemaVersion !== CONFIG_BUNDLE_VERSION) {
+  const kindOk = bundle.kind === CONFIG_BUNDLE_KIND
+    || (LEGACY_CONFIG_BUNDLE_KINDS as readonly unknown[]).includes(bundle.kind);
+  if (!kindOk || bundle.schemaVersion !== CONFIG_BUNDLE_VERSION) {
     throw new Error('不是 Iris 配置迁移文件。');
   }
   const apiKeys = Array.isArray(bundle.apiKeys) ? bundle.apiKeys : [];

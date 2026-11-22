@@ -93,4 +93,11 @@ describe('config migration bundle', () => {
     expect(parsed.providerScripts.map(script => script.id)).toEqual(['demo-video']);
     expect(parsed.invalidScripts).toBe(1);
   });
+
+  it('accepts config bundles exported by Flovart before the rename', () => {
+    const bundle = { ...JSON.parse(JSON.stringify(buildConfigBundle([apiKey], true))), kind: 'flovart-config' };
+    const parsed = parseConfigBundle(JSON.stringify(bundle));
+    expect(parsed.legacy).toBe(false);
+    expect(parsed.apiKeys).toHaveLength(1);
+  });
 });
