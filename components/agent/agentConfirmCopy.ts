@@ -121,6 +121,34 @@ export function describeAgentConfirmation(
       if (deletedLinks.length) return { title: en ? 'Remove connections' : '删除连线', detail: en ? `${operations.length} change(s) in this step` : `本次共 ${operations.length} 项改动` };
       return { title: en ? 'Edit the canvas' : '修改画布', detail: operations.length ? (en ? `${operations.length} change(s)` : `${operations.length} 项改动`) : undefined };
     }
+    case 'iris_cut_edit': {
+      const operations = Array.isArray(args.operations) ? args.operations as Array<{ op?: string; clipIds?: unknown }> : [];
+      const clips = operations.filter(op => op?.op === 'delete_clips').reduce((sum, op) => sum + stringList(op.clipIds).length, 0);
+      const sides = operations.filter(op => op?.op === 'delete_side').length;
+      const tracks = operations.filter(op => op?.op === 'remove_track').length;
+      const parts = en
+        ? [clips && `${clips} clip(s)`, sides && 'everything on one side of the playhead', tracks && `${tracks} track(s)`]
+        : [clips && `${clips} 个片段`, sides && '播放头一侧的片段', tracks && `${tracks} 条轨道`];
+      const what = parts.filter(Boolean).join(en ? ', ' : '、');
+      const detail = en ? `${operations.length} change(s) in this step, one undo` : `本次共 ${operations.length} 项改动，可一步撤销`;
+      if (what) return { title: en ? `Delete ${what} in Cut` : `在 Cut 里删除 ${what}`, detail };
+      return { title: en ? 'Edit the Cut timeline' : '修改 Cut 时间线', detail };
+    }
+    case 'iris_cut_subtitles': {
+      const action = String(args.action || '');
+      if (action === 'delete') {
+        const count = stringList(args.clipIds).length || (args.clipId ? 1 : 0);
+        return { title: en ? `Delete ${count} subtitle(s) in Cut` : `在 Cut 里删除 ${count} 条字幕` };
+      }
+      if (action === 'replace_all' || action === 'import_srt') {
+        const count = Array.isArray(args.cues) ? args.cues.length : undefined;
+        return {
+          title: en ? 'Replace all subtitles in Cut' : '替换 Cut 里的全部字幕',
+          detail: action === 'import_srt' ? (en ? 'From an SRT / VTT file' : '来自 SRT / VTT 文本') : (count !== undefined ? (en ? `${count} new cue(s)` : `新字幕 ${count} 条`) : undefined),
+        };
+      }
+      return { title: en ? 'Edit Cut subtitles' : '修改 Cut 字幕' };
+    }
     default:
       break;
   }

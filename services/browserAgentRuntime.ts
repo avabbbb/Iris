@@ -111,7 +111,7 @@ interface RuntimeSnapshot {
  * 委派回合的审批上下文：无人值守（headless），与面板走同一个解析器。
  * - 默认 read-only → always-ask：只有 read 自动放行，write / exec 解析为 prompt 后被拒绝；
  * - workspace-write → write：read + write 放行，exec（付费、删除等）被拒绝。
- * 用户的按工具策略照旧生效（deny 绝对；allow 可放行非安全覆盖的调用），会话授权不生效。
+ * 用户的按工具策略照旧生效（deny 绝对；allow 只能在 maxTier 以内放行），会话授权不生效。
  * 与 OMP 子代理用 yolo 不同：这里的委派方是外部 Agent，授权边界是调用方声明的 policy，不能升级。
  */
 export function delegatedPolicyFor(policy?: DelegatedTurnPolicy, base?: ApprovalContext): ApprovalContext {
@@ -120,6 +120,8 @@ export function delegatedPolicyFor(policy?: DelegatedTurnPolicy, base?: Approval
     mode,
     ...(base?.userPolicy ? { userPolicy: base.userPolicy } : {}),
     headless: true,
+    // 用户的按工具 allow 不能把委派回合升级到声明的 policy 之上。
+    maxTier: policy === 'workspace-write' ? 'write' : 'read',
   };
 }
 

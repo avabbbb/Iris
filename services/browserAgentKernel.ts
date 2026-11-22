@@ -1043,7 +1043,14 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
   if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   // Cut 视频剪辑页：读写时间线 / 字幕 / 代理 / 导出（实现懒加载，见 services/cut/agentTools.ts）。
-  extraTools.push(...createCutAgentTools({ projectId: dependencies.projectId }));
+  // 与命令面同一个审批层：读放行，写按模式，删除逐次确认，委派回合受 maxTier 限制。
+  extraTools.push(...createCutAgentTools({ projectId: dependencies.projectId }).map(tool => ({
+    ...tool,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      await guard(tool.name, (params ?? {}) as Record<string, unknown>);
+      return tool.execute(toolCallId, params, signal, onUpdate);
+    },
+  } satisfies AgentTool)));
   return [...commandTools, ...extraTools];
 }
 

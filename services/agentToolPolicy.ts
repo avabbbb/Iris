@@ -58,6 +58,11 @@ export interface ApprovalContext {
    * 会话授权不生效，deny 照旧绝对。
    */
   headless?: boolean;
+  /**
+   * 硬上限：超过这一 tier 的调用一律拒绝，用户 allow、工具 allow、yolo 都不能放宽。
+   * 委派回合用它把调用方声明的 read-only / workspace-write 变成真正的边界。
+   */
+  maxTier?: ToolTier;
 }
 
 const TIERS = new Set<ToolTier>(['read', 'write', 'exec']);
@@ -94,6 +99,7 @@ function lookupUserPolicy(map: UserToolPolicyMap | undefined, tool: string, poli
 }
 
 const TIER_LABEL: Record<ToolTier, string> = { read: '读取', write: '修改画布', exec: '执行高风险操作' };
+const TIER_RANK: Record<ToolTier, number> = { read: 0, write: 1, exec: 2 };
 
 /**
  * 解析一次工具调用，顺序与 OMP 一致：
@@ -115,6 +121,13 @@ export function resolveToolApproval(input: ApprovalContext & {
       action: 'deny',
       tier: resolution.tier,
       reason: `无人值守的委派回合不能确认「${resolution.reason || TIER_LABEL[resolution.tier]}」（${input.tool}），已拒绝。请在 Iris 面板里直接让 Agent 执行，或调整该工具的审批策略。`,
+    };
+  }
+  if (resolution.action !== 'deny' && input.maxTier && TIER_RANK[resolution.tier] > TIER_RANK[input.maxTier]) {
+    return {
+      action: 'deny',
+      tier: resolution.tier,
+      reason: `当前回合权限上限是「${TIER_LABEL[input.maxTier]}」，不能「${TIER_LABEL[resolution.tier]}」（${input.tool}），已拒绝。`,
     };
   }
   return resolution;
@@ -202,12 +215,47 @@ export const DELETE_REASON = '删除内容';
 const spend = (): ToolApprovalObject => ({ tier: 'exec', override: true, hardGate: 'spend', reason: SPEND_REASON });
 const destroy = (): ToolApprovalObject => ({ tier: 'exec', override: true, hardGate: 'delete', reason: DELETE_REASON });
 
+// Cut 视频剪辑工具（只在网页内置 Agent 注册，见 services/cut/agentTools.ts）。
+// 读工具自动放行；普通编辑是可撤销写入；删片段 / 删轨道 / 删字幕 / 整体替换字幕按删除硬闸逐次确认。
+const CUT_READ_TOOLS = new Set([
+  'iris_cut_get_timeline', 'iris_cut_get_assets', 'iris_cut_get_inspector', 'iris_cut_get_subtitles', 'iris_cut_snapshot_frame',
+]);
+const CUT_DELETE_OPS = new Set(['delete_clips', 'delete_side', 'remove_track', 'delete_subtitles', 'replace_subtitles']);
+const CUT_DELETE_SUBTITLE_ACTIONS = new Set(['delete', 'replace_all', 'import_srt']);
+
+function cutToolApproval(tool: string, args: Record<string, unknown>): ToolApprovalObject | undefined {
+  if (!tool.startsWith('iris_cut_')) return undefined;
+  if (CUT_READ_TOOLS.has(tool)) return { tier: 'read' };
+  const action = String(args.action || '');
+  switch (tool) {
+    case 'iris_cut_edit': {
+      const ops = Array.isArray(args.operations) ? args.operations : [];
+      return ops.some(item => Boolean(item) && typeof item === 'object' && CUT_DELETE_OPS.has(String((item as { op?: unknown }).op)))
+        ? destroy() : { tier: 'write' };
+    }
+    case 'iris_cut_subtitles':
+      if (action === 'export_srt') return { tier: 'read' };
+      return CUT_DELETE_SUBTITLE_ACTIONS.has(action) ? destroy() : { tier: 'write' };
+    case 'iris_cut_playback':
+      // undo / redo 改时间线；seek / select / play / pause 只改视图状态。
+      return action === 'undo' || action === 'redo' ? { tier: 'write' } : { tier: 'read' };
+    case 'iris_cut_import':
+    case 'iris_cut_proxy':
+    case 'iris_cut_export':
+      return { tier: 'write' };
+    default:
+      return { tier: 'exec' };
+  }
+}
+
 /**
  * 命令的审批声明。未知命令按 exec（fail safe）。
  * workflow.apply 含删除操作时升级为 exec + 删除覆盖；workflow.node.tool 及图片 / 视频 / 音频工具调用 AI 服务时为 exec + 费用覆盖。
  */
 export function toolApprovalFor(command: string, args: Record<string, unknown> = {}): ToolApprovalObject {
   if (READ_COMMANDS.has(command)) return { tier: 'read' };
+  const cut = cutToolApproval(command, args);
+  if (cut) return cut;
   if (command === 'workflow.node.run') return spend();
   // generate 只写 Prompt Bar 时是普通可撤销写入；run=true 才会花钱。
   if (command === 'workflow.generate' || command === 'workflow.shortcut.apply') return args.run === true || args.run === 'true' ? spend() : { tier: 'write' };

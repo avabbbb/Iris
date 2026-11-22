@@ -22,7 +22,8 @@ export const CUT_TOOL_DOCS = `## Cut（视频剪辑页）工具
 - iris_cut_proxy：为视频素材生成 / 删除预览代理（540 或 720p，后台转码，导出仍用原片）。
 - iris_cut_playback：seek（秒）/ play / pause / undo / redo。play 只在 Cut 页打开时生效。
 - iris_cut_export：导出 MP4（H.264/AAC）并作为视频节点放回画布；时间较长时会阻塞到完成。
-时间都是秒；片段 id、轨道 id、素材 id 都取自读工具的结果，不要猜。`;
+时间都是秒；片段 id、轨道 id、素材 id 都取自读工具的结果，不要猜。
+- 审批：读工具直接执行；编辑按审批模式；删片段（delete_clips / delete_side）、删轨道、删字幕、replace_all / import_srt 整体替换字幕每次都要用户确认，被拒绝就不要换个写法重试。委派回合只能做调用方声明权限以内的操作。`;
 
 export interface CutAgentToolDependencies {
   projectId: string;

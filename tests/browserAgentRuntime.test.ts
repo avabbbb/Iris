@@ -129,10 +129,10 @@ describe('delegated agent turns', () => {
   });
 
   it('runs delegated turns headless: read-only by default, write only when asked, user policy carried over', () => {
-    expect(delegatedPolicyFor()).toEqual({ mode: 'always-ask', headless: true });
-    expect(delegatedPolicyFor('workspace-write')).toEqual({ mode: 'write', headless: true });
+    expect(delegatedPolicyFor()).toEqual({ mode: 'always-ask', headless: true, maxTier: 'read' });
+    expect(delegatedPolicyFor('workspace-write')).toEqual({ mode: 'write', headless: true, maxTier: 'write' });
     const userPolicy = { 'workflow.apply': 'deny' as const };
-    expect(delegatedPolicyFor('workspace-write', { mode: 'yolo', userPolicy, isGranted: () => true })).toEqual({ mode: 'write', userPolicy, headless: true });
+    expect(delegatedPolicyFor('workspace-write', { mode: 'yolo', userPolicy, isGranted: () => true })).toEqual({ mode: 'write', userPolicy, headless: true, maxTier: 'write' });
   });
 
   it('fails closed on any prompt inside a delegated turn and keeps deny absolute', () => {
@@ -145,6 +145,16 @@ describe('delegated agent turns', () => {
     // 会话授权在无人值守回合里不生效。
     expect(resolveToolApproval({ ...readOnly, isGranted: () => true, tool: 'workflow.apply', decision: 'write' }).action).toBe('deny');
     expect(resolveToolApproval({ ...delegatedPolicyFor('workspace-write', { mode: 'write', userPolicy: { 'workflow.apply': 'deny' } }), tool: 'workflow.apply', decision: 'write' })).toMatchObject({ action: 'deny', reason: expect.stringContaining('禁止') });
+  });
+
+  it('caps delegated turns at the declared policy even when the user allows the tool', () => {
+    const readOnly = delegatedPolicyFor(undefined, { mode: 'yolo', userPolicy: { 'workflow.apply': 'allow', iris_cut_edit: 'allow' } });
+    expect(resolveToolApproval({ ...readOnly, tool: 'workflow.apply', decision: toolApprovalFor('workflow.apply', { operations: [] }) })).toMatchObject({ action: 'deny', reason: expect.stringContaining('权限上限') });
+    expect(resolveToolApproval({ ...readOnly, tool: 'iris_cut_edit', decision: toolApprovalFor('iris_cut_edit', { operations: [{ op: 'move_clip' }] }) }).action).toBe('deny');
+    expect(resolveToolApproval({ ...readOnly, tool: 'iris_cut_get_timeline', decision: toolApprovalFor('iris_cut_get_timeline') }).action).toBe('allow');
+    const write = delegatedPolicyFor('workspace-write', { mode: 'write', userPolicy: { iris_cut_edit: 'allow' } });
+    expect(resolveToolApproval({ ...write, tool: 'iris_cut_edit', decision: toolApprovalFor('iris_cut_edit', { operations: [{ op: 'move_clip' }] }) }).action).toBe('allow');
+    expect(resolveToolApproval({ ...write, tool: 'iris_cut_edit', decision: toolApprovalFor('iris_cut_edit', { operations: [{ op: 'delete_clips', clipIds: ['a'] }] }) }).action).toBe('deny');
   });
 
   it('returns a summary, tool calls, and the draft version', async () => {

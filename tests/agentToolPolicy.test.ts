@@ -204,3 +204,37 @@ describe('approval persistence', () => {
     expect(JSON.parse(storage.data.get('iris.agent.toolApproval')!)).toEqual({ 'workflow.apply': 'allow' });
   });
 });
+
+describe('Cut tool approvals', () => {
+  const ctx = { mode: 'write' as ApprovalMode };
+  it('reads freely, writes by mode, and asks every time for deletes', () => {
+    for (const tool of ['iris_cut_get_timeline', 'iris_cut_get_assets', 'iris_cut_get_inspector', 'iris_cut_get_subtitles', 'iris_cut_snapshot_frame']) {
+      expect(toolApprovalFor(tool).tier).toBe('read');
+    }
+    expect(toolApprovalFor('iris_cut_playback', { action: 'seek', time: 1 }).tier).toBe('read');
+    expect(toolApprovalFor('iris_cut_playback', { action: 'undo' }).tier).toBe('write');
+    expect(toolApprovalFor('iris_cut_subtitles', { action: 'export_srt' }).tier).toBe('read');
+    expect(toolApprovalFor('iris_cut_subtitles', { action: 'add', start: 0, end: 1, text: 'a' }).tier).toBe('write');
+    expect(toolApprovalFor('iris_cut_edit', { operations: [{ op: 'move_clip', clipId: 'c', start: 1 }] }).tier).toBe('write');
+    expect(toolApprovalFor('iris_cut_export', {}).tier).toBe('write');
+    expect(toolApprovalFor('iris_cut_unknown').tier).toBe('exec');
+
+    const deletes: Array<[string, Record<string, unknown>]> = [
+      ['iris_cut_edit', { operations: [{ op: 'move_clip' }, { op: 'delete_clips', clipIds: ['c'] }] }],
+      ['iris_cut_edit', { operations: [{ op: 'delete_side', time: 1, side: 'left' }] }],
+      ['iris_cut_edit', { operations: [{ op: 'remove_track', trackId: 't' }] }],
+      ['iris_cut_subtitles', { action: 'delete', clipIds: ['s'] }],
+      ['iris_cut_subtitles', { action: 'replace_all', cues: [] }],
+      ['iris_cut_subtitles', { action: 'import_srt', content: '' }],
+    ];
+    for (const [tool, args] of deletes) {
+      const decision = toolApprovalFor(tool, args);
+      expect(decision).toMatchObject({ tier: 'exec', hardGate: 'delete' });
+      // yolo 也不放过删除；会话授权不能跳过逐次确认。
+      expect(resolveToolApproval({ mode: 'yolo', tool, decision }).action).toBe('prompt');
+      expect(resolveToolApproval({ ...ctx, isGranted: () => true, tool, decision })).toMatchObject({ action: 'prompt', grantable: false });
+    }
+    expect(resolveToolApproval({ ...ctx, tool: 'iris_cut_edit', decision: toolApprovalFor('iris_cut_edit', { operations: [{ op: 'split', time: 1 }] }) }).action).toBe('allow');
+    expect(resolveToolApproval({ mode: 'always-ask', tool: 'iris_cut_edit', decision: toolApprovalFor('iris_cut_edit', { operations: [{ op: 'split', time: 1 }] }) }).action).toBe('prompt');
+  });
+});

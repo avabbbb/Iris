@@ -39,6 +39,33 @@ describe('Agent confirmation copy', () => {
   });
 });
 
+describe('Cut approval through the built-in Agent guard', () => {
+  it('asks once per delete and never touches Cut when the user declines', async () => {
+    const confirm = vi.fn(async (_summary: string, _request?: unknown) => false);
+    const tools = createBrowserAgentTools({ projectId: 'p', confirm, activeChangeSetId: 'turn', getApproval: () => ({ mode: 'yolo' }) });
+    const edit = tools.find(item => item.name === 'iris_cut_edit')!;
+    await expect(edit.execute('call', { operations: [{ op: 'delete_clips', clipIds: ['c1'] }] } as never, undefined as never)).rejects.toThrow();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][1]).toMatchObject({ kind: 'destructive', command: 'iris_cut_edit', grantable: false });
+    const subtitles = tools.find(item => item.name === 'iris_cut_subtitles')!;
+    await expect(subtitles.execute('call', { action: 'replace_all', cues: [] } as never, undefined as never)).rejects.toThrow();
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses Cut writes in a read-only delegated turn without asking', async () => {
+    const confirm = vi.fn(async () => true);
+    const tools = createBrowserAgentTools({ projectId: 'p', confirm, activeChangeSetId: 'turn', getApproval: () => ({ mode: 'always-ask', headless: true, maxTier: 'read', userPolicy: { iris_cut_edit: 'allow' } }) });
+    const edit = tools.find(item => item.name === 'iris_cut_edit')!;
+    await expect(edit.execute('call', { operations: [{ op: 'move_clip', clipId: 'c1', start: 2 }] } as never, undefined as never)).rejects.toThrow('权限上限');
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('describes Cut deletes in plain words', () => {
+    expect(describeAgentConfirmation({ kind: 'destructive', command: 'iris_cut_edit', args: { operations: [{ op: 'delete_clips', clipIds: ['a', 'b'] }, { op: 'remove_track', trackId: 't' }] } }, [], 'zho').title).toBe('在 Cut 里删除 2 个片段、1 条轨道');
+    expect(describeAgentConfirmation({ kind: 'destructive', command: 'iris_cut_subtitles', args: { action: 'replace_all', cues: [{}, {}] } }, [], 'zho')).toEqual({ title: '替换 Cut 里的全部字幕', detail: '新字幕 2 条' });
+  });
+});
+
 describe('Agent transcript text', () => {
   it('hides model-only context such as node IDs from the user bubble', () => {
     const stored = '[创作模式: 视频创作]\n抽第十秒的帧\n\n引用上下文：\n- @视频 1（工作流节点 nodeId=Aj1Rv7vsBZ9CPa5icN-Li）\n\n已附带画面：\nAj1Rv7vsBZ9CPa5icN-Li：视频「视频 1」首/中/尾帧';
@@ -96,7 +123,7 @@ describe('built-in Agent canvas tools', () => {
   it('routes tool calls through the approval resolver: mode prompts are grantable, headless prompts fail closed', async () => {
     const project = { ...createWorkflowProject('审批'), id: 'project-approval', nodes: [video] };
     useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
-    const confirm = vi.fn(async () => false);
+    const confirm = vi.fn(async (_summary: string, _request?: unknown) => false);
     const operations = [{ type: 'update_node', id: 'video-1', patch: { title: '新标题' } }];
     const ask = createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: 't', getApproval: () => ({ mode: 'always-ask' }) })
       .find(item => item.label === 'workflow.apply')!;
