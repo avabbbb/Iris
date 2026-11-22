@@ -649,12 +649,22 @@ export function createAgentTaskLayer({
     if (jobsChanged) persist(task);
   }
 
-  /** 按节点状态对账所有未结束任务（恢复轮询）；同时为在跑任务记下供应商任务 ID。 */
-  async function reconcile() {
-    await ready;
-    for (const task of [...tasks.values()]) await reconcileTask(task);
-    refreshPolling();
-    await writeChain;
+  /**
+   * 按节点状态对账所有未结束任务（恢复轮询）；同时为在跑任务记下供应商任务 ID。
+   * 单飞：上一轮还没结束时，新的调用复用同一个 promise，定时器不会叠出并发对账。
+   */
+  let reconciling = null;
+  function reconcile() {
+    if (reconciling) return reconciling;
+    reconciling = (async () => {
+      await ready;
+      for (const task of [...tasks.values()]) {
+        if (!TERMINAL.has(task.status)) await reconcileTask(task);
+      }
+      refreshPolling();
+      await writeChain;
+    })().finally(() => { reconciling = null; });
+    return reconciling;
   }
 
   function needsPolling() {
