@@ -7,7 +7,7 @@ import {
   plainPreview,
   splitConversationTurns,
   turnIndexByMessage,
-} from '../components/agent/agentConversationNav';
+} from '../components/agent/agentConversationNavModel';
 
 describe('conversation turns', () => {
   const messages = [

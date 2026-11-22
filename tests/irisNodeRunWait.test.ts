@@ -16,7 +16,7 @@ describe('workflow.node.run --wait-seconds / --no-wait', () => {
   });
 
   it('returns a running receipt on timeout and does not forward the wait flag to the Workflow', async () => {
-    const operation = vi.fn(async () => { throw timeoutError(); });
+    const operation = vi.fn(async (_command: string, _args: Record<string, any>, _context: Record<string, any>): Promise<unknown> => { throw timeoutError(); });
     const result = await executeIrisCommand('workflow.node.run', {
       'project-id': 'p1', 'node-ids': 'n1,n2', 'idempotency-key': 'run-7', 'wait-seconds': '30',
     }, { operation, source: 'cli' });
@@ -29,7 +29,7 @@ describe('workflow.node.run --wait-seconds / --no-wait', () => {
   });
 
   it('keeps the old behaviour without the flag: a timeout is still an error', async () => {
-    const operation = vi.fn(async () => { throw timeoutError(); });
+    const operation = vi.fn(async (_command: string, _args: Record<string, any>, _context: Record<string, any>): Promise<unknown> => { throw timeoutError(); });
     await expect(executeIrisCommand('workflow.node.run', {
       'project-id': 'p1', 'node-id': 'n1', 'idempotency-key': 'run-8',
     }, { operation, source: 'cli' })).rejects.toMatchObject({ code: 'WORKSPACE_TIMEOUT' });

@@ -2043,6 +2043,9 @@ export class BrowserAgentKernel {
       while (this.agent === agent && agent.hasQueuedMessages() && !agent.state.isStreaming) {
         const last = agent.state.messages[agent.state.messages.length - 1] as { stopReason?: string } | undefined;
         if (last?.stopReason === 'aborted') { agent.clearAllQueues(); break; }
+        // 这一轮以模型请求失败结束：插话没到过步骤边界，不拿它再调一次模型（会把同一个失败再撞一遍），
+        // 留在队列里由调用方 takePendingSteers() 取回、交还给用户。
+        if (last?.stopReason === 'error') break;
         await agent.continue();
         await this.recoverFromOverflow(agent);
         this.flushSteers();

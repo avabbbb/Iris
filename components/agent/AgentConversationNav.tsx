@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { translations } from '../../utils/translations';
-import { activeTurnIndex, type ConversationTurn } from './agentConversationNav';
+import { activeTurnIndex, type ConversationTurn } from './agentConversationNavModel';
 
 /** 消息区真正的滚动层可能是外层容器，也可能是 WorkflowAgentMessages 的根节点（取决于样式），两者都处理。 */
 export function messageScrollers(root: HTMLElement | null): HTMLElement[] {

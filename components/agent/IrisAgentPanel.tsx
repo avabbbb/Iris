@@ -70,7 +70,7 @@ import { isRunPlanRequest, runPlanApproved, runPlanNodeIds, type RunPlanDecision
 import { clearRunPlans, readRunPlans, saveRunPlan } from './agentRunPlanStore';
 import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from '../../services/runApproval';
 import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
-import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNav';
+import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNavModel';
 import { quotePreview, withQuote } from './agentQuote';
 import { activityAfterConfirmation, advanceConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, enqueueConfirmation, needsCredential, rejectAllConfirmations, useAgentTurn, type ConfirmationQueue } from './agentPanelState';
 

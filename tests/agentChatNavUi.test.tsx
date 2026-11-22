@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../components/workflow/WorkflowAgentMessages';
 import { AgentRunPlanCard } from '../components/agent/AgentRunPlanCard';
 import { AgentScrollToLatest, AgentTurnTimeline } from '../components/agent/AgentConversationNav';
-import { splitConversationTurns } from '../components/agent/agentConversationNav';
+import { splitConversationTurns } from '../components/agent/agentConversationNavModel';
 import type { AgentConfirmRequest } from '../services/agentSpendMandate';
 import type { WorkflowNode } from '../components/workflow/types';
 

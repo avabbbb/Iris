@@ -74,7 +74,7 @@ const OPERATION_LABELS_EN: Readonly<Record<string, string>> = {
 const PARAMETER_LABELS_EN: Readonly<Record<string, string>> = {
   x: 'Left', y: 'Top', width: 'Width', height: 'Height', targetLongEdge: 'Long edge', algorithm: 'Algorithm',
   action: 'Action', preset: 'Style', rows: 'Rows', cols: 'Columns', style: 'Style', count: 'Candidates',
-  startSec: 'Start', endSec: 'End', position: 'Position', speed: 'Speed',
+  startSec: 'Start', endSec: 'End', position: 'Position', speed: 'Speed', semitones: 'Semitones',
 };
 const OPTION_LABELS_EN: Readonly<Record<string, string>> = {
   high: 'High quality', bilinear: 'Smooth', nearest: 'Pixel',
@@ -83,7 +83,7 @@ const OPTION_LABELS_EN: Readonly<Record<string, string>> = {
   doodle: 'Doodle', glow: 'Glow', title: 'Title', sticker: 'Sticker',
   first: 'First frame', current: 'Current frame', last: 'Last frame',
 };
-const SUFFIX_EN: Readonly<Record<string, string>> = { '秒': 's' };
+const SUFFIX_EN: Readonly<Record<string, string>> = { '秒': 's', '半音': 'st' };
 
 export function localizeOperationLabel(capability: Pick<WorkflowOperationCapability, 'id' | 'label'>, language?: WorkflowOperationUiLanguage): string {
   return language === 'en' ? OPERATION_LABELS_EN[capability.id] || capability.label : capability.label;
