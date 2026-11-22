@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { WorkspaceLeaseError, WorkspaceLeaseManager } from './workspace-lease.js';
 import { buildDelivery, collectNodeIds } from './delivery.js';
-import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget } from './session-budget.js';
+import { buildPlanCard, PRE_SUBMIT_ERROR_CODES, SESSION_CONTROL_COMMANDS, SessionBudget, UNCERTAIN_SUBMIT_CODES } from './session-budget.js';
 import { planBatchPick } from './batch-pick.js';
 import { importIrisPipelineModule } from './iris-modules.js';
 import { appendRunArtifactReceipts } from './receipts.js';
@@ -465,19 +465,30 @@ export class WorkflowAgentSession {
     if ((args?.dryRun === true || args?.['dry-run'] === true) && command !== 'workflow.generate') {
       return { ok: true, result: buildPlanCard(command, args, { snapshot: this.snapshot, budget: this.budget }) };
     }
-    const blocked = this.budget.check(command, args);
+    // 先原子预留再异步提交：并发的两条付费请求不会看到同一份剩余额度。
+    const { blocked, reservation } = this.budget.reserve(command, args, { key: idempotencyKey });
     if (blocked) return blocked;
     const entry = this.recordActivity({ command, source, caller, args });
     try {
       const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller, runOptions);
       const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
-      if (!failed && !result?.confirmation?.required && PAID_COMMANDS.has(command)) this.budget.consume(command, args);
+      if (reservation) {
+        if (failed && UNCERTAIN_SUBMIT_CODES.has(result.error?.code)) this.budget.commit(reservation, { uncertain: true });
+        else if (failed || result?.confirmation?.required) this.budget.release(reservation);
+        else this.budget.commit(reservation);
+      }
       if (!failed && command === 'workflow.node.run') await this.recordRunReceipts(result, args, caller);
       const delivery = failed ? null : this.deliveryFor(command, result, caller, args, entry);
       if (delivery && delivery.nodeIds.length) entry.nodeIds = delivery.nodeIds;
       this.finishActivity(entry, failed ? { ok: false, error: result.error } : { ok: true });
       return delivery ? { ...result, delivery } : result;
     } catch (error) {
+      // 发出前就被拦下的（租约、写入者、项目不匹配、参数错误）退回额度；
+      // 其余异常（超时、连接中断、发出后取消）无法确认请求是否已发出：按已用计，不退回。
+      if (reservation) {
+        if (PRE_SUBMIT_ERROR_CODES.has(error?.code)) this.budget.release(reservation);
+        else this.budget.commit(reservation, { uncertain: true });
+      }
       this.finishActivity(entry, { ok: false, error });
       throw error;
     }

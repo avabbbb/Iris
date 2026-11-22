@@ -10,6 +10,12 @@ export const MAX_BUDGET_RUNS = 200;
 export const DEFAULT_BUDGET_TTL_MS = 7_200_000; // 2 小时
 export const MAX_BUDGET_TTL_MS = 86_400_000; // 24 小时
 
+// 结果里出现这些错误码时，请求可能已经发到供应商：预留不释放，按已用计（宁可少放一单也不多花）。
+export const UNCERTAIN_SUBMIT_CODES = new Set(['COMMAND_TIMEOUT', 'UNKNOWN_SUBMIT', 'SUBMIT_UNKNOWN', 'PROVIDER_SUBMIT_UNKNOWN', 'TASK_SUBMIT_UNKNOWN']);
+
+// 抛出这些错误码时请求还没离开 Agent（租约 / 写入者 / 项目校验失败），可以安全退回预留。
+export const PRE_SUBMIT_ERROR_CODES = new Set(['AGENT_WRITER_INACTIVE', 'AGENT_HOST_REQUIRED', 'AGENT_HOST_SESSION_MISMATCH', 'AGENT_PROJECT_INACTIVE', 'LEASE_EXPIRED', 'LEASE_TARGET_CHANGED', 'REVISION_CONFLICT', 'WORKSPACE_UNAVAILABLE', 'INVALID_ARGUMENT', 'UNKNOWN_COMMAND']);
+
 const control = (code, message, details = {}) => ({ ok: false, error: { code, message, retryable: false, ...details } });
 
 function listArg(value) {
@@ -49,7 +55,8 @@ export class SessionBudget {
     if (!Number.isFinite(ttl) || ttl < 60_000 || ttl > MAX_BUDGET_TTL_MS) {
       throw new RangeError('ttlMs 必须在 60000 到 ' + MAX_BUDGET_TTL_MS + ' 之间。');
     }
-    this.grantState = { maxRuns: runs, used: 0, expiresAt: this.now() + ttl, grantedBy: String(grantedBy || 'unknown').slice(0, 80) };
+    // reserved：已原子预留、请求还没出结果的次数；keys：本授权内已预留 / 已计费的幂等键，同一键重试不重复扣。
+    this.grantState = { maxRuns: runs, used: 0, reserved: 0, uncertain: 0, keys: new Map(), expiresAt: this.now() + ttl, grantedBy: String(grantedBy || 'unknown').slice(0, 80) };
     return this.snapshot();
   }
 
@@ -70,20 +77,69 @@ export class SessionBudget {
     return this.snapshot();
   }
 
-  // 返回 null 表示放行；否则返回可直接回给调用方的失败结果。
+  // 返回 null 表示放行；否则返回可直接回给调用方的失败结果。只读，不占额度（计划卡用）；真正执行用 reserve。
   check(command, args = {}) {
     const units = paidUnits(command, args);
     if (!units) return null;
+    return this.blockedFor(units);
+  }
+
+  blockedFor(units) {
     if (this.paused) return control('SESSION_PAUSED', '会话已暂停，付费生成被拦截。请先 session.resume。', { pauseReason: this.pauseReason });
     if (!this.grantState) return null; // 未授权预算：保持原行为（每次在浏览器里确认）
     if (this.now() > this.grantState.expiresAt) return control('BUDGET_EXPIRED', '会话预算已过期，请重新授权。', { budget: this.snapshot().budget });
-    const remaining = this.grantState.maxRuns - this.grantState.used;
+    const remaining = this.grantState.maxRuns - this.grantState.used - this.grantState.reserved;
     if (units > remaining) {
       return control('BUDGET_EXCEEDED', '本次需要 ' + units + ' 次付费生成，会话预算只剩 ' + remaining + ' 次。', { requiredRuns: units, budget: this.snapshot().budget });
     }
     return null;
   }
 
+  /**
+   * 在发出付费请求之前原子预留额度（check 与扣减在同一个同步步骤里，并发请求不会看到同一份剩余）。
+   * 返回 { blocked } 或 { reservation }；reservation 为 null 表示不需要预留（非付费命令 / 未授权预算）。
+   * 同一 idempotencyKey 在本授权内只扣一次：重试拿到 { reservation: null, duplicate: true }。
+   */
+  reserve(command, args = {}, { key } = {}) {
+    const units = paidUnits(command, args);
+    if (!units) return { reservation: null };
+    const grant = this.grantState;
+    const dedupeKey = typeof key === 'string' && key ? key.slice(0, 200) : '';
+    if (grant && dedupeKey && grant.keys.has(dedupeKey) && !this.paused && this.now() <= grant.expiresAt) {
+      return { reservation: null, duplicate: true };
+    }
+    const blocked = this.blockedFor(units);
+    if (blocked) return { blocked };
+    if (!grant) return { reservation: null };
+    grant.reserved += units;
+    const reservation = { grant, units, key: dedupeKey, settled: false };
+    if (dedupeKey) grant.keys.set(dedupeKey, 'reserved');
+    return { reservation };
+  }
+
+  /** 请求已被接受（或结果不确定）：预留转为已用。uncertain 只用于统计展示。 */
+  commit(reservation, { uncertain = false } = {}) {
+    if (!reservation || reservation.settled) return 0;
+    reservation.settled = true;
+    const { grant, units } = reservation;
+    grant.reserved = Math.max(0, grant.reserved - units);
+    grant.used = Math.min(grant.maxRuns, grant.used + units);
+    if (uncertain) grant.uncertain += units;
+    if (reservation.key) grant.keys.set(reservation.key, 'used');
+    return units;
+  }
+
+  /** 明确没有提交（被拒、需人工确认、参数错误）：退回预留，键也释放，允许以同一键重试。 */
+  release(reservation) {
+    if (!reservation || reservation.settled) return 0;
+    reservation.settled = true;
+    const { grant, units } = reservation;
+    grant.reserved = Math.max(0, grant.reserved - units);
+    if (reservation.key && grant.keys.get(reservation.key) === 'reserved') grant.keys.delete(reservation.key);
+    return units;
+  }
+
+  /** 兼容旧调用：不经预留直接计已用。 */
   consume(command, args = {}) {
     const units = paidUnits(command, args);
     if (units && this.grantState) this.grantState.used = Math.min(this.grantState.maxRuns, this.grantState.used + units);
@@ -98,7 +154,9 @@ export class SessionBudget {
       budget: grant ? {
         maxRuns: grant.maxRuns,
         used: grant.used,
-        remaining: grant.maxRuns - grant.used,
+        reserved: grant.reserved,
+        uncertain: grant.uncertain,
+        remaining: grant.maxRuns - grant.used - grant.reserved,
         expiresAt: grant.expiresAt,
         expired: this.now() > grant.expiresAt,
         grantedBy: grant.grantedBy,

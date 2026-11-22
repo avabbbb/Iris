@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- 会话预算改为提交前原子预留：并发的付费请求不会同时看到同一份剩余额度（只剩一次时只放行一单）；同一幂等键在一次授权内只扣一次；浏览器明确拒绝或需要人工确认时退回额度，超时 / 结果不确定时按已用计；`session.budget.get` 新增 `reserved`、`uncertain`。
 - 本机托管 Agent 的回合按 turnId 路由：`/agent/iris/turn` 接受 `turnId`（缺省由 Agent 生成），SSE 只推本轮事件并先发 `turn` 事件；`/agent/iris/cancel` 带 `turnId` 时只取消这一轮，排队中的回合直接出队不再启动；客户端在排队阶段断开也会出队。不带 `turnId` 的旧客户端行为不变。
 
 ## 0.1.1 — Iris closed beta / Iris 内测版 (2026-11-22)
