@@ -34,6 +34,70 @@ const SCHEDULER_POLL: Duration = Duration::from_secs(2);
 const LEASE_MS: i64 = 500;
 const RESOLVE_R1_FIXTURE_IMAGE: &[u8] = include_bytes!("../../../public/favicon.png");
 
+/// 续租心跳：领单后由独立线程按 LEASE_MS/3 续租，不受执行线程里阻塞的网络 I/O 影响；
+/// 续租失败（租约已被别人接管或任务已结束）时置 lost，执行者的后续写入会因 lease_owner 不匹配而失败。
+struct LeaseHeartbeat {
+    stop: Arc<AtomicBool>,
+    lost: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl LeaseHeartbeat {
+    fn start(store: Arc<RuntimeStore>, task_id: String, owner: String) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let lost = Arc::new(AtomicBool::new(false));
+        let thread_stop = stop.clone();
+        let thread_lost = lost.clone();
+        let interval = Duration::from_millis((LEASE_MS as u64 / 3).max(10));
+        let handle = std::thread::spawn(move || {
+            let mut next = Instant::now() + interval;
+            while !thread_stop.load(Ordering::Acquire) {
+                if Instant::now() < next {
+                    std::thread::sleep(SAFE_POINT);
+                    continue;
+                }
+                next = Instant::now() + interval;
+                match store.renew_lease(&task_id, &owner, LEASE_MS) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        thread_lost.store(true, Ordering::Release);
+                        break;
+                    }
+                    Err(error) => {
+                        log::warn!("Runtime lease heartbeat failed: {}", error.message);
+                    }
+                }
+            }
+        });
+        Self {
+            stop,
+            lost,
+            handle: Some(handle),
+        }
+    }
+
+    #[allow(dead_code)]
+    fn lost(&self) -> bool {
+        self.lost.load(Ordering::Acquire)
+    }
+}
+
+impl Drop for LeaseHeartbeat {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// 每次领单一个独立的所有者标记（worker id + 序号）：旧执行者即使与新执行者同一线程身份，
+/// 失去租约后也无法再提交结果。
+fn claim_owner(worker_id: &str, sequence: &mut u64) -> String {
+    *sequence = sequence.wrapping_add(1);
+    format!("{worker_id}:{sequence}")
+}
+
 pub struct RuntimeWorker {
     stopping: Arc<AtomicBool>,
     scheduler_thread: Option<JoinHandle<()>>,
@@ -50,12 +114,21 @@ impl RuntimeWorker {
         let scheduler_store = store.clone();
         let scheduler_id = super::ProductionRuntime::new_id("worker");
         let scheduler_thread = std::thread::spawn(move || {
+            let scheduler_worker_id = scheduler_id;
+            let mut claim_sequence: u64 = 0;
             let mut idle_count: u32 = 0;
             while !scheduler_stopping.load(Ordering::Acquire) {
+                let generation = scheduler_store.work_generation();
+                let scheduler_id = claim_owner(&scheduler_worker_id, &mut claim_sequence);
                 match scheduler_store.claim_next_task_filtered(&scheduler_id, LEASE_MS, Some(true))
                 {
                     Ok(Some(task)) => {
                         idle_count = 0;
+                        let _heartbeat = LeaseHeartbeat::start(
+                            scheduler_store.clone(),
+                            task.id.clone(),
+                            scheduler_id.clone(),
+                        );
                         match task.kind.as_str() {
                         "production.run" => run_production_execution(
                             &scheduler_store,
@@ -80,7 +153,8 @@ impl RuntimeWorker {
                         idle_count = idle_count.saturating_add(1);
                         let backoff = IDLE_POLL_MIN
                             * 2u32.saturating_pow(idle_count.min(7));
-                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
+                        // 入队会唤醒；退避等待只作兜底。
+                        scheduler_store.wait_for_work(generation, backoff.min(IDLE_POLL_MAX));
                     }
                     Err(error) => {
                         log::warn!("Runtime scheduler ledger poll failed: {}", error.message);
@@ -99,11 +173,17 @@ impl RuntimeWorker {
         let executor_artifact_root = artifact_root;
         let executor_id = super::ProductionRuntime::new_id("exec");
         let executor_thread = std::thread::spawn(move || {
+            let executor_worker_id = executor_id;
+            let mut claim_sequence: u64 = 0;
             let mut idle_count: u32 = 0;
             while !executor_stopping.load(Ordering::Acquire) {
+                let generation = store.work_generation();
+                let executor_id = claim_owner(&executor_worker_id, &mut claim_sequence);
                 match store.claim_next_task_filtered(&executor_id, LEASE_MS, Some(false)) {
                     Ok(Some(task)) => {
                         idle_count = 0;
+                        let _heartbeat =
+                            LeaseHeartbeat::start(store.clone(), task.id.clone(), executor_id.clone());
                         match task.kind.as_str() {
                         "runtime.test.delay" => {
                             run_delay(&store, &executor_id, &executor_stopping, &task)
@@ -168,7 +248,8 @@ impl RuntimeWorker {
                         idle_count = idle_count.saturating_add(1);
                         let backoff = IDLE_POLL_MIN
                             * 2u32.saturating_pow(idle_count.min(7));
-                        std::thread::sleep(backoff.min(IDLE_POLL_MAX));
+                        // 入队会唤醒；退避等待只作兜底。
+                        store.wait_for_work(generation, backoff.min(IDLE_POLL_MAX));
                     }
                     Err(error) => {
                         log::warn!("Runtime executor ledger poll failed: {}", error.message);

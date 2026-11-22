@@ -101,7 +101,11 @@ fn a_restarted_runtime_reclaims_a_task_only_after_its_lease_expires() {
     let before_expiry = get_task(&restarted, &task_id);
     assert_eq!(before_expiry["status"], "working");
     assert_eq!(before_expiry["leaseOwner"], first_lease_owner);
-    assert_eq!(before_expiry["leaseExpiresAt"], first_lease_expiry);
+    // 续租心跳在读出 working 与关闭第一个 Runtime 之间可能再续一次：只要求租约没有提前被新 Runtime 接管。
+    assert!(
+        before_expiry["leaseExpiresAt"].as_i64().expect("lease expiry") >= first_lease_expiry,
+        "lease went backwards: {before_expiry}"
+    );
 
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
@@ -158,5 +162,66 @@ fn cancellation_is_persisted_and_honored_at_the_next_worker_safe_point() {
         }
         assert!(Instant::now() < deadline, "task was not cancelled: {task}");
         thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn an_idle_worker_is_woken_by_a_new_task_instead_of_waiting_out_its_backoff() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime");
+    // 让空闲退避涨到上限（2 秒）。
+    thread::sleep(Duration::from_millis(2_500));
+    let submitted = Instant::now();
+    let receipt = runtime
+        .execute(&envelope(
+            "runtime.test.delay",
+            json!({ "delayMs": 50 }),
+            Some("wake-delay"),
+        ))
+        .expect("receipt");
+    let task_id = receipt["taskId"].as_str().expect("task id");
+    let deadline = submitted + Duration::from_secs(3);
+    let claimed_after = loop {
+        let task = get_task(&runtime, task_id);
+        if task["status"] != "queued" {
+            break submitted.elapsed();
+        }
+        assert!(Instant::now() < deadline, "task was never claimed: {task}");
+        thread::sleep(Duration::from_millis(5));
+    };
+    assert!(
+        claimed_after < Duration::from_millis(500),
+        "idle worker took {claimed_after:?} to claim a new task"
+    );
+}
+
+#[test]
+fn a_long_running_task_keeps_its_lease_while_the_executor_is_busy() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime");
+    let receipt = runtime
+        .execute(&envelope(
+            "runtime.test.delay",
+            json!({ "delayMs": 1_500 }),
+            Some("lease-heartbeat"),
+        ))
+        .expect("receipt");
+    let task_id = receipt["taskId"].as_str().expect("task id");
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let owner = loop {
+        let task = get_task(&runtime, task_id);
+        if task["status"] == "working" {
+            break task["leaseOwner"].as_str().expect("owner").to_owned();
+        }
+        assert!(Instant::now() < deadline, "task was never claimed: {task}");
+        thread::sleep(Duration::from_millis(10));
+    };
+    // 每次领单都有自己的所有者标记。
+    assert!(owner.contains(':'), "owner should be per-claim: {owner}");
+    for _ in 0..10 {
+        thread::sleep(Duration::from_millis(100));
+        let task = get_task(&runtime, task_id);
+        if task["status"] == "completed" {
+            break;
+        }
+        assert_eq!(task["leaseOwner"].as_str(), Some(owner.as_str()), "lease changed hands: {task}");
     }
 }

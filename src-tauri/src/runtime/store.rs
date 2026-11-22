@@ -1,4 +1,4 @@
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde_json::{json, Value};
 use std::{path::Path, time::Duration};
@@ -21,6 +21,9 @@ const MIGRATION_0005: &str =
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,
+    /// 入队唤醒：新任务写入后递增代数并唤醒空闲 worker，worker 不必等到下一次退避轮询。
+    work_generation: Mutex<u64>,
+    work_signal: Condvar,
 }
 
 pub struct ClaimedTask {
@@ -101,7 +104,30 @@ impl RuntimeStore {
         }
         Ok(Self {
             connection: Mutex::new(connection),
+            work_generation: Mutex::new(0),
+            work_signal: Condvar::new(),
         })
+    }
+
+    /// 当前的入队代数。worker 先读代数再领单，领不到时用同一代数等待，避免丢失领单与等待之间的唤醒。
+    pub fn work_generation(&self) -> u64 {
+        *self.work_generation.lock()
+    }
+
+    /// 有可领取的新任务时调用：递增代数并唤醒所有等待中的 worker。
+    pub fn signal_work(&self) {
+        let mut generation = self.work_generation.lock();
+        *generation = generation.wrapping_add(1);
+        self.work_signal.notify_all();
+    }
+
+    /// 代数仍为 `seen` 时最多等待 `timeout`（退避轮询作为兜底）；返回等待后的代数。
+    pub fn wait_for_work(&self, seen: u64, timeout: Duration) -> u64 {
+        let mut generation = self.work_generation.lock();
+        if *generation == seen {
+            let _ = self.work_signal.wait_for(&mut generation, timeout);
+        }
+        *generation
     }
 
     pub fn submit_delay(
@@ -1051,6 +1077,8 @@ impl RuntimeStore {
             )
             .map_err(store_unavailable)?;
         transaction.commit().map_err(store_unavailable)?;
+        drop(connection);
+        self.signal_work();
         Ok(receipt)
     }
 
