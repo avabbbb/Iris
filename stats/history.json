@@ -1,0 +1,1074 @@
+{
+  "schemaVersion": 1,
+  "views": {},
+  "clones": {},
+  "snapshots": [
+    {
+      "date": "2026-07-29",
+      "stars": 125,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 22
+    },
+    {
+      "date": "2026-07-30",
+      "stars": 125,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 22
+    },
+    {
+      "date": "2026-07-31",
+      "stars": 126,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 22
+    },
+    {
+      "date": "2026-08-01",
+      "stars": 127,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 23
+    },
+    {
+      "date": "2026-08-02",
+      "stars": 129,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 23
+    },
+    {
+      "date": "2026-08-03",
+      "stars": 129,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-04",
+      "stars": 129,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-05",
+      "stars": 129,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-06",
+      "stars": 129,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-07",
+      "stars": 129,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-08",
+      "stars": 129,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-09",
+      "stars": 129,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-10",
+      "stars": 130,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-11",
+      "stars": 130,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-12",
+      "stars": 130,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-13",
+      "stars": 131,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 24
+    },
+    {
+      "date": "2026-08-14",
+      "stars": 131,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-15",
+      "stars": 131,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-16",
+      "stars": 131,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-17",
+      "stars": 132,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-18",
+      "stars": 132,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-19",
+      "stars": 133,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-20",
+      "stars": 133,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 26
+    },
+    {
+      "date": "2026-08-21",
+      "stars": 132,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 27
+    },
+    {
+      "date": "2026-08-22",
+      "stars": 132,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 27
+    },
+    {
+      "date": "2026-08-23",
+      "stars": 132,
+      "forks": 33,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 27
+    },
+    {
+      "date": "2026-08-24",
+      "stars": 133,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 28
+    },
+    {
+      "date": "2026-08-25",
+      "stars": 134,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 29
+    },
+    {
+      "date": "2026-08-26",
+      "stars": 134,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 33
+    },
+    {
+      "date": "2026-08-27",
+      "stars": 134,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 33
+    },
+    {
+      "date": "2026-08-28",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 34
+    },
+    {
+      "date": "2026-08-29",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 34
+    },
+    {
+      "date": "2026-08-30",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 34
+    },
+    {
+      "date": "2026-08-31",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 34
+    },
+    {
+      "date": "2026-09-01",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 35
+    },
+    {
+      "date": "2026-09-02",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 35
+    },
+    {
+      "date": "2026-09-03",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 35
+    },
+    {
+      "date": "2026-09-04",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 35
+    },
+    {
+      "date": "2026-09-05",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 35
+    },
+    {
+      "date": "2026-09-06",
+      "stars": 135,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 1,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-07",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 2,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-08",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 2,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-09",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 3,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-10",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 7,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-11",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 13,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-12",
+      "stars": 136,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 13,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-13",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 13,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-15",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 15,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-16",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 16,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-17",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-18",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 19,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-20",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 25,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-21",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 29,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-22",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 32,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-23",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 35,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-24",
+      "stars": 137,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 40,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-25",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 40,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-26",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 43,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-27",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 45,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-28",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 52,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-29",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-09-30",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-01",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-02",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-03",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-04",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-05",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-06",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-07",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-08",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-09",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 36
+    },
+    {
+      "date": "2026-10-10",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 38
+    },
+    {
+      "date": "2026-10-11",
+      "stars": 139,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-12",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-13",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-14",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-15",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 53,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-16",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 6,
+      "downloads": 39
+    },
+    {
+      "date": "2026-10-17",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 53
+    },
+    {
+      "date": "2026-10-18",
+      "stars": 138,
+      "forks": 34,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 53
+    },
+    {
+      "date": "2026-10-19",
+      "stars": 138,
+      "forks": 35,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 54
+    },
+    {
+      "date": "2026-10-20",
+      "stars": 138,
+      "forks": 35,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 54
+    },
+    {
+      "date": "2026-10-21",
+      "stars": 140,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 54
+    },
+    {
+      "date": "2026-10-22",
+      "stars": 140,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 56
+    },
+    {
+      "date": "2026-10-23",
+      "stars": 142,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 56
+    },
+    {
+      "date": "2026-10-24",
+      "stars": 143,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 56
+    },
+    {
+      "date": "2026-10-25",
+      "stars": 143,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-26",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-27",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-28",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-29",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-30",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 12,
+      "downloads": 59
+    },
+    {
+      "date": "2026-10-31",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 15,
+      "downloads": 59
+    },
+    {
+      "date": "2026-11-01",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 17,
+      "downloads": 59
+    },
+    {
+      "date": "2026-11-02",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 17,
+      "downloads": 60
+    },
+    {
+      "date": "2026-11-03",
+      "stars": 144,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 85
+    },
+    {
+      "date": "2026-11-04",
+      "stars": 143,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 85
+    },
+    {
+      "date": "2026-11-05",
+      "stars": 143,
+      "forks": 36,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 104
+    },
+    {
+      "date": "2026-11-06",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 105
+    },
+    {
+      "date": "2026-11-07",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 109
+    },
+    {
+      "date": "2026-11-08",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 112
+    },
+    {
+      "date": "2026-11-09",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 112
+    },
+    {
+      "date": "2026-11-10",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 21,
+      "downloads": 113
+    },
+    {
+      "date": "2026-11-11",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 34,
+      "downloads": 114
+    },
+    {
+      "date": "2026-11-12",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 48,
+      "downloads": 115
+    },
+    {
+      "date": "2026-11-13",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 49,
+      "downloads": 115
+    },
+    {
+      "date": "2026-11-14",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 62,
+      "downloads": 117
+    },
+    {
+      "date": "2026-11-15",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 73,
+      "downloads": 118
+    },
+    {
+      "date": "2026-11-16",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 97,
+      "downloads": 118
+    },
+    {
+      "date": "2026-11-17",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 101,
+      "downloads": 123
+    },
+    {
+      "date": "2026-11-18",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 102,
+      "downloads": 123
+    },
+    {
+      "date": "2026-11-19",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 103,
+      "downloads": 123
+    },
+    {
+      "date": "2026-11-20",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 104,
+      "downloads": 124
+    },
+    {
+      "date": "2026-11-21",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 105,
+      "downloads": 124
+    },
+    {
+      "date": "2026-11-22",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 4,
+      "downloads": 0
+    }
+  ],
+  "releaseAssets": [
+    {
+      "release": "v0.1.1",
+      "name": "iris-agent-toolkit-manifest.json",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:01:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-agent-toolkit-win32-x64.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:01:45Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-macos-15-sbom.spdx.json",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-ubuntu-22.04-sbom.spdx.json",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-windows-latest-sbom.spdx.json",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:01:09Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:02Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:27Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_amd64.AppImage.sig",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:27Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:23Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_amd64.deb.sig",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:24Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:47Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_x64-setup.exe.sig",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:47Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:05Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_aarch64.app.tar.gz.sig",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:06Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "latest.json",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:49Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "SHA256SUMS-aarch64-apple-darwin.txt",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:00:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "SHA256SUMS-x86_64-pc-windows-msvc.txt",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T17:01:09Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "nightly-304-49b5166",
+      "name": "Iris_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T01:02:40Z"
+    },
+    {
+      "release": "nightly-304-49b5166",
+      "name": "Iris_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T01:02:34Z"
+    },
+    {
+      "release": "nightly-303-5dc3ebc",
+      "name": "Iris_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-21T02:03:58Z"
+    },
+    {
+      "release": "nightly-303-5dc3ebc",
+      "name": "Iris_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-21T02:03:52Z"
+    },
+    {
+      "release": "nightly-302-466abae",
+      "name": "Iris_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-20T02:10:44Z"
+    },
+    {
+      "release": "nightly-302-466abae",
+      "name": "Iris_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-20T02:10:39Z"
+    }
+  ],
+  "updatedAt": "2026-11-22T17:01:54.252Z"
+}
