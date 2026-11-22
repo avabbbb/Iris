@@ -57,7 +57,7 @@
 
 影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是概念片。** 产品已于 2026-11-20 由 Flovart 更名为 Iris；个人 Agent tab 现在叫 Cut（即将推出）。 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
 
-**0.1.0 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Iris/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
+**0.1.1 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Iris/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
 
 ## 产品愿景——我们要做的交互与 UI
 
@@ -85,7 +85,7 @@
 
 公开 Releases 页面可能包含测试或预览产物；这不代表所有宿主或 Provider 都已 Stable。
 
-### 已知限制（0.1.0 内测版）
+### 已知限制（0.1.1 内测版）
 
 - Beta 路径只有 Codex CLI + Browser Workflow（Agent）与 RunningHub 图像 + 视频（Provider，待认证）。DaVinci Resolve、WorkBuddy、Claude Code、OpenCode、Gemini、OpenAI-compatible BYOK 等其余路径均为 Experimental。
 - 安装包未签名：Windows 未配置 Authenticode，会出现 SmartScreen 提示；macOS 为 ad-hoc 签名且未公证，Gatekeeper 会要求确认。

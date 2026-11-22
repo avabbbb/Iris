@@ -57,7 +57,7 @@
 
 The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film.** The product was renamed from Flovart to Iris on 2026-11-20; the personal-agent tab is now called Cut (coming soon). Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
 
-**0.1.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Iris/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
+**0.1.1 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Iris/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
 
 ## Product vision — the interaction we're building toward
 
@@ -85,7 +85,7 @@ For implementation status and real-host gates, see the [Support Matrix](SUPPORT_
 
 The Releases page may contain test or preview artifacts; it is not a claim that every host or provider is Stable.
 
-### Known limitations (0.1.0 Closed Beta)
+### Known limitations (0.1.1 Closed Beta)
 
 - Beta paths are Codex CLI + Browser Workflow (agent) and RunningHub image + video (provider, pending certification). Everything else, including DaVinci Resolve, WorkBuddy, Claude Code, OpenCode, Gemini and OpenAI-compatible BYOK, is Experimental.
 - Builds are unsigned: Windows shows a SmartScreen warning (Authenticode is not configured) and macOS uses ad-hoc signing without notarization, so Gatekeeper asks for confirmation.

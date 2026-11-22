@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-## 0.1.0 — Iris closed beta / Iris 内测版 (2026-11-22)
-- 更名为 Iris 后的第一个发行版，版本号从 0.1.0 重新开始（Flovart 时代的 0.1.0 – 0.3.0 及其 Release 已下架，Git 标签归档在 `archive/flovart/*`）。v0.x 为内测预发布，不进入稳定自动更新频道。
+## 0.1.1 — Iris closed beta / Iris 内测版 (2026-11-22)
+- 更名为 Iris 后的第一个发行版。原计划用 0.1.0，但仓库开启了不可变 Release，Flovart 时代 v0.1.0 标签名被保留无法复用，因此从 0.1.1 起（Flovart 时代的 0.1.0 – 0.3.0 及其 Release 已下架，Git 标签归档在 `archive/flovart/*`）。v0.x 为内测预发布，不进入稳定自动更新频道。
 - 流水线审批：付费 Step 处于 `running` / `unknown_submit` 时重试需 `confirmResubmit`；`budgetConfirmed` / `confirmed` 只接受 CLI 或界面一次性批准，Agent / MCP 自填无效。
 - Cut：Agent 的 Cut 工具接入通用审批（删除类每次确认），委派回合按声明权限硬上限；导出流式写入 OPFS 临时文件；时间线显示音频波形。
 - 修复 Windows / macOS 打包：`components/agent/agentConversationNav.ts` 与 `AgentConversationNav.tsx` 在不区分大小写的文件系统上撞名，纯逻辑改名为 `agentConversationNavModel.ts`。CI Typecheck 同一原因的报错一并消除。
