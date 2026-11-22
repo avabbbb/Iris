@@ -26,6 +26,7 @@ import {
 import { audioSegments, type CutEncoder, type CutFrameStream, type CutRenderBackend, type Drawable } from './render';
 import type { CutClip, CutProject, CutSource, CutSourceKind } from './timeline';
 import { deleteProxyFile, readProxyFile, writeProxyFile } from './proxyStore';
+import { createCutExportTarget, type CutExportTarget } from './exportTarget';
 
 export interface CutProbe { duration: number; width?: number; height?: number; hasAudio: boolean }
 
@@ -343,11 +344,18 @@ export class CutMediaEngine implements CutRenderBackend {
 
 // ── 编码 ───────────────────────────────────────────────────────────────
 
-export interface CutEncoderInfo { videoCodec: VideoCodec; audioCodec: 'aac' | null; audioPolyfill: boolean }
+export interface CutEncoderInfo {
+  videoCodec: VideoCodec;
+  audioCodec: 'aac' | null;
+  audioPolyfill: boolean;
+  /** 成片写在哪：opfs = 流式写进磁盘临时文件；memory = 退回内存缓冲（浏览器不支持 OPFS 可写流）。start() 之后才确定。 */
+  storage?: 'opfs' | 'memory';
+}
 
 export class MediabunnyMp4Encoder implements CutEncoder {
   readonly sampleRate = 48000;
-  private output: Output<Mp4OutputFormat, BufferTarget> | null = null;
+  private output: Output<Mp4OutputFormat> | null = null;
+  private sink: CutExportTarget | null = null;
   private videoSource: CanvasSource | null = null;
   private audioSource: AudioBufferSource | null = null;
 
@@ -374,7 +382,10 @@ export class MediabunnyMp4Encoder implements CutEncoder {
   }
 
   async start() {
-    this.output = new Output({ format: new Mp4OutputFormat({ fastStart: false }), target: new BufferTarget() });
+    // fastStart: false 让 moov 写在文件尾，muxer 不必把整段媒体留在内存里，才能流式落盘。
+    this.sink = await createCutExportTarget();
+    this.info.storage = this.sink.kind;
+    this.output = new Output({ format: new Mp4OutputFormat({ fastStart: false }), target: this.sink.target });
     this.videoSource = new CanvasSource(this.canvas, { codec: this.info.videoCodec, bitrate: QUALITY_HIGH, keyFrameInterval: 2 });
     this.output.addVideoTrack(this.videoSource, { frameRate: this.fps });
     if (this.hasAudio) {
@@ -395,14 +406,16 @@ export class MediabunnyMp4Encoder implements CutEncoder {
   async finalize(): Promise<Blob> {
     const output = this.output!;
     await output.finalize();
-    const buffer = output.target.buffer;
     this.output = null;
-    if (!buffer) throw new Error('Export produced no data.');
-    return new Blob([buffer], { type: 'video/mp4' });
+    return this.sink!.finish();
   }
 
   async cancel() {
-    if (this.output && this.output.state !== 'finalized' && this.output.state !== 'canceled') await this.output.cancel();
-    this.output = null;
+    try {
+      if (this.output && this.output.state !== 'finalized' && this.output.state !== 'canceled') await this.output.cancel();
+    } finally {
+      this.output = null;
+      await this.sink?.discard();
+    }
   }
 }
