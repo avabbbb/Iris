@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // capture.ui 端到端：本机起一个 localhost 页面，经 pipeline 命令边界截图 + 录屏，
-// 检查确认门、公网拒绝、授权文件夹 file://、产物进 run 且 trace 有对应 Step。
+// 检查确认门、公网拒绝、授权文件夹 file://、页面内越界（点链接跳公网、302 到公网、外链子资源）、产物进 run 且 trace 有对应 Step。
+// Linux 以 root 身份或容器里没有 user namespace 时 Chromium 沙箱起不来，需显式 IRIS_CAPTURE_NO_SANDBOX=1。
 // 需要本机 Chromium（Playwright 自带、IRIS_CAPTURE_BROWSER，或 Remotion 已下载的 headless shell）。
 import { createServer } from 'node:http';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -20,7 +21,14 @@ const page = `<!doctype html><meta charset="utf-8"><title>Demo</title>
 button{font:inherit;padding:16px 32px;border-radius:14px;border:0;background:#4f8cff;color:#fff}#done{display:none;color:#5be3a8}</style>
 <main><h1 id="title">截图进去</h1><button id="go" onclick="setTimeout(()=>{document.getElementById('title').textContent='宣传片出来';document.getElementById('done').style.display='block'},300)">生成</button><p id="done">已完成 ✓</p></main>`;
 writeFileSync(join(authorized, 'demo.html'), page);
-const server = createServer((_, response) => { response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end(page); });
+const escapePage = '<!doctype html><meta charset="utf-8"><a id="out" href="http://example.com/">外链</a>';
+const subresourcePage = '<!doctype html><meta charset="utf-8"><img src="http://example.com/pixel.png"><h1>外链图片被拦，页面照常截图</h1>';
+const server = createServer((request, response) => {
+  if (request.url === '/redirect') { response.writeHead(302, { location: 'http://example.com/' }); response.end(); return; }
+  const body = request.url === '/escape' ? escapePage : request.url === '/subresource' ? subresourcePage : page;
+  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  response.end(body);
+});
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const base = `http://localhost:${server.address().port}/`;
 
@@ -73,11 +81,18 @@ try {
   check('录屏成功并转成 MP4', video.ok && video.result.artifacts[0]?.captureKind === 'recording' && /\.mp4$/.test(video.result.artifacts[0].path), video);
   check('录屏有时长', (video.result.artifacts[0].media?.durationMs || 0) > 1000, video.result.artifacts[0].media);
 
+  const clickOut = await approved('capture.ui', { runId, url: `${base}escape`, steps: [{ action: 'click', selector: '#out' }, { action: 'wait', ms: 300 }, { action: 'screenshot' }], confirmed: true }, { ...agent, mutationId: 'cap-escape' });
+  check('页面里点链接跳公网：整次采集失败', clickOut.error?.code === 'PATH_NOT_AUTHORIZED', clickOut);
+  const redirect = await approved('capture.ui', { runId, url: `${base}redirect`, confirmed: true }, { ...agent, mutationId: 'cap-redirect' });
+  check('本机地址 302 到公网：整次采集失败', !redirect.ok, redirect);
+  const subresource = await approved('capture.ui', { runId, url: `${base}subresource`, confirmed: true }, { ...agent, mutationId: 'cap-sub' });
+  check('外链子资源被拦但页面照常截图', subresource.ok && subresource.result.artifacts.length === 1, subresource);
+
   const trace = pipeline.trace(runId);
   const captureSteps = trace.steps.filter(step => step.tool === 'capture.ui');
-  check('trace 里记下 capture.ui Step（含失败与确认门）', captureSteps.length === 6 && captureSteps.every(step => step.caller === 'codex'), captureSteps.map(step => [step.status, step.error?.code]));
+  check('trace 里记下 capture.ui Step（含失败与确认门）', captureSteps.length === 9 && captureSteps.every(step => step.caller === 'codex'), captureSteps.map(step => [step.status, step.error?.code]));
   const listed = await pipeline.execute('asset.list', { runId, kind: 'capture' }, agent);
-  check('采集产物可按 kind=capture 列出', listed.ok && listed.result.artifacts.length === 4, listed.result);
+  check('采集产物可按 kind=capture 列出', listed.ok && listed.result.artifacts.length === 5, listed.result);
   console.log(`\n${checks.length} checks passed. Screenshots: ${images.map(item => item.path).join(', ')}`);
 } finally {
   pipeline.close();

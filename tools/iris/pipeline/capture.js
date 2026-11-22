@@ -1,6 +1,8 @@
 // capture.ui：本机 Playwright 打开用户给的本地页面，按步骤截图 / 录屏（docs/design/16-agent-video-pipeline.md C5）。
 // 只允许 localhost / 回环地址，或授权文件夹内的 file:// 页面；不访问公网。
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+// 边界不止校验入口 URL：浏览器里的每个请求（子资源、跳转、重定向、弹窗、WebSocket）都走同一条规则，
+// 越界的子资源直接拦掉，越界的导航 / 真实发出的越界响应让整次采集失败。Chromium 默认开沙箱。
+import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +12,8 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
 export const CAPTURE_LIMITS = Object.freeze({ maxSteps: 40, maxWaitMs: 15000, maxScreenshots: 12, maxVideoMs: 120000, maxViewportEdge: 4096 });
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+// 页面内部的空白页 / 内联资源 / 浏览器自己的错误页，不出本机。
+const INTERNAL_PROTOCOLS = new Set(['about:', 'data:', 'blob:']);
 const ACTIONS = new Set(['goto', 'click', 'fill', 'press', 'hover', 'scroll', 'wait', 'waitFor', 'screenshot']);
 
 const invalid = message => Object.assign(new Error(message), { code: 'INVALID_ARGUMENT' });
@@ -18,25 +22,137 @@ export function allowedRoots() {
   return (process.env.IRIS_PIPELINE_ALLOWED_ROOTS || '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean).map(root => resolve(root));
 }
 
+/** 解析符号链接后的真实路径；文件不存在时逐级向上找到存在的祖先再拼回去，防止用链接跳出授权文件夹。 */
+function realPath(path) {
+  try { return realpathSync.native(path); } catch {
+    const parent = dirname(path);
+    if (parent === path) return path;
+    return join(realPath(parent), path.slice(parent.length).replace(/^[\\/]+/, ''));
+  }
+}
+
+function insideRoots(path, roots) {
+  const real = realPath(path);
+  return roots.some(root => {
+    const base = realPath(root);
+    return real === base || real.startsWith(base.endsWith(sep) ? base : base + sep);
+  });
+}
+
+const notAuthorized = (message, details) => Object.assign(new Error(message), { code: 'PATH_NOT_AUTHORIZED', ...(details ? { details } : {}) });
+
+/**
+ * 浏览器里的一个请求能不能放行（入口、子资源、跳转、重定向、WebSocket 共用）。
+ * 回环 http(s) / ws(s)、授权文件夹内的 file://、about: / data: / blob:。返回 { ok, reason }。
+ */
+export function captureRequestAllowed(raw, roots = allowedRoots()) {
+  let url;
+  try { url = new URL(String(raw || '')); } catch { return { ok: false, reason: `不是合法 URL：${raw}` }; }
+  if (INTERNAL_PROTOCOLS.has(url.protocol)) return { ok: true };
+  if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+    return LOOPBACK_HOSTS.has(url.hostname) ? { ok: true } : { ok: false, reason: `只允许本机地址（localhost / 127.0.0.1），拒绝 ${url.hostname}` };
+  }
+  if (url.protocol === 'file:') {
+    let path;
+    try { path = resolve(fileURLToPath(url)); } catch { return { ok: false, reason: `不是合法的本地文件地址：${raw}` }; }
+    return roots.length && insideRoots(path, roots) ? { ok: true } : { ok: false, reason: `${path} 不在授权文件夹内` };
+  }
+  return { ok: false, reason: `不支持 ${url.protocol} 协议` };
+}
+
 /** 只放行回环地址与授权文件夹内的本地文件；返回规范化后的 URL 字符串。 */
 export function assertCaptureUrl(raw, roots = allowedRoots()) {
   let url;
   try { url = new URL(String(raw || '')); } catch { throw invalid(`不是合法 URL：${raw}`); }
   if (url.protocol === 'http:' || url.protocol === 'https:') {
     if (!LOOPBACK_HOSTS.has(url.hostname)) {
-      throw Object.assign(new Error(`capture.ui 只打开本机页面（localhost / 127.0.0.1），拒绝 ${url.hostname}`), { code: 'PATH_NOT_AUTHORIZED' });
+      throw notAuthorized(`capture.ui 只打开本机页面（localhost / 127.0.0.1），拒绝 ${url.hostname}`);
     }
     return url.toString();
   }
   if (url.protocol === 'file:') {
     const path = resolve(fileURLToPath(url));
-    if (!roots.length || !roots.some(root => path === root || path.startsWith(root + sep))) {
-      throw Object.assign(new Error(`${path} 不在授权文件夹内`), { code: 'PATH_NOT_AUTHORIZED', details: { allowedRoots: roots } });
-    }
+    if (!roots.length || !insideRoots(path, roots)) throw notAuthorized(`${path} 不在授权文件夹内`, { allowedRoots: roots });
     if (!existsSync(path)) throw Object.assign(new Error(`文件不存在：${path}`), { code: 'ASSET_MISSING' });
     return url.toString();
   }
   throw invalid(`capture.ui 不支持 ${url.protocol} 协议`);
+}
+
+/** Chromium 沙箱：默认开启；只有显式设置 IRIS_CAPTURE_NO_SANDBOX=1（例如 root 身份的容器）才关闭。 */
+export function captureSandboxEnabled(env = process.env) {
+  return !/^(1|true|yes)$/i.test(String(env.IRIS_CAPTURE_NO_SANDBOX || ''));
+}
+
+/** 启动参数：除 localhost 外的主机名一律解析失败（纵深防御；IP 字面量由请求拦截兜底）。 */
+export const CAPTURE_BROWSER_ARGS = Object.freeze([
+  '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost',
+  '--disable-background-networking',
+  '--disable-component-update',
+  '--disable-sync',
+  '--no-first-run',
+  '--disable-extensions',
+]);
+
+/**
+ * 在浏览器上下文里装上访问边界：越界请求一律拦截；越界的导航、绕过拦截真正拿到的响应记为违规，
+ * 由 violation() 取出，采集在下一步之前失败。
+ */
+export async function guardCaptureContext(context, roots = allowedRoots()) {
+  const violations = [];
+  const note = (url, reason, kind) => { if (violations.length < 20) violations.push({ url: String(url).slice(0, 300), reason, kind }); };
+  const internalPage = url => /^chrome-error:/.test(String(url));
+  await context.route(() => true, route => {
+    const request = route.request();
+    const verdict = captureRequestAllowed(request.url(), roots);
+    if (verdict.ok) return route.continue();
+    if (request.isNavigationRequest()) note(request.url(), verdict.reason, 'navigation');
+    return route.abort('blockedbyclient');
+  });
+  if (typeof context.routeWebSocket === 'function') {
+    await context.routeWebSocket(() => true, ws => {
+      const verdict = captureRequestAllowed(ws.url(), roots);
+      if (verdict.ok) ws.connectToServer();
+      else { note(ws.url(), verdict.reason, 'websocket'); ws.close({ code: 1008, reason: 'blocked by capture boundary' }); }
+    });
+  }
+  // 重定向等不经过拦截的情况：只要越界的响应真的回来了，就判违规。
+  context.on('response', response => {
+    const verdict = captureRequestAllowed(response.url(), roots);
+    if (!verdict.ok) note(response.url(), verdict.reason, 'response');
+  });
+  const watchPage = page => {
+    page.on('framenavigated', frame => {
+      const url = frame.url();
+      if (internalPage(url)) return;
+      const verdict = captureRequestAllowed(url, roots);
+      if (!verdict.ok) note(url, verdict.reason, 'navigation');
+    });
+  };
+  context.on('page', watchPage);
+  for (const page of context.pages?.() || []) watchPage(page);
+  return {
+    violations,
+    assertClean() {
+      if (!violations.length) return;
+      const first = violations[0];
+      throw notAuthorized(`页面试图访问授权范围以外的地址（${first.url}）：${first.reason}`, { violations: violations.slice(0, 5) });
+    },
+  };
+}
+
+async function launchCaptureBrowser(chromium, executablePath) {
+  const sandbox = captureSandboxEnabled();
+  try {
+    return await chromium.launch({ executablePath, headless: true, chromiumSandbox: sandbox, args: [...CAPTURE_BROWSER_ARGS] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (sandbox && /sandbox/i.test(message)) {
+      throw new CapabilityError('capture.ui', 'Chromium 沙箱无法启动（常见于以 root 身份运行或容器里缺少 user namespace）',
+        '以普通用户运行；确实只能在受控环境里关闭沙箱时，设置 IRIS_CAPTURE_NO_SANDBOX=1');
+    }
+    throw error;
+  }
 }
 
 /** 校验并规范化 steps / viewport / mode；纯函数，便于单测。 */
@@ -152,18 +268,27 @@ async function startScreencast(context, page, plan, scratchPath) {
 /**
  * 执行一次采集。scratchPath(name) 给出临时输出路径。返回 [{ path, kind: 'screenshot'|'recording', label }]。
  */
-export async function runCapture(plan, { scratchPath, signal }) {
-  const { chromium, executablePath } = await resolveCaptureBrowser();
-  const browser = await chromium.launch({ executablePath, headless: true });
+export async function runCapture(plan, { scratchPath, signal, roots = allowedRoots(), resolveBrowser = resolveCaptureBrowser }) {
+  const { chromium, executablePath } = await resolveBrowser();
+  const browser = await launchCaptureBrowser(chromium, executablePath);
   const outputs = [];
   const abort = () => { void browser.close().catch(() => {}); };
   signal?.addEventListener('abort', abort, { once: true });
   const started = Date.now();
   try {
-    const context = await browser.newContext({ viewport: plan.viewport, deviceScaleFactor: plan.deviceScaleFactor });
+    const context = await browser.newContext({
+      viewport: plan.viewport,
+      deviceScaleFactor: plan.deviceScaleFactor,
+      // Service Worker 的请求不经过 context.route，直接禁用；也不接受下载、不授予任何权限。
+      serviceWorkers: 'block',
+      acceptDownloads: false,
+      permissions: [],
+    });
+    const boundary = await guardCaptureContext(context, roots);
     const page = await context.newPage();
     page.setDefaultTimeout(CAPTURE_LIMITS.maxWaitMs);
     await page.goto(plan.url, { waitUntil: 'load' });
+    boundary.assertClean();
     const recorder = plan.mode === 'video' ? await startScreencast(context, page, plan, scratchPath) : null;
     let shot = 0;
     for (const step of plan.steps) {
@@ -184,6 +309,7 @@ export async function runCapture(plan, { scratchPath, signal }) {
         await target.screenshot({ path, ...(step.selector ? {} : { fullPage: Boolean(step.fullPage) }) });
         outputs.push({ path, kind: 'screenshot', label: step.name || `shot-${shot}` });
       }
+      boundary.assertClean();
     }
     if (recorder) outputs.push({ path: await recorder.stop(signal), kind: 'recording', label: 'recording' });
     await context.close();
