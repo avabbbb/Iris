@@ -36,11 +36,17 @@ export interface RuntimeCommandEnvelope {
 export interface IrisRuntimeApi {
   status(): Promise<RuntimeStatus>;
   execute(envelope: RuntimeCommandEnvelope): Promise<unknown>;
+  /**
+   * 长轮询：任务 updatedAt 与 sinceUpdatedAt 不同或已到终态时返回，否则最多等 timeoutMs（上限 25 秒）。
+   * 只有桌面 IPC 提供；缺失时调用方退回定时 task.get。
+   */
+  waitTask?(taskId: string, sinceUpdatedAt: number | undefined, timeoutMs: number): Promise<unknown>;
 }
 
 const tauriRuntime: IrisRuntimeApi = {
   status: () => invoke<RuntimeStatus>('runtime_status'),
   execute: envelope => invoke('runtime_execute', { envelope }),
+  waitTask: (taskId, sinceUpdatedAt, timeoutMs) => invoke('runtime_task_wait', { taskId, sinceUpdatedAt: sinceUpdatedAt ?? null, timeoutMs }),
 };
 
 export function isTauriRuntimeSurface(): boolean {

@@ -225,3 +225,36 @@ fn a_long_running_task_keeps_its_lease_while_the_executor_is_busy() {
         assert_eq!(task["leaseOwner"].as_str(), Some(owner.as_str()), "lease changed hands: {task}");
     }
 }
+
+#[test]
+fn wait_task_returns_on_change_and_honours_its_timeout() {
+    let runtime = ProductionRuntime::new(env!("CARGO_PKG_VERSION")).expect("runtime");
+    let receipt = runtime
+        .execute(&envelope(
+            "runtime.test.delay",
+            json!({ "delayMs": 300 }),
+            Some("wait-task"),
+        ))
+        .expect("receipt");
+    let task_id = receipt["taskId"].as_str().expect("task id");
+    // 不给 since：立即返回当前状态。
+    let first = runtime
+        .wait_task(task_id, None, Duration::from_secs(5))
+        .expect("first");
+    // 给 since：直到状态变化（领单 / 完成）才返回，远早于 5 秒上限。
+    let started = Instant::now();
+    let mut current = first;
+    while current.status != "completed" {
+        current = runtime
+            .wait_task(task_id, Some(current.updated_at), Duration::from_secs(5))
+            .expect("wait");
+        assert!(started.elapsed() < Duration::from_secs(4), "wait did not return on change");
+    }
+    // 终态立即返回；未变化时按超时返回。
+    let settled = Instant::now();
+    let done = runtime
+        .wait_task(task_id, Some(current.updated_at), Duration::from_secs(5))
+        .expect("terminal");
+    assert_eq!(done.status, "completed");
+    assert!(settled.elapsed() < Duration::from_millis(200));
+}

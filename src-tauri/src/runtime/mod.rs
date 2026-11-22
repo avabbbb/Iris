@@ -169,6 +169,28 @@ impl ProductionRuntime {
         self.store.get_task(task_id)
     }
 
+    /// 长轮询：任务的 updated_at 与 `since_updated_at` 不同（或已到终态）时立即返回，否则最多等 `timeout`。
+    /// 桌面画布用它代替固定 2 秒一次的 task.get：本地 SQLite 每 100 ms 读一次，IPC 只在变化时往返。
+    pub fn wait_task(
+        &self,
+        task_id: &str,
+        since_updated_at: Option<i64>,
+        timeout: std::time::Duration,
+    ) -> Result<RuntimeTask, RuntimeError> {
+        const STEP: std::time::Duration = std::time::Duration::from_millis(100);
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let task = self.store.get_task(task_id)?;
+            let terminal = matches!(task.status.as_str(), "completed" | "failed" | "cancelled");
+            let changed = since_updated_at.map_or(true, |since| task.updated_at != since);
+            let now = std::time::Instant::now();
+            if terminal || changed || now >= deadline {
+                return Ok(task);
+            }
+            std::thread::sleep(STEP.min(deadline - now));
+        }
+    }
+
     pub fn get_production_task(&self, task_id: &str) -> Result<Value, RuntimeError> {
         self.store.get_production_task(task_id)
     }
@@ -1336,14 +1358,34 @@ pub fn runtime_execute(
 }
 
 #[tauri::command]
-pub fn runtime_artifact_read(
+pub async fn runtime_artifact_read(
     runtime: tauri::State<'_, Arc<ProductionRuntime>>,
     task_id: String,
 ) -> Result<tauri::ipc::Response, RuntimeError> {
     // 原始二进制响应：前端拿到 ArrayBuffer，大视频不再被序列化成 JSON 数字数组。
-    runtime
-        .read_artifact_frame(&task_id)
+    // 读盘与校验放到阻塞线程池，不占主线程。
+    let runtime = runtime.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || runtime.read_artifact_frame(&task_id))
+        .await
+        .map_err(|_| RuntimeError::new("RUNTIME_UNAVAILABLE", "Media artifact read was interrupted"))?
         .map(tauri::ipc::Response::new)
+}
+
+/// 画布等待任务变化的长轮询（UI 专用，不属于 canonical 命令面）。timeout 上限 25 秒。
+#[tauri::command]
+pub async fn runtime_task_wait(
+    runtime: tauri::State<'_, Arc<ProductionRuntime>>,
+    task_id: String,
+    since_updated_at: Option<i64>,
+    timeout_ms: Option<u64>,
+) -> Result<RuntimeTask, RuntimeError> {
+    let runtime = runtime.inner().clone();
+    let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(15_000).min(25_000));
+    tauri::async_runtime::spawn_blocking(move || {
+        runtime.wait_task(&task_id, since_updated_at, timeout)
+    })
+    .await
+    .map_err(|_| RuntimeError::new("RUNTIME_UNAVAILABLE", "Runtime task wait was interrupted"))?
 }
 
 #[tauri::command]

@@ -145,6 +145,7 @@ pub fn run() {
             runtime::runtime_status,
             runtime::runtime_execute,
             runtime::runtime_artifact_read,
+            runtime::runtime_task_wait,
             runtime::browser_import_pairing_list_pending,
             runtime::browser_import_pairing_approve,
             runtime::browser_import_pairing_reject,

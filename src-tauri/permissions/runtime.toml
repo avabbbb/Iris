@@ -1,7 +1,7 @@
 [[permission]]
 identifier = "runtime-control"
 description = "Allows the main Iris WebUI to inspect and execute the typed Production Runtime contract."
-commands.allow = ["runtime_status", "runtime_execute", "runtime_artifact_read"]
+commands.allow = ["runtime_status", "runtime_execute", "runtime_artifact_read", "runtime_task_wait"]
 
 [[permission]]
 identifier = "keyring-metadata"

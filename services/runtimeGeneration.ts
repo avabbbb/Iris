@@ -10,6 +10,7 @@ export interface RuntimeMediaResult {
 
 interface RuntimeTaskView {
   status?: string;
+  updatedAt?: number;
   result?: { artifact?: { mimeType?: string }; priceQuote?: { estimatedPrice?: number; currency?: string } };
   error?: unknown;
 }
@@ -55,22 +56,46 @@ export function runtimeTaskPhase(status: string | undefined): RuntimeTaskPhase {
 
 type RuntimePollOutcome = { kind: 'settled'; task: RuntimeTaskView } | { kind: 'timeout' };
 
+const RUNTIME_WAIT_MS = 15_000;
+
+/** 等待 promise 或 signal 取消，先到者为准；被放弃的长轮询在 Runtime 侧自然超时，不影响状态。 */
+async function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  signal.throwIfAborted();
+  const { promise: aborted, reject } = Promise.withResolvers<never>();
+  const onAbort = () => reject(signal.reason ?? new DOMException('已停止等待 Runtime 任务', 'AbortError'));
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function pollRuntimeTask(runtime: IrisRuntimeApi, taskId: string, onProgress?: (message: string) => void, signal?: AbortSignal): Promise<RuntimePollOutcome> {
   const pollStart = Date.now();
+  let task: RuntimeTaskView | undefined;
   for (;;) {
     // 保留 signal.reason（默认是 AbortError），下游 isAbort 才能把停止和失败区分开。
     signal?.throwIfAborted();
-    if (Date.now() - pollStart > RUNTIME_POLL_TIMEOUT_MS) return { kind: 'timeout' };
-    const task = await runtime.execute({
-      protocolVersion: '1',
-      commandId: crypto.randomUUID(),
-      command: 'task.get',
-      args: { taskId },
-      actor: { kind: 'ui', instanceId: 'workflow-generation' },
-    }) as RuntimeTaskView;
+    const elapsed = Date.now() - pollStart;
+    if (elapsed > RUNTIME_POLL_TIMEOUT_MS) return { kind: 'timeout' };
+    if (task && runtime.waitTask) {
+      // 桌面 Runtime：长轮询，任务一变化就返回，不再固定每 2 秒往返一次。
+      const timeoutMs = Math.max(1, Math.min(RUNTIME_WAIT_MS, RUNTIME_POLL_TIMEOUT_MS - elapsed));
+      task = await untilAborted(runtime.waitTask(taskId, task.updatedAt, timeoutMs), signal) as RuntimeTaskView;
+    } else {
+      if (task) await waitForNextPoll(signal);
+      task = await runtime.execute({
+        protocolVersion: '1',
+        commandId: crypto.randomUUID(),
+        command: 'task.get',
+        args: { taskId },
+        actor: { kind: 'ui', instanceId: 'workflow-generation' },
+      }) as RuntimeTaskView;
+    }
     if (runtimeTaskPhase(task?.status) !== 'pending') return { kind: 'settled', task };
     onProgress?.(task?.status === 'queued' ? '已提交给 Runtime，排队中…' : 'Runtime 生成中…');
-    await waitForNextPoll(signal);
   }
 }
 
