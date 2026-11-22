@@ -914,6 +914,14 @@
       "watchers": 0,
       "releases": 105,
       "downloads": 124
+    },
+    {
+      "date": "2026-11-22",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 106,
+      "downloads": 124
     }
   ],
   "releaseAssets": [
@@ -1060,6 +1068,18 @@
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:58Z"
+    },
+    {
+      "release": "nightly-304-49b5166",
+      "name": "Iris_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T01:02:40Z"
+    },
+    {
+      "release": "nightly-304-49b5166",
+      "name": "Iris_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-22T01:02:34Z"
     },
     {
       "release": "nightly-303-5dc3ebc",
@@ -4518,5 +4538,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-21T07:22:03.517Z"
+  "updatedAt": "2026-11-22T07:01:44.248Z"
 }
