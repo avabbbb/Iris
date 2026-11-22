@@ -114,11 +114,14 @@ describe('Skill Hub picker UI', () => {
     fireEvent.change(screen.getByLabelText('名称'), { target: { value: '海报文案' } });
     fireEvent.change(screen.getByLabelText('指令'), { target: { value: '写三条海报标题' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
-    await screen.findByText('写三条海报标题');
+    await screen.findByText('写三条海报标题', undefined, { timeout: 5000 });
     fireEvent.click(screen.getByRole('button', { name: '返回 Skill 列表' }));
     fireEvent.click(screen.getByRole('tab', { name: '我的' }));
-    const mine = await screen.findByRole('region', { name: '我的 Skill' });
-    expect(within(mine).getByRole('group', { name: '海报文案' })).toBeInTheDocument();
+    // 列表从持久化 store 异步加载并会重渲染 region：每次重新取 region 再找条目，慢机器（Windows release gate）上也稳定。
+    await waitFor(() => {
+      const mine = screen.getByRole('region', { name: '我的 Skill' });
+      expect(within(mine).getByRole('group', { name: '海报文案' })).toBeInTheDocument();
+    }, { timeout: 5000 });
   });
 
   it('详情 opens the built-in Skill details (read-only)', async () => {
