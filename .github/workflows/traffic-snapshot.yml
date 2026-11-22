@@ -1,6 +1,7 @@
 # Iris - 每日仓库数据快照
 #
-# GitHub Traffic API 只保留最近 14 天数据，本工作流每天抓取并累积到 stats/history.json。
+# GitHub Traffic API 只保留最近 14 天数据，本工作流每天抓取并累积到 stats 分支的 stats/history.json。
+# main 受保护（必须 PR），Actions 不能直推，所以快照只写独立的 stats 分支；首次运行以 main 上已有的历史为种子。
 # views / clones 需要 TRAFFIC_PAT：推荐 Fine-grained PAT，仅授权本仓库的 Administration: read。
 # 未配置时降级为只记录 stars / forks / watchers / releases / release 下载量。
 # 这里不采集 Iris 应用内行为、Prompt、素材或 API Key。
@@ -25,6 +26,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Switch to stats branch
+        run: |
+          if git fetch --depth=1 origin stats 2>/dev/null; then
+            git checkout -B stats FETCH_HEAD
+          else
+            seed="$(mktemp)"
+            [ -f stats/history.json ] && cp stats/history.json "$seed"
+            git checkout --orphan stats
+            git rm -rfq --cached .
+            git clean -fdxq
+            mkdir -p stats
+            [ -s "$seed" ] && cp "$seed" stats/history.json
+          fi
 
       - name: Collect stats
         uses: actions/github-script@v7
@@ -103,5 +118,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add stats/history.json
           git diff --cached --quiet || git commit -m "chore: daily traffic snapshot"
-          git pull --rebase origin "$GITHUB_REF_NAME"
-          git push origin "HEAD:$GITHUB_REF_NAME"
+          git push origin HEAD:stats
