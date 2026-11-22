@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+
+## 0.1.0 — Iris closed beta / Iris 内测版 (2026-11-22)
+- 更名为 Iris 后的第一个发行版，版本号从 0.1.0 重新开始（Flovart 时代的 0.1.0 – 0.3.0 及其 Release 已下架，Git 标签归档在 `archive/flovart/*`）。v0.x 为内测预发布，不进入稳定自动更新频道。
+- 流水线审批：付费 Step 处于 `running` / `unknown_submit` 时重试需 `confirmResubmit`；`budgetConfirmed` / `confirmed` 只接受 CLI 或界面一次性批准，Agent / MCP 自填无效。
+- Cut：Agent 的 Cut 工具接入通用审批（删除类每次确认），委派回合按声明权限硬上限；导出流式写入 OPFS 临时文件；时间线显示音频波形。
+- 修复 Windows / macOS 打包：`components/agent/agentConversationNav.ts` 与 `AgentConversationNav.tsx` 在不区分大小写的文件系统上撞名，纯逻辑改名为 `agentConversationNavModel.ts`。CI Typecheck 同一原因的报错一并消除。
+- 修复：模型请求失败结束的一轮不再拿插话再调一次模型，插话交还给输入队列；工作流「变调」参数补英文标签。
 - **更名：Flovart → Iris**（2026-11-20；更名前最后一版打标签 `flovart-final`）。产品名、文档、界面文案、页面标题 / manifest、扩展名称与说明、桌面产品名与 sidecar（`iris-host` / `iris-agent`）、CLI / MCP / Agent 工具名（`iris_*`）、环境变量（`IRIS_*` / `VITE_IRIS_*`）、本机目录（`~/.iris`）、仓库 `avabbbb/Iris`、官方站 https://iris.avabbbb.com（Cloudflare Worker `iris`）统一改名；顶栏为 Canvas / Cut / Agent（中文 画布 / Cut / Agent），原第二个 tab「Iris」改名 **Cut**。兼容：`flovart_*` 工具名作为弃用别名继续可用（MCP 同时注册旧名）；`FLOVART_*` / `VITE_FLOVART_*` 作为回退；浏览器 localStorage / IndexedDB 与 `~/.flovart` 首次启动复制到新名字，旧数据本版本不删除；扩展 chrome.storage 旧 key 与加密密钥迁移，扩展版本 1.5.0；`flovart.avabbbb.com` 过渡期仍是受信 origin（扩展配对、本机 Agent bootstrap）；`flovart://` 深链接继续注册。线上协议与持久化格式标识（`flovart:` 模型 id 与事件名、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*`、`data-flovart-*`、`__FLOVART_*__`、`com.flovart.*`、`flovart-state.db`、本机 Agent 的 `/agent/flovart/*` 路径、npm 包 `@flovart/*`）有意保留。
 - 移除 Agent「执行计划」（任务清单）：删除执行计划卡（含「已停下 · 停在第 N 步」状态）、`agentTodo` 逻辑、`flovart_todo` 工具与系统提示词里的清单规则；不提供 `iris_todo`，`flovart_todo` 只保留为弃用的无操作别名（调用返回 ok）。
 - Agent 画布工具按媒体拆分：`flovart_workflow_node_tool` 拆成 `flovart_image_tool`（`workflow.image.tool`）、`flovart_video_tool`（`workflow.video.tool`）、`flovart_audio_tool`（`workflow.audio.tool`），四个宿主同一份；每个工具只带本类参数，`tool` 是本类工具的枚举（reverse-prompt 同时属于图片和视频），发错类别返回 `BAD_REQUEST` 并指明该用哪个。三者落到同一个 `workflow.node.tool` 实现（确认、预检、后台任务、交付一致），`workflow.node.tool` 保留为 CLI 兼容入口，不再出现在 Agent / MCP 工具面。已保存的「节点工具」审批策略继续适用于三个新工具。同时修复：确认卡把 outpaint / mask 标成不收费；浏览器桥对外部 Agent 的只读命令（nodes.search、cost.estimate、node.tool.list 等）也弹写入确认。

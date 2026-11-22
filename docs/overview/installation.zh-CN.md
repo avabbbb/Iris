@@ -2,7 +2,7 @@
 
 本指引面向**不熟悉电脑操作**的使用者。使用 Windows 安装包时不需要安装
 Node.js、Rust 或打开命令行。
-当前候选安装包文件名：`Iris_0.3.0_x64-setup.exe`（大小以发布页为准）。
+当前候选安装包文件名：`Iris_0.1.0_x64-setup.exe`（大小以发布页为准）。
 
 ---
 
@@ -14,10 +14,10 @@ Node.js、Rust 或打开命令行。
 
 ## 二、安装步骤（约 2 分钟）
 
-1. 双击安装包 `Iris_0.3.0_x64-setup.exe`。
+1. 双击安装包 `Iris_0.1.0_x64-setup.exe`。
 2. 如果弹出蓝色「Windows 已保护你的电脑」窗口——**这是正常的**（软件还没购买微软的数字签名证书），请按下面操作放行：
    - 先确认文件来自 Iris 官方 GitHub Releases 页面，并核对发布页提供的 SHA-256 与下载文件一致（PowerShell：Get-FileHash 文件名 -Algorithm SHA256）。
-   - 核对一致后，点击「更多信息」→「仍要运行」。0.3.0 内测版尚未配置 Windows 代码签名，这一提示是预期行为；SHA-256 不一致或来源不明时不要运行。
+   - 核对一致后，点击「更多信息」→「仍要运行」。0.1.0 内测版尚未配置 Windows 代码签名，这一提示是预期行为；SHA-256 不一致或来源不明时不要运行。
 3. 语言选择「简体中文」（默认即是）。
 4. 一路点击「下一步 / 安装」，不需要改任何选项，不会要求输入管理员密码。
 5. 安装完成后，桌面会出现 **Iris** 图标，双击即可打开。
@@ -48,7 +48,7 @@ Node.js、Rust 或打开命令行。
 
 ## 六、给分发者的说明
 
-- 本地构建产物：`src-tauri/target/release/bundle/nsis/Iris_0.3.0_x64-setup.exe`；本地构建使用 `src-tauri/tauri.local.conf.json`，不生成正式更新签名。
+- 本地构建产物：`src-tauri/target/release/bundle/nsis/Iris_0.1.0_x64-setup.exe`；本地构建使用 `src-tauri/tauri.local.conf.json`，不生成正式更新签名。
 - 正式发布流程：由维护者在确认 Hosted release gate、生产签名和产物校验通过后，再按 `.github/workflows/build-desktop.yml` 发布；未完成这些外部门禁前，不应宣称 `latest.json` 或自动更新已经可用。
 - 安装器采用「当前用户」模式（`installMode: currentUser`）：无需管理员权限、不弹 UAC、卸载干净，最适合分发给普通用户。
 - 若要消除 SmartScreen 首次拦截，需要代码签名证书（OV 证书或 Azure Trusted Signing），在 `src-tauri/tauri.conf.json → bundle.windows.certificateThumbprint` 填入指纹后重新出包。

@@ -1,6 +1,6 @@
 [package]
 name = "iris"
-version = "0.3.0"
+version = "0.1.0"
 description = "Iris - AI creative layer for professional editing tools"
 authors = ["Iris"]
 edition = "2021"
