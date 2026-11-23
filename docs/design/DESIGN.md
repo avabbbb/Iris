@@ -4,6 +4,18 @@
 > 格式：参照 Refero Styles 的 DESIGN.md 分层（mood → tokens → typography → color → overview → components → logic → do/don't → motion）。所有数值取自当前代码：`styles/index.css`、`styles/motion.css`、`styles/adaptive.css`、`styles/workflow.css`、`styles/dshEmbed.css`、`components/` 扫描；标 **目标** 的是本次新增、代码尚未采用的 token。
 > 来源：原 `31-notion-compact-ui.zh-CN.md` 的已实施部分已并入本文，原文见 [archive/2026-11-13-design-refresh](../archive/2026-11-13-design-refresh/)。
 
+## 0. Agent-native Production OS 的视觉重心（2026-11-24）
+
+Iris 的界面首先服务于**看懂素材、审查 Agent 的改动、比较版本、决定是否应用**。Canvas 是素材/Workflow/审片空间；Cut 是已经可用的视频剪辑器；Agent 是连接/Runtime 管理；对话与上下文在现有 Canvas Assistant Drawer。不要按旧设计里的独立 Iris Personal Agent tab 实现 UI。
+
+- **Spatial Context**：只把用户明确 Commit 的结论显示成独立 Context Card；卡片短标题、正文、来源 Chip 和「继续讨论」。不把所有消息平铺为节点，来源绑定默认隐藏，选中/悬停才高亮；Workflow 执行连线保持原意。
+- **审片与提案**（目标）：用户看得见原版/候选、变更范围、Diff、费用和批准/拒绝；失败有定位、查询或恢复动作。工具日志按需展开，不抢素材画面的空间。
+- **按任务出现的 UI**（目标）：镜头并排、帧段定位、字幕波形、审核卡只在需要时出现，结束后收拢为产物与回执；不加第四个导航入口。
+- **视觉约束**：沿用本文 `--isl-*`、暖纸面/薄荷色、现有 `motion` 与弹性布局。素材优先、浅底高信息密度、避免装饰性图、重复标题和泛化营销文案。
+- **状态透明**：明确区分 Done / Failed / Pending / Unknown，以及已实现/设计目标，不用动画制造假的进行中或成功。
+
+§1–§15 继续定义视觉 token、数字与响应式规则，历史组件名仅作样式参考。产品状态和入口职责见 [00](00-overview.md)、[11](11-iris.md)。
+
 ## 1. Mood
 
 Iris 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创作台：人和 Agent 在同一张无限画布上摆素材、跑生成、比版本。它应当像一张**温暖的工作纸**——安静、紧凑、可信：底色是米白纸面和炭黑墨线，只有一抹薄荷绿标记“可以按 / 正在进行 / 已选中”；面板是贴在纸上的扁平卡片，只有真正浮在画布之上的工具才轻轻透出底下的内容；动作短促、有弹性但不炫技。作品和画布永远比界面更显眼。
@@ -29,7 +41,7 @@ Iris 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创作
 
 | 名称 | 字号 / 行高 | 字重 | 用法 |
 | --- | --- | --- | --- |
-| display | 20 / 28px | 600 | 仅首页（Iris 对话首页“今天想做点什么？”）、首次使用 |
+| display | 20 / 28px | 600 | 仅首次使用与关键空态；历史个人 Agent 首页不是当前交互入口 |
 | title | 15 / 22px | 600 | 面板标题、空态标题、视图标题 |
 | body-strong | 13 / 20px | 600 | 卡片标题、抽屉 / 侧栏分区标题、run 名 |
 | body | 12 / 18px | 400 | 正文、对话、trace 行、表格 |
@@ -71,7 +83,7 @@ Iris 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创作
 | 维度 | 规格 |
 | --- | --- |
 | Mood | 暖纸面、单一薄荷、扁平分层、紧凑密度（§1） |
-| Layout | 顶栏三个 surface：**画布 Canvas｜Cut｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas 的主体是无限画布，Iris = 对话栏 + 无限画布（产出面） |
+| Layout | 顶栏三个 surface：**画布 Canvas｜Cut｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas 主体是无限画布；Cut 是实际视频时间线；现有 Assistant Drawer 负责对话与审查 |
 | Content width | 页面型内容 `--content-max: 1280px`；表单 `--form-max: 680px`；侧栏 `--sidebar-width: clamp(220px, 24vw, 320px)`；宿主面板 280–480px |
 | Grid | 画布 24px 点阵（`.workflow-bg--dots`，墨 16%）或线格（`--lines`，13%），可开关；吸附网格同 24px；页面用 `--space-*` 间距而非列栅格 |
 | Icons | `lucide-react`（^1.20）线性图标，常用 12–18px（15px 75 处、14px 66 处），描边默认 2 |
