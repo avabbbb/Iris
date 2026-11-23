@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>Iris —— 开源的无限画布 AgentOS。</strong><br />
-  开放的 LibTV 替代品：人和编程 Agent 在同一张实时画布上协作编辑；本地优先，图片 / 视频模型自带密钥（BYOK）。
+  <strong>Iris —— 开源 Agent-native Creative Production Workspace / OS。</strong><br />
+  Agent-native 创作生产工作台：Canvas 组织素材和生成流程，Cut 编辑视频时间线，Personal Agent 辅助理解工程、审查候选并精准返工；本地优先，模型自带密钥（BYOK）。
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 <p align="center">
   开源、本地优先的 Workflow + Agent 创作工具；DaVinci Resolve Studio 21.1 宿主层开发中（Experimental）。<br />
-  剪辑工程继续留在宿主里，Agent 理解上下文，Iris 负责生成、参考素材、持久产物与候选版本。
+  当前可在 Canvas + Cut 工作，专业宿主连接器仍在实验阶段；长期目标是可审查的工程改动、真实产物与可复用 Skill。
 </p>
 
 <p align="center">
