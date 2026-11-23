@@ -4,7 +4,7 @@ import { AgentWorkingOrb } from './AgentWorkingOrb';
 /** 正在进行 / 刚结束的一次上下文压缩（面板按内核 compaction_start / compaction_end 事件维护）。 */
 export interface AgentCompactionLive {
   phase: 'running' | 'done' | 'error';
-  reason: 'threshold' | 'overflow' | 'manual';
+  reason: 'threshold' | 'overflow' | 'manual' | 'midturn';
   startedAt: number;
   tokensBefore?: number;
   error?: string;

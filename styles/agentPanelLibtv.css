@@ -95,3 +95,9 @@
   .agent-conversation__header .drawer-chrome-tabs .isl-tab { padding: 3px 7px; }
   .agent-conversation .workflow-agent__body { padding-right: 8px; padding-left: 8px; }
 }
+/* 斜杠命令（/compact）：与 Skill 列表同一菜单，命令在上 */
+.agent-slash-command__label{padding:6px 8px 4px;color:var(--isl-ink-ghost);font-size:10px;font-weight:600;letter-spacing:.02em}
+.agent-slash-command__mark{display:grid;width:36px;height:36px;flex:0 0 auto;place-content:center;border:.5px solid var(--agent-line,var(--isl-border));border-radius:10px;color:var(--isl-mint-deep,#22a06b);background:var(--isl-mint-bg,rgba(34,160,107,.1))}
+.agent-slash-command strong{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.agent-slash-command strong em{font-family:inherit}
+.agent-slash-command small{white-space:normal!important;line-height:1.45}

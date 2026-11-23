@@ -1,4 +1,4 @@
-import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, FileUp, Heart, LayoutTemplate, Plus, RefreshCw, Search, Shuffle, Sparkles, X } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, FileUp, Heart, LayoutTemplate, Minimize2, Plus, RefreshCw, Search, Shuffle, Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 
@@ -16,6 +16,8 @@ import { useSkillHubStore } from '../../stores/useSkillHubStore';
 import { useStudioHubStore } from '../../stores/useStudioHubStore';
 import { isSkillEnabled, useUserSkillsStore, type RemovedUserSkill } from '../../stores/useUserSkillsStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { translations } from '../../utils/translations';
+import { matchSlashCommands, type AgentSlashCommand } from './agentSlashCommands';
 import {
   parseSkillImport,
   pickTextFile,
@@ -60,6 +62,8 @@ export function ProductionSkillDeck({
   onOpenChange,
   searchQuery,
   keyboardRef,
+  commands = [],
+  onCommand,
 }: {
   attachment?: ProductionSkillAttachment;
   onChange: (attachment?: ProductionSkillAttachment) => void;
@@ -72,6 +76,10 @@ export function ProductionSkillDeck({
   searchQuery?: string;
   /** 输入框把方向键 / Enter / Tab / Esc 转交给列表。返回 true 表示已消费。 */
   keyboardRef?: { current: ((key: string) => boolean) | null };
+  /** 斜杠命令（/compact 等）：只在「/」打开的菜单（searchQuery 有值）的「全部」页显示，排在 Skill 前面。 */
+  commands?: readonly AgentSlashCommand[];
+  /** 选中命令。run=true 表示输入已是完整命令名、直接执行；否则把命令写进输入框等用户补参数。 */
+  onCommand?: (command: AgentSlashCommand, options: { run: boolean }) => void;
 }) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -178,6 +186,19 @@ export function ProductionSkillDeck({
   const visibleHub = useMemo(() => (tab === 'all' ? hubOnly.filter(skill => skillMatches(skill, query)) : []), [tab, hubOnly, query]);
   // 键盘在能直接选用的行之间走（跳过停用与未安装的 Hub 行）。
   const navSkills = useMemo(() => visible.filter(skill => skill.enabled && skill.installed), [visible]);
+  // 斜杠命令：键盘序号命令在前、Skill 在后（highlight < commandCount 指向命令）。
+  const visibleCommands = useMemo(
+    () => (tab === 'all' && onCommand && searchQuery !== undefined ? matchSlashCommands(commands, searchQuery) : []),
+    [tab, commands, onCommand, searchQuery],
+  );
+  const commandCount = visibleCommands.length;
+  const navCount = commandCount + navSkills.length;
+  const navSkillAt = (index: number) => (index >= commandCount ? navSkills[index - commandCount] : undefined);
+  /** 命令 Enter：输入正好是完整命令名时直接执行，否则写进输入框等补参数；Tab 只补全。 */
+  const pickCommand = (command: AgentSlashCommand, key: string) => {
+    const exact = command.name.toLowerCase() === String(searchQuery || '').trim().toLowerCase();
+    onCommand?.(command, { run: key === 'Enter' && exact });
+  };
   // 每次筛选后高亮第一项（Enter 直接选中）；composer 里刚敲 `/` 还没筛选时保持在输入框（-1）。
   const createMenuKeys = useMenuKeyboard({ open: menu !== null, onClose: () => setMenu(null) });
   // 从按钮打开（非 composer 里的 `/`）时把焦点放进浮层，键盘立刻可用：打字即搜索。
@@ -186,9 +207,11 @@ export function ProductionSkillDeck({
     const frame = requestAnimationFrame(() => { if (!pickerRef.current?.contains(document.activeElement)) pickerRef.current?.focus({ preventScroll: true }); });
     return () => cancelAnimationFrame(frame);
   }, [open, searchQuery]);
-  const firstNav = navSkills.length && (query || searchQuery === undefined) ? 0 : -1;
+  const firstNav = navCount && (query || searchQuery === undefined) ? 0 : -1;
   useEffect(() => { setHighlight(firstNav); }, [query, open, view.type, tab, firstNav]);
-  const highlightedKey = highlight >= 0 ? navSkills[highlight]?.key : undefined;
+  const highlightedKey = highlight < 0 ? undefined
+    : highlight < commandCount ? 'command:' + visibleCommands[highlight].id
+      : navSkillAt(highlight)?.key;
   const rowId = (key: string) => `${listId}-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
   const welcomeSource = useMemo(() => [...catalog.installed, ...catalog.mine].filter(skill => skill.enabled), [catalog.installed, catalog.mine]);
@@ -220,7 +243,7 @@ export function ProductionSkillDeck({
       if (!open) return false;
       if (key === 'Escape') { setOpen(false); return true; }
       if (view.type !== 'list') return false;
-      const count = navSkills.length;
+      const count = navCount;
       if (key === 'ArrowDown' || key === 'ArrowUp') {
         // ↑ 越过第一项回到输入框（不消费），让光标照常移动。
         if (key === 'ArrowUp' && highlight < 0) return false;
@@ -229,8 +252,12 @@ export function ProductionSkillDeck({
       }
       // 未进入列表时也吞掉 Enter，避免把半截 /xxx 当消息发出去；Tab 只在有高亮时消费。
       if (key === 'Enter' || key === 'Tab') {
-        const skill = navSkills[highlight];
+        if (highlight >= 0 && highlight < commandCount) { pickCommand(visibleCommands[highlight], key); return true; }
+        const skill = navSkillAt(highlight);
         if (skill) { void attach(skill); return true; }
+        // 没进列表、输入的正好是完整命令名（例如 /compact）：Enter 直接执行。
+        const exact = key === 'Enter' ? visibleCommands.find(command => command.name.toLowerCase() === String(searchQuery || '').trim().toLowerCase()) : undefined;
+        if (exact) { onCommand?.(exact, { run: true }); return true; }
         return key === 'Enter';
       }
       return false;
@@ -324,7 +351,8 @@ export function ProductionSkillDeck({
   const renderRow = (skill: DeckSkill) => {
     const highlighted = skill.key === highlightedKey;
     const hub = skill.source === 'hub';
-    const navIndex = navSkills.findIndex(item => item.key === skill.key);
+    const skillIndex = navSkills.findIndex(item => item.key === skill.key);
+    const navIndex = skillIndex >= 0 ? skillIndex + commandCount : -1;
     return (
       <motion.div
         key={skill.key}
@@ -361,6 +389,29 @@ export function ProductionSkillDeck({
     );
   };
 
+  const renderCommandRow = (command: AgentSlashCommand, index: number) => {
+    const key = 'command:' + command.id;
+    const highlighted = key === highlightedKey;
+    return (
+      <div
+        key={key}
+        id={rowId(key)}
+        className={`skill-hub__row agent-slash-command${highlighted ? ' is-highlighted' : ''}`}
+        data-highlighted={highlighted || undefined}
+        data-testid={'agent-slash-command-' + command.id}
+        ref={highlighted ? (element: HTMLDivElement | null) => element?.scrollIntoView?.({ block: 'nearest' }) : undefined}
+        role="group"
+        aria-label={'/' + command.name}
+        onMouseEnter={() => { setHighlight(index); setPreview(null); }}
+      >
+        <button type="button" className="skill-hub__row-main" onClick={() => pickCommand(command, 'Tab')}>
+          <span className="agent-slash-command__mark" aria-hidden="true"><Minimize2 size={15} /></span>
+          <span className="skill-hub__text"><strong><span>/{command.name}</span>{command.args && <em>{command.args}</em>}</strong><small>{command.description}</small></span>
+        </button>
+      </div>
+    );
+  };
+
   const previewSkill = preview ? allSkills.find(skill => skill.key === preview.key) : undefined;
   const previewRecord = previewSkill?.source === 'mine' ? userSkills.find(item => item.id === previewSkill.id) : undefined;
   const previewBody = previewRecord?.prompt || (previewSkill?.source === 'bundled' ? getBundledProductionSkill(previewSkill.id)?.description : undefined) || previewSkill?.description || '';
@@ -376,11 +427,12 @@ export function ProductionSkillDeck({
     const key = event.key;
     const done = () => { event.preventDefault(); event.stopPropagation(); return true; };
     if (key === 'ArrowDown' || key === 'ArrowUp') {
-      const count = navSkills.length;
+      const count = navCount;
       setHighlight(index => nextHighlight(index, count, key === 'ArrowDown' ? 1 : -1, { exitAbove: true }));
       return done();
     }
-    if ((key === 'Enter' || key === 'Tab') && navSkills[highlight]) { void attach(navSkills[highlight]); return done(); }
+    if ((key === 'Enter' || key === 'Tab') && highlight >= 0 && highlight < commandCount) { pickCommand(visibleCommands[highlight], key); return done(); }
+    if ((key === 'Enter' || key === 'Tab') && navSkillAt(highlight)) { void attach(navSkillAt(highlight)!); return done(); }
     if (key === 'Escape') {
       if (query && searchQuery === undefined) { setQuery(''); return done(); }
       setOpen(false);
@@ -434,8 +486,15 @@ export function ProductionSkillDeck({
       )}
       <div className="skill-hub__list" id={listId} role="listbox" aria-label={copy.title} onMouseLeave={() => setPreview(null)} onScroll={() => setPreview(null)}>
         <section className="skill-hub__section" aria-label={tab === 'mine' ? copy.sectionMine : tab === 'favorites' ? copy.tabFavorites : copy.sectionInstalled}>
+          {commandCount > 0 && (
+            <div className="agent-slash-command__group" role="group" aria-label={translations[language].agentPanel.slashCommands}>
+              <div className="agent-slash-command__label">{translations[language].agentPanel.slashCommands}</div>
+              {visibleCommands.map(renderCommandRow)}
+              {visible.length > 0 && <div className="agent-slash-command__label">Skill</div>}
+            </div>
+          )}
           {visible.map(renderRow)}
-          {!visible.length && !(tab === 'all' && visibleHub.length) && (
+          {!visible.length && !commandCount && !(tab === 'all' && visibleHub.length) && (
             tab === 'mine' && !query
               ? <button type="button" className="skill-hub__inline-empty" onClick={() => setView({ type: 'edit', id: null })}><Plus size={13} aria-hidden="true" /><span>{copy.mineEmpty} · {copy.newSkill}</span></button>
               : <div className="skill-hub__empty" role="status">{emptyText}</div>

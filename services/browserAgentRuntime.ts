@@ -32,6 +32,8 @@ export interface BrowserAgentRuntimeDeps {
   getDraftVersion?: () => number | undefined;
   /** 当前思考强度；缺省由内核读本机为该模型保存的设置。 */
   getThinkingLevel?: () => AgentThinkingLevel;
+  /** 模型上下文窗口；缺省读 route.contextWindow（模型对象的可选字段），再没有按 128K。 */
+  contextWindow?: number;
 }
 
 /** 只依赖运行时实际用到的内核方法，测试可注入替身。 */
@@ -53,8 +55,14 @@ export interface RuntimeKernel {
   openSessionById(sessionId: string): Promise<unknown>;
   deleteSession(sessionId: string): Promise<void>;
   branchSession(fromSessionId: string, upto: string | readonly string[]): Promise<unknown>;
-  /** 手动压缩上下文；旧替身可不实现。 */
-  compactContext?(): Promise<{ compacted: boolean; tokensBefore?: number }>;
+  /** 手动压缩上下文（可带 /compact 的聚焦说明）；旧替身可不实现。 */
+  compactContext?(focus?: string): Promise<CompactContextResult>;
+}
+
+export interface CompactContextResult {
+  compacted: boolean;
+  tokensBefore?: number;
+  tokensAfter?: number;
 }
 
 export type DelegatedTurnPolicy = 'read-only' | 'workspace-write';
@@ -175,6 +183,7 @@ export class BrowserAgentRuntime {
       systemPrompt: deps.systemPrompt,
       skillCatalog,
       ...(deps.getThinkingLevel ? { getThinkingLevel: deps.getThinkingLevel } : {}),
+      ...(deps.contextWindow ? { contextWindow: deps.contextWindow } : {}),
     });
     await kernel.openSession();
     const runtime = new BrowserAgentRuntime(deps.projectId, kernel, policyState, deps.getDraftVersion);
@@ -241,10 +250,11 @@ export class BrowserAgentRuntime {
     return this.kernel.branchSession(fromSessionId, upto);
   }
 
-  /** 手动压缩当前会话的上下文（会话菜单「压缩上下文」）。 */
-  async compactContext(): Promise<{ compacted: boolean; tokensBefore?: number }> {
+  /** 手动压缩当前会话的上下文（/compact [聚焦说明]，或会话菜单「压缩上下文」）。 */
+  async compactContext(focus?: string): Promise<CompactContextResult> {
     if (!this.kernel.compactContext) throw new AgentRuntimeError('BAD_REQUEST', '当前 Agent 不支持手动压缩上下文。');
-    return this.kernel.compactContext();
+    const value = String(focus || '').trim();
+    return value ? this.kernel.compactContext(value) : this.kernel.compactContext();
   }
 
   /**

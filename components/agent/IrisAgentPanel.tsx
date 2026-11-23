@@ -72,6 +72,8 @@ import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from 
 import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
 import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNavModel';
 import { quotePreview, withQuote } from './agentQuote';
+import { agentSlashCommands, insertSlashCommand, type AgentSlashCommand } from './agentSlashCommands';
+import { parseCompactCommand } from '../../services/agentCompaction';
 import { activityAfterConfirmation, advanceConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, enqueueConfirmation, needsCredential, rejectAllConfirmations, useAgentTurn, type ConfirmationQueue } from './agentPanelState';
 
 interface IrisAgentPanelProps {
@@ -758,7 +760,7 @@ const userApiKeysRef = useRef(userApiKeys);
     }
     if (event.type === 'compaction_start') {
       if (compactionTimer.current) clearTimeout(compactionTimer.current);
-      const reason = (event.reason === 'overflow' || event.reason === 'manual' ? event.reason : 'threshold') as AgentCompactionLive['reason'];
+      const reason = (event.reason === 'overflow' || event.reason === 'manual' || event.reason === 'midturn' ? event.reason : 'threshold') as AgentCompactionLive['reason'];
       setCompaction({ phase: 'running', reason, startedAt: Date.now() });
       return;
     }
@@ -864,13 +866,24 @@ const userApiKeysRef = useRef(userApiKeys);
     }
   };
 
-  /** 会话菜单「压缩上下文」：只对浏览器内置内核可用，运行中不压缩。 */
-  const handleCompactContext = async () => {
+  /**
+   * 手动压缩：/compact [聚焦说明] 或会话菜单「压缩上下文」。只对浏览器内置内核可用，运行中不压缩。
+   * 聚焦说明拼进摘要要求；最近几轮保留原文；过程由末尾的奶蛙压缩胶囊表示（compaction_start / compaction_end）。
+   */
+  const handleCompactContext = async (focus?: string) => {
     const kernel = kernelRef.current;
-    if (!kernel || sending) return;
     dispatchLayer({ type: 'close', layer: 'sessions' });
+    if (!kernel) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: t('agentPanel.compactUnsupported') }]);
+      return;
+    }
+    if (sending || turnRef.current.phase !== 'idle') {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: t('agentPanel.compactBusy') }]);
+      return;
+    }
+    stickToBottom.current = true;
     try {
-      const result = await kernel.compactContext();
+      const result = await kernel.compactContext(focus);
       const snapshot = await kernel.snapshot();
       setMessages(displayMessages(snapshot as IrisAgentSnapshot, languageRef.current));
       if (!result.compacted) flashCopied(t('agentPanel.compactNotNeeded'));
@@ -1187,9 +1200,31 @@ const userApiKeysRef = useRef(userApiKeys);
     void accepted.then(ok => { if (!ok) demoteSteer(queueKey, id); });
   };
 
+  /** 斜杠菜单里选中命令：run=true（输入已是完整的 /compact）直接执行，否则写进输入框等用户补聚焦说明。 */
+  const handleSlashCommand = (command: AgentSlashCommand, options: { run: boolean }) => {
+    dispatchLayer({ type: 'clearSlash' });
+    dispatchLayer({ type: 'close', layer: 'skill' });
+    if (command.id !== 'compact') return;
+    if (options.run) {
+      setPrompt('');
+      void handleCompactContext();
+      return;
+    }
+    setPrompt(current => insertSlashCommand(current, command));
+    focusComposer();
+  };
+
   const send = async (key: RunningSubmitKey = 'enter') => {
     const draft = composerDraft();
     if (draftIsEmpty(draft)) return;
+    // /compact [聚焦说明]：不发给模型，走手动压缩（omp 风格）。带引用 / 附件时按普通消息处理。
+    const compactCommand = !draft.quote && !draft.references.length && !draft.attachments.length ? parseCompactCommand(draft.text) : null;
+    if (compactCommand) {
+      setPrompt('');
+      dispatchLayer({ type: 'closeAll' });
+      await handleCompactContext(compactCommand.focus);
+      return;
+    }
     // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
     if (status === 'connecting') return;
     const phase = turnRef.current.phase;
@@ -1471,6 +1506,8 @@ const userApiKeysRef = useRef(userApiKeys);
   };
 
   const focusComposer = () => window.requestAnimationFrame(() => textarea.current?.focus());
+  // 斜杠命令只在输入框以「/」开头时出现（/compact 只认开头），且只对浏览器内置内核可用。
+  const slashCommands = /^\s*\/[^\s/]*$/.test(prompt) ? agentSlashCommands(language === 'en' ? 'en' : 'zho', { builtin: Boolean(kernelRef.current) }) : [];
   const runQuickAction = (action: Exclude<AgentQuickAction, 'adapt'>) => {
     const zho = language === 'zho';
     if (action === 'perceive') {
@@ -1751,6 +1788,8 @@ const userApiKeysRef = useRef(userApiKeys);
             onOpenChange={next => dispatchLayer(next ? { type: 'open', layer: 'skill' } : { type: 'close', layer: 'skill' })}
             searchQuery={slashQuery ?? undefined}
             keyboardRef={skillNav}
+            commands={slashCommands}
+            onCommand={handleSlashCommand}
           />
           {mentionOpen && <div className="agent-reference-picker flv-frost" id={mentionListId} role="listbox" aria-label={t('agentPanel.referencePicker')}>
             <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? t('agentPanel.referenceReplace', replaceTarget.label) : mentionQuery ? t('agentPanel.referenceSearch', mentionQuery) : t('agentPanel.referencePrompt')}</span></div>
