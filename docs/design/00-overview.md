@@ -3,49 +3,35 @@
 > 状态：**Current truth**（2026-10-07 文档重构）。本文是产品与系统的唯一总纲；各模块细节见同目录模块文档，交互规则见[交互设计](01-interaction.md)。
 > 标注约定：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。
 
+
 ## 1. 一句话
 
-Iris 有两条并行的定位（2026-11-17 定案）：
+**Iris — Agent-native Creative Production Workspace / OS.** 开源、local-first、BYOK，让创作者与可插拔 Personal Agent 共同理解素材和工程，在同一套可编辑工作流中规划、制作、审片、局部修正与交付。
 
-- **Iris（Canvas + Agent）是 Workflow 生产工具**：在可见的无限画布上编排节点、生成、素材与版本；你自己的 Agent（Codex、Claude Code、DSH…）通过 Skill + CLI 调用同一套命令。宿主插件给素材加一层可开关、可替换的 AI 创意层，原素材不动，复杂制作再展开 Iris。
-- **Iris 是全能后期助手（Personal agent）**：Web 版独立可用——对话优先，Iris 无限画布是它的产出面，不装任何剪辑软件也能用。可选地连接本地宿主插件（DaVinci Resolve 先，Premiere、剪映 / CapCut 后续）同步剪辑上下文，免手动上传。核心主张：Agent 读完整工程上下文（图层、合成、关键帧、标记、素材），输出可编辑的工程改动或画布节点，而不是烤死的成片。见 [11-iris](11-iris.md)。
+长期目标是让个人借助 Agent 获得过去需要小型制作团队的能力。这是**愿景，不是当前已验证的能力或效率指标**。Iris 的职责是专业创作上下文、受控操作、非破坏性提案、可追溯任务与可复用 Skill；它不重造通用云电脑、模型推理引擎或专业剪辑软件。
 
-对外短句：*Your footage. Plus one layer.*（宿主叠加层）
+核心循环：**读取授权工程上下文 → 提案 / Diff → 人审核 → 安全执行 → 真实 Artifact/Run/版本 → 局部返工 → 经确认的 Skill**。其中部分已实现，未验证能力按 [Support Matrix](../../SUPPORT_MATRIX.md) 标注。
 
-Iris是 local-first、agent-native、BYOK 的创作工作台。用户的模型、Key、素材和最终编辑权始终在用户一侧。
+“Your footage. Plus one layer.” 保留为专业宿主叠加层的场景标语，不替代整个产品定位。
 
-## 2. 目标用户与首个任务
+## 2. 用户与首个闭环
 
-- 宿主线首批用户：用 DaVinci Resolve Studio 21.1 做短视频、广告、创作者内容的个人剪辑师；同时会用 Codex / Claude Code 等 Coding Agent。
-- 宿主线首个任务：选中时间线上的一个片段 → 描述想要的效果（可在画面上圈一笔）→ Iris 生成若干**叠加层候选** → 比较、选定 → 非破坏性送回宿主。
-- 不是首个任务：让 AI 自动剪完一条片、替换整段原素材、实时 AI 视频。
-- Iris 线首个任务（设计目标）：在 Web 上用一句话说清要做的后期改动（可拖入素材）→ Iris 把计划与候选落到画布 → 用户在画布上比较、改、选定。连上 Resolve 后，同一任务直接从当前时间线取上下文。
+面向独立视频创作者、小型制作团队和已经使用 Codex/Claude Code 等 Coding Agent 的剪辑师。首批重点场景是参考素材逆向、真实 UI 产品宣传片、从已有编辑工程中精确修改局部镜头。
 
-## 3. 产品组成（模块地图）
+第一轮目标：在 Canvas 多选真实素材、给 Assistant 提问 → 保存结构化引用并钉下创作结论 → Cut/Canvas 审查产物 → 指定秒数或帧范围修改 → 留下可回放的 Run 和 Artifact。之后才验证 Resolve 真实工程上下文与安全导入，最后将成功流程抽成 Skill 候选。
 
-| 模块 | 职责一句话 | 设计文档 |
+商业化仍属探索：本地开源 + BYOK 优先；未来可按托管任务/云渲染、团队审片、宿主集成和 Skill/Blueprint 服务定价。没有发布的 Cloud、Marketplace、企业版不得被写成现状。
+
+## 3. 当前三个 Surface 及状态权威
+
+| 入口 | 已有职责 | 边界 |
 | --- | --- | --- |
-| Canvas / Workflow | 空间化、可见的生产图：节点、生成、素材、版本——GenAI 基本盘；人和 Agent 编辑同一份状态 | [10-canvas-workflow](10-canvas-workflow.md) |
-| Iris（全能后期助手 · Personal agent） | 对话优先的个人 Agent，画布为产出面：run、可见光标、trace、评审版本；可选宿主上下文连接器；Hypit 式逆向拆解是它的一组工具 | [11-iris](11-iris.md) |
-| Agent | Agent 连接与状态管理：runtime、模型 / Provider、外部 Agent（Codex、Claude Code、DSH…）、连接健康与每个 Agent 的状态；Skill + CLI（MCP 为投影） | [12-agent](12-agent.md) |
-| Generation & Runtime | 一条生成路径：任务、Provider 路由、费用、持久素材、本地服务 | [13-generation-runtime](13-generation-runtime.md) |
-| Creative Hosts | Resolve 首发；AE / PR / PS 后续；宿主轻面板、上轨道、原生效果；同时是 Iris 的可选上下文连接器 | [14-creative-hosts](14-creative-hosts.md) |
-| Web, Community & Extension | 网站后端、作品社区、浏览器导入扩展、安装与发行 | [15-web-community-extension](15-web-community-extension.md) |
-| 质量与治理 | 评测、证据、支持等级、文档治理 | [20-quality-and-governance](20-quality-and-governance.md) |
+| **Canvas** | 无限画布、生成节点、素材/版本、Workflow；后续承载独立 Context Card | Browser Workflow 是图的权威，`workflow.apply` 带 projectId/revision/mutationId |
+| **Cut** | **已实现的视频剪辑器**：轨道、字幕、属性、剪辑、代理、预览和导出；Agent 工具共用 Cut Store | `cutStore` 是 Cut 的权威；不是尚未上线的 Personal Agent |
+| **Agent** | Agent/Provider/Runtime/Skill 连接、健康和状态 | 不存第二份对话或 Workflow |
+| **Assistant Drawer**（非顶栏） | 内置对话、明确素材引用、工具调用和审核入口 | 借用 Canvas/Cut/Runtime 的真实操作，不建立第四个工作区 |
 
-### 3.1 三个顶级 surface（2026-11-13 定案，2026-11-17 逆向改名 Iris）
-
-顶栏固定为 **画布 Canvas｜Cut｜Agent**（内部 `canvasView: 'reverse'` 与 `reverse` 目录在单独迁移前保持）：
-
-| Surface | 拥有 | 调用 / 被调用 |
-| --- | --- | --- |
-| 画布 Canvas | 节点、连线、生成任务、素材库、版本 / take / batch、`workflow.*` 命令 | 被 Iris 与外部 Agent 调用；选中节点可“交给 Iris” |
-| Iris | 对话 + run（计划 → 步骤 → 评审轮次 → 版本）、多 Agent 光标、trace / 计划 / 审批、预览与版本对比、逆向拆解工具、可选宿主上下文连接器；当前 tab 是 coming-soon 占位 | 调用 Canvas 的 `workflow.*` 与 Generation 的同一任务函数；使用 Agent 页供应的 Agent 与模型 |
-| Agent | runtime、模型 / Provider 路由、外部 Agent 发现 / 准备 / 健康 / 状态、Skill 安装 | 向 Iris 供应 Agent 与模型；不放对话与 run 编辑 |
-
-Canvas 旁的 Assistant drawer 保留为轻量上下文入口：就地问答与单步操作；多步制作“在 Iris 中继续”，进入同一个 run。一套业务实现：Iris、抽屉、CLI、MCP 都调用同一组命令，光标只是调用的可视化。交互细节见 [01](01-interaction.md) §11–§12，视觉见 [DESIGN.md](DESIGN.md)。
-
-提案中：Agent 驱动的产品宣传片流水线（run / trace、评审循环、素材归档）见 [16-agent-video-pipeline（PROPOSAL）](16-agent-video-pipeline.md)，其放置已按本节改为 Iris。
+模型和 Harness 可插拔（Codex/Claude Code/DSH/内置）；外部 Agent 保有自己的会话。Iris 的 Canvas、Cut、Runtime 和 Resolve 工程各自保留单一权威，通过稳定引用和受控操作协作。现状与目标见 [11 Cut / Creative AgentOS](11-iris.md)、交互见 [01](01-interaction.md)，视觉见 [DESIGN.md](DESIGN.md)。
 
 ## 4. 设计原则
 
@@ -87,9 +73,9 @@ Canvas 旁的 Assistant drawer 保留为轻量上下文入口：就地问答与�
 | 生成输入、任务状态、Provider 任务 ID、结果版本 | 本地生成服务 | taskId、进度、结果引用 |
 | 已生成媒体 | 持久素材目录（内容寻址） | 素材 ID、相对路径、校验和 |
 | Workflow 图 | Browser Workflow（当前权威） | 引用；修改走 mutation |
-| 逆向工程（Script、证据、对齐、变体） | Iris 的逆向拆解工具（`useReverseStore`） | 子画布节点上的 reverseProjectId 与镜头 key |
-| run / trace / 评审轮次（提案） | 本地 Runtime（[16](16-agent-video-pipeline.md)） | Iris 与画布节点只存 runId / version 引用 |
-| Agent 主会话 | Agent 官方运行时（Codex、Claude…） | 非秘密会话引用与任务关联 |
+| 逆向工程（Script、证据、对齐、变体） | 既有逆向拆解工具（`useReverseStore`） | 子画布节点上的 reverseProjectId 与镜头 key |
+| run / trace / 评审轮次 | 本地 Runtime（以实际已实现命令为准） | Canvas/Cut/会话只存 runId / version 引用 |
+| Agent 会话 | 内置 BrowserAgentRuntime 或各外部 Harness | 非秘密会话/消息引用，不另建统一 Session 库 |
 | Provider Key | 本机安全存储 | 永不进入宿主工程、Skill、日志、素材元数据 |
 
 ## 7. 系统主路径
@@ -99,60 +85,37 @@ Canvas 旁的 Assistant drawer 保留为轻量上下文入口：就地问答与�
 渲染：宿主效果 → 读取固定素材版本 → 混合 → 输出当前帧（不联网、不等待模型、不依赖 Agent 在线）
 ~~~
 
-## 8. 路线图
 
-| 阶段 | 交付 | 完成证据 |
+## 8. 路线图（能力与证据门槛）
+
+| 阶段 | 改动 | 必须观察到的证据 |
 | --- | --- | --- |
-| R0 | Resolve 21.1 native MCP 真实连接 | 真实 Agent 读到当前项目与选择；记录版本与实际 tool 列表 |
-| R1 | 最小闭环（不付费） | 当前选择 → fixture 叠加层 → 持久文件 → Media Pool；原时间线不变 |
-| R2 | 轻面板收敛 | Current Clip → Tools → Generate → Task → Candidates → Add to Media Pool → Open in Iris |
-| R3 | 一条真实 Provider | 真实付费、取消、unknown-submit、持久素材、Media Pool |
-| R4 | 上新轨道（P1） | 叠加层放在源轨道上方并对齐；开关后原片逐像素不变；删除即撤销 |
-| R5 | Replace / Commit（P2） | 显式确认、提交前复核目标、可撤销 |
-| R6 | Resolve OFX | 仅当固定版本参数 / 关键帧 / 离线渲染被真实需求证明 |
-| R7 | 恢复 AE / PR / PS | 各自真实 SDK 与宿主证据 |
+| P0 · Turn Context | 结构化消息 ↔ 素材引用和内容指纹持久化，标记实际送达媒体 | 刷新、节点改名/删除/移动后准确，不夸大视频理解范围 |
+| P1 · Context Card | 用户 Commit 后创建独立 `plugin:context-card`；来源高亮、继续讨论 | 可编辑、可撤销、可续接；默认无常驻 Context 连线 |
+| P2 · Creative Proposal | 在 Cut/Canvas 展示修改范围、Diff、费用、审批、冲突检测 | 只改指定片段/帧段，其他已锁定内容不变 |
+| P3 · Resolve Read | 通过真机探测的官方 API / MCP 读取工程和选定片段 | 明确可读与未知的效果/调色参数，不虚称完整私有上下文 |
+| P4 · Resolve Write | 候选生成后先导入 Media Pool，再验证新轨道/时间线分支 | 保存并重开后媒体在线，原工程不变，未知结果不重复写入 |
+| P5 · Skill Distillation | 从已确认的真实工程和 Run 提炼方法与统计指纹 | 有来源、人工确认、在新素材上重放通过 |
 
-R0–R7 是宿主线；Resolve 部分同时作为 Iris 的第一个连接器。Iris 线：
-
-| 阶段 | 交付 | 完成证据 |
-| --- | --- | --- |
-| I0 | Web Iris：对话优先的个人 Agent，画布为产出面；替换当前 coming-soon 占位 | 不连任何宿主，从一句话到画布上的计划与候选；run 可回放 |
-| I1 | Resolve 只读上下文连接器 | 连上 Resolve 后 Iris 读到当前项目、时间线与选择，无需上传；写回仍只 Add to Media Pool |
-| I2 | Premiere（UXP）、剪映 / CapCut 连接器 | 剪映 6.0+ 草稿加密（待验证）、CapCut 国际版草稿格式（待验证）先核对再立项；不做破解 |
-
-进度清单见 [todo](../content/docs/progress/todo.mdx) 与 [pending-test](../content/docs/progress/pending-test.mdx)；支持等级只看 [SUPPORT_MATRIX](../../SUPPORT_MATRIX.md)。
+前两项仅在现有 Drawer + Canvas 内完成，不依赖 Resolve。先复用 `tools/iris/pipeline/`、`src-tauri/src/runtime/`、`services/cut/`，不另写一套任务编排。旧版视频流水线能力矩阵见 [历史提案](../archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md)。
 
 ## 9. 对外口径
 
-| 场合 | 可用说法 | 条件 |
-| --- | --- | --- |
-| README | 本地优先的 Workflow 与 Agent 创作工具；宿主叠加层开发中；Iris 即将推出（不写“已可用”或“自动读取剪辑工程”） | 跟随 Support Matrix |
-| 宣传片 / 概念片 | *Your footage. Plus one layer.*；可展示路线图能力 | 未上线能力在画面中标注 **Coming soon** |
-| 宿主验证后 | 在 Resolve 中生成、比较并导入叠加层 | 真实宿主录屏与证据 |
-| 性能 | 指定硬件与素材规格下的实测值 | 可复跑 Benchmark |
-
-禁止未验证宣称：实时 AI 视频、支持所有模型 / 宿主、人物完美保留、跨 Agent 无缝记忆迁移、完全离线生成、云同步已完成、一键无人值守成片。
+当前已经有 Canvas、Cut、内置 Assistant、CLI/Skill 与部分多媒体 pipeline/Runtime。Resolve、AE、Premiere、Photoshop 的深层读取和工程写回仍需真实宿主认证；只有 [Support Matrix](../../SUPPORT_MATRIX.md) 能升级发布支持等级。禁止把设计目标、假设、Mock 或编译通过写成生产验证。
 
 ## 10. 术语
 
-| 术语 | 含义 | 避免 |
-| --- | --- | --- |
-| Canvas | 空间化 Workflow 创作面 | Canvas / Art 双系统 |
-| Cut（原 逆向 Reverse，11-17–11-20 曾叫 Iris） | 顶栏第二个 surface：对话优先、画布为产出面的个人 Agent；逆向拆解是其工具；宿主连接器可选；不是第二份 Workflow 权威 | 用旧名指代它；没有画布产出的纯聊天页、隐式双写、复制 Hypit 源码 |
-| 旧名 Flovart | 2026-11-20 前的产品名；`flovart_*` 工具名、`FLOVART_*` 环境变量、旧存储 key 作为兼容别名保留（§11） | 在新文档与 UI 里沿用 |
-| Agent surface | 顶栏的 Agent 连接与状态中心：runtime、模型、外部 Agent 的 discover / prepare / status / switch | 对话、run 编辑、Tasks / Artifacts 工作区 |
-| Assistant drawer | Canvas 旁的轻量上下文助手；多步制作交给 Iris 的同一 run | Host picker、Agent 安装、独立 run 主场 |
-| Stable Agent operations | `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run` | 每个 API 一个 tool |
-| Layer（叠加层） | 带 Alpha、与源片段对齐的生成结果，不含源像素 | “替换原片” |
-| Candidate | 尚未被应用的生成结果，先进入 Media Pool / 候选区 | 自动应用 |
-| Generation task | 固定输入、目标、参数与幂等 ID 的一次生成 | 聊天会话 |
-| Artifact | 有稳定 ID 和校验和的结果文件 | 临时 URL |
-| Provider | 真正提供模型能力的服务 | Coding Agent、CLI、宿主 |
-| Creative host | Resolve / AE / PR / PS 等宿主 | — |
-| Native effect | 宿主保存并参与预览 / 导出的效果 | 面板按钮、网页预览 |
-| Iris Link | 本地宿主 / Workflow 连接能力的代码名 | 第二份 Workflow、业务总线 |
-
-历史概念（Production Crew、Director、Workspace Operator、Native Draft、Dock production control、enterprise credits）不再用于推导新功能。
+| 术语 | 定义 |
+| --- | --- |
+| Iris | 整个产品，不是旧“个人 Agent tab” |
+| Canvas / Cut / Agent | 真实顶栏三入口；**Cut 是剪辑器** |
+| Assistant Drawer | 现有内置 Agent 对话与受控操作入口 |
+| Context Binding | 经真实消息 ID 保存的明确素材引用，不是从聊天正文猜测的节点列表 |
+| Context Card | 用户 Commit 的创作结论，独立节点插件；不复用 `text` 备注 |
+| Creative Proposal | 目标、范围、输入快照、版本前置条件、Diff、风险和审批记录 |
+| Skill Distillation | 从已有作品与成功 Run 提炼候选规则，经用户确认和回放验证 |
+| Artifact / Run | 稳定的产物与执行记录，独立于 UI 布局、会话文本 |
+| Creative Host | Resolve/AE/PR 等用户实际使用的专业软件；只有探测验证后开放对应能力 |
 
 ## 11. 品牌与兼容标识
 
