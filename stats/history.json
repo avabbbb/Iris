@@ -922,116 +922,196 @@
       "watchers": 0,
       "releases": 4,
       "downloads": 0
+    },
+    {
+      "date": "2026-11-23",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 5,
+      "downloads": 37
     }
   ],
   "releaseAssets": [
     {
       "release": "v0.1.1",
-      "name": "iris-agent-toolkit-manifest.json",
-      "downloads": 0,
-      "updatedAt": "2026-11-22T17:01:44Z"
-    },
-    {
-      "release": "v0.1.1",
       "name": "iris-agent-toolkit-win32-x64.tar.gz",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:01:45Z"
     },
     {
       "release": "v0.1.1",
-      "name": "iris-macos-15-sbom.spdx.json",
-      "downloads": 0,
-      "updatedAt": "2026-11-22T17:00:44Z"
-    },
-    {
-      "release": "v0.1.1",
-      "name": "iris-ubuntu-22.04-sbom.spdx.json",
-      "downloads": 0,
-      "updatedAt": "2026-11-22T16:58:44Z"
-    },
-    {
-      "release": "v0.1.1",
-      "name": "iris-windows-latest-sbom.spdx.json",
-      "downloads": 0,
-      "updatedAt": "2026-11-22T17:01:09Z"
-    },
-    {
-      "release": "v0.1.1",
       "name": "Iris_0.1.1_aarch64.dmg",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:00:02Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_amd64.AppImage",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T16:58:27Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_amd64.AppImage.sig",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T16:58:27Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_amd64.deb",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T16:58:23Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_amd64.deb.sig",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T16:58:24Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_x64-setup.exe",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:00:47Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_0.1.1_x64-setup.exe.sig",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:00:47Z"
     },
     {
       "release": "v0.1.1",
+      "name": "Iris_0.1.1_x64.dmg",
+      "downloads": 2,
+      "updatedAt": "2026-11-22T17:12:21Z"
+    },
+    {
+      "release": "v0.1.1",
       "name": "Iris_aarch64.app.tar.gz",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:00:05Z"
     },
     {
       "release": "v0.1.1",
       "name": "Iris_aarch64.app.tar.gz.sig",
-      "downloads": 0,
+      "downloads": 2,
       "updatedAt": "2026-11-22T17:00:06Z"
     },
     {
       "release": "v0.1.1",
-      "name": "latest.json",
-      "downloads": 0,
-      "updatedAt": "2026-11-22T17:00:49Z"
+      "name": "Iris_x64.app.tar.gz",
+      "downloads": 2,
+      "updatedAt": "2026-11-22T17:12:26Z"
     },
     {
       "release": "v0.1.1",
-      "name": "SHA256SUMS-aarch64-apple-darwin.txt",
-      "downloads": 0,
+      "name": "Iris_x64.app.tar.gz.sig",
+      "downloads": 2,
+      "updatedAt": "2026-11-22T17:12:27Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "latest.json",
+      "downloads": 2,
+      "updatedAt": "2026-11-22T17:12:29Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-agent-toolkit-manifest.json",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T17:01:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-macos-15-intel-sbom.spdx.json",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T17:13:03Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-macos-15-sbom.spdx.json",
+      "downloads": 1,
       "updatedAt": "2026-11-22T17:00:44Z"
     },
     {
       "release": "v0.1.1",
+      "name": "iris-ubuntu-22.04-sbom.spdx.json",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "iris-windows-latest-sbom.spdx.json",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T17:01:09Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "SHA256SUMS-aarch64-apple-darwin.txt",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T17:00:44Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "SHA256SUMS-x86_64-apple-darwin.txt",
+      "downloads": 1,
+      "updatedAt": "2026-11-22T17:13:02Z"
+    },
+    {
+      "release": "v0.1.1",
       "name": "SHA256SUMS-x86_64-pc-windows-msvc.txt",
-      "downloads": 0,
+      "downloads": 1,
       "updatedAt": "2026-11-22T17:01:09Z"
     },
     {
       "release": "v0.1.1",
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
-      "downloads": 0,
+      "downloads": 1,
       "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_0.1.1_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:35:11Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:31:30Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_0.1.1_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:31:24Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:37:59Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_0.1.1_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:46:40Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:35:14Z"
+    },
+    {
+      "release": "nightly-310-d282714",
+      "name": "Iris_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-23T01:46:44Z"
     },
     {
       "release": "nightly-304-49b5166",
@@ -1070,5 +1150,5 @@
       "updatedAt": "2026-11-20T02:10:39Z"
     }
   ],
-  "updatedAt": "2026-11-22T17:01:54.252Z"
+  "updatedAt": "2026-11-23T07:50:55.733Z"
 }
