@@ -13,7 +13,7 @@ inputs:
   output_verdicts: 本轮产出（分镜图、视频镜头等）在 image-output / video-shot / digital-human Rubric 上的判定摘要，没有产出时为空
 sources:
   - IrisBench 硬门禁（eval/README.md）：不写错项目、不重复扣费、不绕过费用确认、不泄露密钥
-  - docs/quality/2026-11-15-basic-function-eval.md 的真实 trace 问题
+  - docs/archive/2026-11-24-docs-refresh/quality/2026-11-15-basic-function-eval.md 的真实 trace 问题
 items:
   - code: AGENT-CTX-01
     layer: CTX

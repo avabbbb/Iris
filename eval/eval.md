@@ -289,7 +289,7 @@ Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions �
 
 ### 9.1 真实 trace 的采集
 
-基础功能评测（见 `docs/quality/2026-11-15-basic-function-eval.md`）用的是这条链路，可以照着把真实会话变成 `agent-run` 样本：
+基础功能评测（见 [`docs/archive/2026-11-24-docs-refresh/quality/2026-11-15-basic-function-eval.md`](../docs/archive/2026-11-24-docs-refresh/quality/2026-11-15-basic-function-eval.md)）用的是这条链路，可以照着把真实会话变成 `agent-run` 样本：
 
 1. 起服务：`node tools/iris/cli.js start --source --json --no-open`。访问本机 Agent 时要去掉 HTTP(S)_PROXY。
 2. 起一个无头浏览器会话连上 WebUI：`IRIS_CHROME_PATH` 指向 headless shell，并加上 `--disable-web-security`。界面操作通过 Playwright 片段注入。

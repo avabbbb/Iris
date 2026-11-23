@@ -21,7 +21,7 @@ const noop = () => {};
 
 // 回归：生成 4 张后源节点在同一次提交里“成功 + 被批次隐藏”，AnimatePresence 退出它时曾沿用加载态
 // transition.scale 的 repeat: Infinity（主线已去掉整节点呼吸，退出仍须自带有限过渡防回退），退出永远不结束——透明的旧节点留在原位拦截点击
-// （“拖走 4 张批次，原位留下一张点不中的”）。浏览器复现与修复验证见 docs/quality/2026-11-16-batch-alternates.md。
+// （“拖走 4 张批次，原位留下一张点不中的”）。浏览器复现与修复验证见 docs/archive/2026-11-24-docs-refresh/quality/2026-11-16-batch-alternates.md。
 describe('workflow node exit', () => {
   it('gives a loading node a finite exit transition instead of inheriting the node spring', () => {
     captured.length = 0;
