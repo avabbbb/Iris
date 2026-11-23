@@ -8,35 +8,29 @@
 - 兼容（2026-11-20 更名）：Agent 工具 `flovart_*` 保留为 `iris_*` 的弃用别名；`VITE_FLOVART_*` / `FLOVART_*` 环境变量作为 `VITE_IRIS_*` / `IRIS_*` 的回退；浏览器 localStorage / IndexedDB 与 `~/.flovart` 首次启动时复制到新名字（`utils/legacyStorageMigration.ts`、`tools/iris/legacy-home.js`），旧数据本版本不删除；`flovart.avabbbb.com` 在过渡期仍是受信 origin。线上协议与持久化格式标识（`flovart:` 模型 id 与事件名、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*` 头、`data-flovart-*`、`__FLOVART_*__`、`com.flovart.*`、`flovart://`、npm 包 `@flovart/*`）有意保留，改它们是独立迁移。
 - canonical 仓库为 `avabbbb/Iris`；仓库或协议迁移不混入普通品牌清理。归档与更名前的视频可保留原名并说明背景。
 
-## 1. 开始前先确认当前事实
+## 1. 工作方式：遵循 OpenAI GPT-6.2 工程提示建议
 
-先读 `docs/index.md` → 相关 current-truth 文档 → 真实代码与 `SUPPORT_MATRIX.md`。产品与系统目标见 `docs/design/00-overview.md`；交互行为见 `docs/design/01-interaction.md`（简单直接、不硬编码、不死锁）；视觉与动效 token 见 `docs/design/DESIGN.md`；模块细节见 `docs/design/1x-*.md`。不要从 archive、旧 audit、release evidence 或 Git 历史推导当前需求。
+优先完成用户已授权的工作；只有关键决定会改变范围、不可逆数据、费用或上线行为时才询问。复用既有类型、工具和业务函数，避免只为抽象而添加 Manager/Facade、第二套 Harness 或冗余 Agent 编排。小改动只查相关文件并跑相应验证；真实宿主、发布、费用相关变更才扩大检查范围。提供真实验证结果，标明未运行的测试。
 
-会变化的 SDK、宿主 API、许可证、模型 / Provider 能力按当前日期核验官方文档与真实源码。构建通过、mock 通过、manifest 存在都不等于真实宿主 / 账号已认证。
+按任务读取文档：产品定位、状态归属和路线见 `docs/design/00-overview.md`；当前 Canvas/Cut/Agent 职责与宿主 / Skill 路线见 `docs/design/11-iris.md`；交互见 `docs/design/01-interaction.md`；视觉见 `docs/design/DESIGN.md`；能力认证只看 `SUPPORT_MATRIX.md`。不要让每个小改动都强制读完整套文档。仓库历史和 archive 不得反过来决定当前需求。变化中的 SDK、第三方宿主 API、模型能力和许可证必须核对官方资料与实际证据。
 
-## 2. 产品地图：三个顶级 surface
+## 2. 产品定位与职责
 
-产品定位（2026-11-17 定案）：**Canvas + Agent 是 Iris 的 Workflow 生产工具；Iris 是全能后期助手（Personal agent）**。
+**Iris 是开源、local-first、BYOK 的 Agent-native Creative Production Workspace / OS。** 创作者和可插拔 Personal Agent 共同理解素材与已有工程、制定创作意图、预览修改、非破坏性制作、比较候选，并把被验证的流程沉淀为可复用 Skill。“一个人拥有小型剪辑团队的能力”是长期愿景，不能冒充当前效果或吞吐量承诺。
 
-- **Iris 先是独立的 Web 个人 Agent**：Hark 式、对话优先，Iris 无限画布是它的产出面（计划、素材、版本都落到画布上可见、可改）。不装任何剪辑软件也完整可用；素材可拖入或上传。
-- **本地宿主连接器是可选增强**：用户自愿连上本地插件 / 宿主后，Iris 同步剪辑工程上下文（时间线、选择、素材、标记），免手动上传。顺序：DaVinci Resolve 先（native MCP / Scripting），剪映 / CapCut、Premiere（UXP）后续。没有连接器时不得阻塞、不得降级成“请先连接”。
-- **本地优先**：工程上下文只在本机读取，按需、可见地交给模型；连接器只读起步，凭据不进宿主工程与日志。
-- **非破坏**：写回宿主默认新增结果（Resolve 先 Add to Media Pool），不改原时间线；替换须显式且可恢复（见 §5）。
-- 爆款视频逆向拆解（Hypit 式）保留为 Cut 的一组工具与面板；游戏素材替换暂缓。
+核心循环：**工程上下文 → 可审查 Proposal → 受控执行 → 真实 Artifact / Run Trace → 精确返工 → 经用户批准的 Skill**。Agent 可以来自内置模型或外部 Codex、Claude Code、DSH 等；Iris 不重造通用云电脑、跨 Agent 会话数据库或原生剪辑引擎。
 
-顶栏固定为 **画布 Canvas｜Cut｜Agent**（英文 Canvas / Cut / Agent，中文 画布 / Cut / Agent；原 逆向 Reverse → Iris（11-17）→ Cut（11-20）；原 Table 已移除，不保留 `table` 视图；内部 `canvasView: 'reverse'`、`components/reverse/` 等标识在单独迁移前保持）：
+当前顶栏严格为 **Canvas｜Cut｜Agent**：
+- **Canvas**：现有无限画布、GenAI 生成、Workflow、素材与候选版本；未来承载 Spatial Context Card 与可视化评审。
+- **Cut**：**已实现的视频剪辑器**（时间线、素材、字幕、编辑、预览与导出），不是旧文档中“尚未上线的个人 Agent tab”。UI 和 Agent 复用 `services/cut/cutStore.ts`；不另存一份 Cut 工程。
+- **Agent**：Runtime、Provider/模型、外部 Harness、Skill、连接状态与诊断，不新建聊天工作区。
+- **Canvas Assistant Drawer**：当前内置 Agent 的对话、选中素材上下文与操作入口；不是第四个顶栏。Canvas、Cut、Drawer 与 CLI/MCP 使用对应领域的同一业务实现、权限边界、Run 和 Artifact 引用。
 
-| Surface | 拥有 | 交接 |
-| --- | --- | --- |
-| **Canvas** | GenAI 生成与 Workflow 基本盘：节点、连线、生成任务、素材、版本 / take / batch、`workflow.*` 命令 | 被 Iris 与外部 Agent 调用；选中节点可交给 Iris |
-| **Iris（全能后期助手 · Personal agent）** | 对话优先的个人 Agent，画布为产出面：run（计划 → 步骤 → 评审轮次 → 版本）、画布上带标签的 Agent 光标、trace / 计划 / 审批、预览与版本对比；可选的宿主上下文连接器（Resolve 先）；Hypit 式逆向拆解是它的一组工具与一个面板 | 调用 Canvas 与 Generation 的同一命令；使用 Agent 页供应的 Agent 与模型；宿主写回走 §5 |
-| **Agent** | Agent 连接与状态管理：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）发现 / 准备 / 健康 / 每个 Agent 的状态、Skill 安装 | 向 Iris 供应 Agent 与模型；不放对话、不放 run 编辑，最多只读“最近 run”跳转 |
+**Spatial Context v1 只做 P0+P1**：P0 在消息持久化边界保存真实 session/message ID、显式来源及内容指纹、实际送达媒体，不再靠解析文本恢复结构化关系；P1 由用户明确“钉到画布/Commit”创建独立 `plugin:context-card`，**不复用普通 text 节点**。卡片定稿不被自动重写，Context 关系默认不画 Workflow 实线；讨论使用最新授权素材，Run 自动冻结输入。外部 Agent 保留自己的会话；继续讨论可用卡片结论与素材开启新会话，不假定外部 Session Fork。
 
-- **Canvas Assistant drawer** 保留为轻量上下文入口（就地问答、单步操作）；多步制作“在 Iris 中继续”，进入同一个 run（同一 runId）。不复制到 Agent 页，不做 Host 连接管理。
-- **禁止只有聊天的整页**。Iris 对话优先，但每个 run 的计划、素材与版本都必须落到画布上可见；没有画布产出的纯聊天页不算 Iris。也不要引入 Tasks / Artifacts / Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas / Workflow。
-- **Hypit 复刻边界**：以 gitignored `_ref/hypit` 为参照对齐分层、数据模型、术语与数据流，代码在 `services/reverse/` 自写；不复制 Hypit 源文件，不把 `@hypit/*` 打进 bundle（附加条件的 Apache-2.0 与本仓库 MIT 冲突）。WhisperX / ffmpeg / 渲染走本地 Runtime 或用户自装的 hypit CLI，结果作为 durable artifact 导回。
-- **Recordly / Snipaste 边界**：Recordly 是 AGPL-3.0 + 附加条款（UI 与仓库署名、禁用其名称），Snipaste 闭源。主仓库（MIT）不复制、不打包 Recordly 源码，移植成 Rust 仍算衍生作品；只通过连接器调用用户自装的 Recordly、导入其导出文件，Snipaste 只借鉴交互。路线与分期见 `docs/plans/recordly-capture-hub.md`（计划草案）。
-- 外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Agent（Iris / 抽屉）、宿主面板与外部 Agent 复用同一业务能力与权限边界。
+**专业宿主是可选连接器**：Resolve 优先只读能力发现与受限上下文，产物在 Iris 审查后先导入 Media Pool；新轨道/替换必须有真机验证、目标版本检查与明确审批。既不静默修改原时间线，也不通过未经验证的私有项目数据库解析/写入来宣称完整 Color/Fusion/Magic Mask 上下文。
+
+**不要构建**：所有聊天消息铺满画布、通用第二大脑、第二套 Workflow/Provider/Session Store、无证据的“万能 Resolve API”、默认上传整张画布、未经用户许可的昂贵生成/破坏性写入。细节见当前设计与 Support Matrix。
 
 ## 3. 工程原则：短路径、单一权威
 
@@ -60,12 +54,12 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 素材需要稳定来源、版本与校验；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选的新版本。
 
-### 4.1 Agent 视频流水线（PROPOSAL，`docs/design/16-agent-video-pipeline.md`）
+### 4.1 Agent 视频流水线（现有工具与未验证闭环）
 
-实现进度以 16 §12 为准。被接受前，相关施工遵守：
+当前实现状态以 `SUPPORT_MATRIX.md` 与实际 Runtime/pipeline 代码为准，历史阶段方案见 `docs/archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md`。相关施工遵守：
 
 - **trace 唯一权威**：run（durable `runId`）由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话与画布节点只存引用。
-- **主场在 Iris**：run 在 Iris 发起与驱动；画布写入以可见 Agent 光标呈现；Canvas 抽屉只交接到同一 run（当前已有抽屉 run 卡片与“放到画布”版本分组作为轻量入口）；外部 caller 写入同一条 trace。
+- **Run 不另建主场**：Canvas、Cut、Drawer 和外部 Agent 引用同一持久 runId/trace；以实际执行结果为准，不新建旧方案中的独立 Personal Agent Tab。
 - **工具只投影已有业务函数**：`pipeline.run.*`、`asset.import`、`audio.tts`、`audio.transcribe`、`timeline.align`、`composition.patch`、`composition.render`、`media.probe`、`media.frames`、`review.submit`、`run.archive`、`capture.ui` 先有业务实现再登记 canonical registry；内置 Agent、CLI、MCP、DSH 同一 schema 与权限；只在 run 激活时加载，认证后才按 Support Matrix 升级。
 - **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据交给外部 Coding Agent，以 `asset.import` 带回同一 run；网页截图录屏只走 `capture.ui`（仅 localhost / 授权文件夹页面，需用户确认）；桌面级真实操作录制将来走 Recordly 连接器或自研伴生工具，产物同样以 artifact 进入同一 run（计划，未实现）。
 - **评审可审计**：findings 写明时间点 / 片段、层、问题、修法、结论；修补基于版本号，不改 locked 片段（除非显式解锁并留痕）；轮数受 run 预算约束。
@@ -77,11 +71,11 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统；边界见 `docs/design/14-creative-hosts.md`，Resolve 实现还须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`（实现前重新打开 Blackmagic 当前官方页面核对视觉）。
 
-- **宿主轻面板**：当前 selection → intent / reference → plan → generate → import；复杂编排打开 Iris。面板是宿主原生感的 contextual inspector，不是聊天页、dashboard 或缩小版 Canvas；跟随宿主主题、密度、键盘与焦点。
+- **宿主轻面板**：当前 selection → intent / reference → plan → generate → import；复杂编排回到 Canvas / Drawer / Cut。面板是宿主原生感的 contextual inspector，不是聊天页、dashboard 或缩小版 Canvas；跟随宿主主题、密度、键盘与焦点。
 - **native effect / OFX**：宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent / Iris 在线。
 - 默认新增结果，不静默覆盖；替换必须显式且可恢复。Resolve P0 唯一安全输出是 **Add to Media Pool**，P1 才有 Add to new track，P2 才做 Replace / Commit。
 - **Resolve Studio 21.1 first**：宿主操作优先 Blackmagic native MCP；Iris Skill + `iris` CLI 提供生成与 Artifact；不建第二套 Resolve MCP，不为每个 Scripting API 建 wrapper。外部 Agent 的聊天留在 Codex / Claude 等原宿主。
-- **Iris 宿主上下文连接器**：只读同步工程上下文是第一步，写回仍走上面的安全输出。Resolve 走 native MCP / Scripting；Premiere 走当期 UXP；剪映 6.0+ 草稿加密（待验证；11.7 起外部不可读，待验证），不做破解；CapCut 国际版按明文草稿评估（待验证），实现前按当前版本核对。连接器是 Iris 的可选能力，不是使用 Iris 的前提。
+- **宿主上下文连接器**：只读同步工程上下文是第一步，写回仍走上面的安全输出。Resolve 走 native MCP / Scripting；Premiere 走当期 UXP；剪映 6.0+ 草稿加密（待验证；11.7 起外部不可读，待验证），不做破解；CapCut 国际版按明文草稿评估（待验证），实现前按当前版本核对。连接器是 Iris 的可选能力，不是使用 Iris 的前提。
 - After Effects（CEP + C++ Effect SDK）保持 Experimental，暂停扩张；Photoshop / Premiere 按当期官方 UXP API 实现。
 - Provider key、Agent token、OAuth 或私有凭据不得进入宿主工程、Skill、日志或素材 metadata。
 - 真实宿主认证覆盖：安装、目标绑定、生成 / 导入、取消 / 失败、保存重开、素材缺失、离线导出；native effect 另覆盖参数持久化、随机帧、色彩 / alpha / 帧率与关键帧。
