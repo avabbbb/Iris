@@ -2,7 +2,7 @@
 
 > 状态：**Current truth**（2026-11-13 重构）。本文只管**交互与行为**：状态、流程、出口、谁能做什么、动效在什么时候发生。视觉与动效 token（颜色、字号、圆角、阴影、玻璃、弹簧数值）只在 [DESIGN.md](DESIGN.md)，本文引用不重复。
 > 标注约定沿用[总体设计](00-overview.md)：**已实现** = 代码在主干；**设计目标** = 尚未实现；**假设** = 待真实环境确认。§1–§10 编号保持稳定，供其他文档引用。
-> 结构：§1–§10 交互规则 · §11 产品地图（三个 surface 与交接）· §12 Iris 个人 Agent 工作区 · §13–§17 Canvas、状态映射、主题、run / trace、空态 · §18 参考先行 · §19 产品交互模式 · §20 参考 · §21 原型。
+> **Current truth（2026-11-24）**：§11 为 Canvas/Cut/Agent 当前入口与 Drawer；§12 为 Spatial Context/Creative Review 阶段目标；§16 为共享 Run / Trace。旧版独立 Iris Personal Agent 页面已归档，实际能力等级以 SUPPORT_MATRIX 为准。
 
 ## 1. 三条总规则
 
@@ -144,16 +144,12 @@ idle → planning → awaiting_approval → queued → running → completed
 - 晚到结果作为新版本出现，不覆盖用户已选定的版本（§19.6）。
 - 多步制作交给 Iris（§11 交接）；交互模型细节见 §13。
 
-### 6.4 Iris（个人 Agent）发起 run
 
-~~~text
-对话中说出意图 + 拖入素材（或由已连接的宿主带入上下文） → 规划 → 计划卡（预算一次确认）→ 画布上多 Agent 光标执行
-→ 渲染 vN → 评审轮次 → 修补 vN+1 … → pass → 播放 / 归档
-~~~
+### 6.4 Canvas Drawer / Cut 的创作请求
 
-- 写入画布只通过 Canvas 的命令（`workflow.apply` 等），每次写入都显示为光标动作并进入 trace；不形成第二份 Workflow 权威。
-- 逆向拆解（转写、对齐、timeline）是 run 的工具；其“同步到画布”仍是一次 `workflow.apply`，默认新增、不覆盖用户已选版本。
-- 转写导入、批量生成有进度与取消；取消后已完成部分可保留或丢弃，由用户选择。完整设计见 §12。
+用户在现有 Assistant Drawer 中明确引用 Canvas 素材，Agent 调用统一业务工具，改动与结果落在 Canvas/Cut 的真实工程中；只需要问答时不强制创建画布节点。多步骤任务以 Run ID、Artifact 和审查卡关联，不重复开发一张“个人 Agent 主页”。
+
+可选宿主上下文必须在用户授权下按范围读取。真实工程修改先提出可审核的目标、范围和 Diff，批准后执行，再读取结果验证。见 [11](11-iris.md)。
 
 ### 6.5 Agent 连接中心
 
@@ -224,148 +220,61 @@ app-shell
 - [ ] PR 含参考小节与一致性检查表（§18）。
 - [ ] 亮 / 暗主题各截图核对一次（画布、抽屉、弹层、节点生成态）。
 
-## 11. 产品地图：三个顶级 surface、工具归属与交接
 
-> 2026-11-13 定案（覆盖 PR #45 中“run 主场在 Canvas Assistant drawer”的放置决定）；2026-11-17 逆向改名 Iris 并改为对话优先。总纲同步见 [00 总体设计](00-overview.md) §2，pipeline 放置见 [16](16-agent-video-pipeline.md) §6。
+## 11. 产品地图：三个当前入口与 Drawer
 
-| Surface | 一句话 | 拥有的工具 / 状态（唯一业务实现） | 不做 |
-| --- | --- | --- | --- |
-| **画布 Canvas** | GenAI 生成与 Workflow 基本盘 | 节点、连线、`workflow.inspect / selection.get / apply / node.run / viewport.set`、生成任务、素材库、版本 / take / batch、上传与转码 | 不托管多步 run 的编排；不放全量 trace |
-| **Iris**（全能后期助手 · Personal agent；原名 逆向 Reverse） | 对话优先的个人 Agent，**Iris 画布是它的产出面**；Web 版不连任何宿主也完整可用，可选连接本地宿主同步剪辑上下文 | 对话、run（plan → steps → review rounds → versions）、多 Agent 光标、计划 / trace / 审批卡、预览播放器、版本对比、宿主连接器状态；Hypit 式逆向拆解（转写 → 对齐 → timeline → 字幕 / 视觉 / 音频轨）作为它的**一组工具与一个面板** | 不复制 Canvas 的节点 / 生成实现；不另存一份 Workflow；不把宿主连接设为前提 |
-| **Agent** | Agent 连接与状态管理 | runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH…）的发现 / 准备 / 健康 / 每个 Agent 的状态、Skill 安装 | 不放对话、不放 run 编辑；最多只读“最近 run”跳转 |
+| 入口 | 当前职责 | 交接 |
+| --- | --- | --- |
+| **Canvas** | 无限画布、素材与生成节点、Workflow、候选与版本 | 选中媒体可交给现有 Assistant Drawer |
+| **Cut** | 已实现视频编辑器：时间线、字幕、基础属性、代理、导出 | 与 Canvas 引用相同素材；Agent 经 `iris_cut_*` 操作同一 Cut Store |
+| **Agent** | 模型、Provider、外部 Harness、Runtime、Skill、连接状态 | 供应工具和连接，不提供第二份聊天或工程 |
+| **Assistant Drawer**（非顶栏） | 内置 Agent 对话、明确素材引用、执行反馈与审批 | 复用 BrowserAgentRuntime、Workflow、Cut 与 Runtime |
 
-**交接（hand-off）**：
+## 12. Spatial Context + Creative Review（阶段目标）
 
-~~~text
-Agent 页 ──供应──▶ Iris：可用的 Agent（内置 / 外部）、模型路由、预算授权方式
-Iris ──调用──▶ Canvas：workflow.inspect / apply / node.run / viewport.set（以光标动作可见地执行）
-Iris ──调用──▶ Generation & Runtime：生成任务、渲染、转写（同一任务函数）
-Canvas ──交给──▶ Iris：选中节点 → “交给 Iris”，带选中节点作为上下文开启或续接 run
-Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；多步制作一键“在 Iris 中继续”，进入同一个 run
-外部 Agent（经 CLI / MCP）──▶ 同一 run：其写入作为带 caller 徽标的 Step 出现在 Iris trace
-宿主连接器（可选，Resolve 先）──上下文──▶ Iris：当前项目、时间线、选择、素材、标记（只读起步；写回走 14 号文档的安全输出）
-~~~
+### 12.1 引用素材发起讨论
 
-规则：
-- **一套业务实现**：Iris 不实现生成、节点、素材；它调用 Canvas 与 Runtime 的同一命令（AGENTS §3）。光标只是这些调用的可视化，不是第二条写入路径。
-- **一个 run，一个主场**：run 只在 Iris 里展开（对话栏 + 画布）；Canvas 抽屉与外部 Agent 只显示 run 条 / 活动条并跳转。
-- **画布是同一张**：Iris 打开的画布就是该项目的 Workflow；切回 Canvas 看到的是同一批节点（带 run 分组与 `origin=agent`）。
-- **对话优先，但不是纯聊天页**：Iris 的入口与主线是对话；每个 run 的计划、素材与版本必须落到画布上可见、可改。没有画布产出的回复只用于问答（AGENTS §2）。
-- **连接器可选**：没有连接任何宿主时 Iris 完整可用（素材拖入 / 上传）；连接后只是少一步上传，不改变交互主线。
+复用已有 Canvas 多选、`@` Chip、缩略图、消息分叉和节点定位。发送 Turn 时结构化保存真正的 session/message ID、node/asset ID、内容版本/指纹和实际发给模型的媒体范围；历史文本解析仅用于旧会话兼容。没有用户显式选择，不读取整张画布或整个专业工程。
 
-## 12. Iris · 个人 Agent 工作区（设计目标）
+### 12.2 Commit 结论到画布
 
-> 2026-11-17 起：逆向改名 **Iris**，交互从“prompt 首页 + 画布主体、对话只在侧栏”改为 **Hark 式对话优先 + 画布为产出面**。§12.1、§12.2、§12.5、§12.9–§12.11 已按新方向重写；§12.3–§12.4、§12.6–§12.8 的光标、飞入、播放、对比规则不变。原型（§21）仍是旧的“侧栏对话”版本，**待重画**。现状：tab 是 coming-soon 占位（标签带“优化中”），以下全部是设计目标。
-> 依据：用户提供的理想交互视频（关键帧：prompt 首页“今天想做点什么？”→ 拖入参考视频并输入“用代码把这个视频复刻出来”→ 无限网格画布上多个带标签的光标（“我”“字体”“行动”）放置像素素材、文字层“curiosity.”、参考帧卡并组装 → 播放成片）。动效数值见 [DESIGN.md](DESIGN.md) §14；原型见 §21。
+助手回复可「钉到画布」：确认标题、结论与来源 Chip 后创建**独立** `plugin:context-card`，不复用备注 `text`。用户点 Commit 后卡片正文定稿，后续聊天不自动更改；再次更新须显式保存且保留版本。
 
-### 12.1 对话首页（idle）
+### 12.3 Context 关系可视化
 
-| 元素 | 规格 |
-| --- | --- |
-| 标题 | display 20/28 “今天想做点什么？”（随 i18n） |
-| 输入框 | 居中，宽 `min(640px, 100%)`；多行；左下 `+` 附件、`@` 引用画布节点 / 素材 / 已连接宿主的当前选择；右下发送（同位变停止） |
-| 附件拖入 | 拖入视频 / 图片 / 文本 / 链接时整框虚线 mint 边 + `--isl-mint-bg`，松手后附件卡以 snappy 进入输入框上方（缩略图 + 时长 / 尺寸 + 移除）；大文件显示导入进度，导入中仍可编辑文字 |
-| 宿主上下文 chip | 输入框上方一枚小 chip，见 §12.11：已连接时显示“Resolve · 当前时间线”，可点开选择要带入的范围；未连接时不显示 chip，只在 `+` 菜单里有“连接剪辑软件（可选）” |
-| 示例卡 | 输入框下 3 张叠放示例（“复刻这个视频”“把截图做成宣传片”“给这段音频配画面”），点击只填入不发送（参考 Inspora R4） |
-| 最近对话 | 下方一行：最近 3 个对话 / run 的名称 · 状态 · vN，点击回到该对话与画布 |
-| Agent / 模型 | 输入框内右侧小 chip：当前 Agent 与模型（来自 Agent 页）；未配置时 chip 变 sun 并点击去 Agent 页配置（§6.6） |
+Workflow 执行流保留常驻连线；Context 关系默认隐藏，卡片显示来源数量和缺失/更新提示，仅悬停或选中时高亮关联节点。移动、缩放不触发“来源已更新”；内容指纹改变才触发。
 
-状态：空 → 有输入 → 拖入中 → 附件导入中 → 可发送 → 规划中（planning，输入框锁定为只读并显示“正在规划…”，可取消）。纯问答（不需要产出）在对话里直接回答，不打开画布。
+### 12.4 继续讨论与跨 Agent
 
-### 12.2 开始产出：对话首页 → 对话栏 + 画布（转场）
+原会话可访问则回到现有 Drawer；外部会话失效或用户要新分支时，以卡片定稿 + 已授权、可访问的当前来源开启新会话，不假定跨宿主 Session Fork。删除卡片不删除会话，删除会话不应抹掉卡片。
 
-1. 发送后首页的输入框与第一轮对话原位移到左侧对话栏（smooth，FLIP：记录首末位置，只动 transform / opacity；参考 GSAP G2、G4）。对话仍是主线：用户继续在对话栏输入、追问、改要求。
-2. 画布网格在右侧从中心淡入并以 0.98 → 1 缩放到位（smooth）；附件作为第一个元素“参考帧卡”以 expressive 落在画布左上（参考 Inspora R8 的落定、G1 的元素落入）。
-3. 计划卡（awaiting_approval，§19.2）作为一条消息出现在对话里，同时在画布上画出计划的流程带骨架（§19.1）。
-4. 总时长 ≤ 600ms；减弱动效时为 120ms 交叉淡化，无位移。
-5. 返回：对话栏顶部“← 首页”回到对话首页，run 在后台继续（首页“最近对话”显示进度）。
-6. 窄容器（< 900px）：对话与画布上下切换（segmented：对话 / 画布），产出到画布时对话里出现“在画布中查看”的缩略卡。
+### 12.5 Proposal / 审批（下一阶段）
 
-### 12.3 多 Agent 光标
+Agent 先读取目标与版本，提出按 clip/帧段限定的操作提案，显示 Diff、预览、费用与风险。批准后再检查目标指纹，提交到 Canvas Workflow、Cut Store 或经官方能力发现的宿主 API；冲突直接提示，不静默重算或覆盖原片。
 
-| 方面 | 规则 |
-| --- | --- |
-| 谁有光标 | 每个**正在写画布或产物**的执行者一个：主编排、子 Agent（字体 / 版式、素材 / 生成、合成 / 行动、评审）、外部 caller（codex、claude-code、dsh）。只读工具（inspect、frames 抽取）不产生光标 |
-| 标签 | 角色名 pill（“我”= 用户本人时不显示；“字体”“行动”“素材”“评审”…），名称来自 run 的 Step caller / 工具注册表元数据，不在组件写死 |
-| 颜色 | 每个角色一个派生色（DESIGN §4 光标色），run 内稳定；同屏 ≤ 6 色 |
-| 动作映射 | `workflow.apply` 新增节点 → 光标移到落点、按下（光标缩到 0.9 再回 1，snappy）、元素出现（§12.4）；移动 / 对齐 → 光标拖着元素走；改文字 → 光标停在文本层，显示 I 形光标与逐字输入；`viewport.set` → 只平移视角，不出光标；`node.run` → 光标点节点的运行按钮，节点进入生成态 |
-| 运动 | 位移用 smooth 弹簧（可被新目标打断、保持速度）；路径为直线，不画轨迹；距离 > 800px 时先淡出、在目标附近 80px 处淡入（避免横穿屏幕）；速度上限约 1600 px/s |
-| 碰撞 | 两个光标目标距离 < 32px 时，后到者沿 45° 偏移 24px 停靠；标签互相遮挡时后者标签翻到左侧 |
-| 空闲 | 无动作 2s 后光标降为 60% 不透明；10s 后收回到对话栏对应 Step 行的头像位置（淡出）；有新动作再从那里出现 |
-| 视野外 | 光标在视口外时，视口边缘显示同色小箭头 + 标签，点击平移到它 |
-| 用户抓取 | 用户按下某元素（或框选含该元素）时：正在操作它的光标立即停下、标签变“等待你”（虚线边），该 Agent 的**此元素相关** Step 暂停；用户松手 1.5s 后无进一步编辑则 Agent 读取新状态（`expectedRevision` 已变）重新计划这一步并继续；用户在该元素上的修改写入 trace（caller=user），Agent 不得回滚。其他光标不受影响 |
-| 用户让路 | 对话栏“暂停全部 Agent”一键冻结所有光标（标签变灰）；“接管此步”把当前 Step 转为手动并结束其光标 |
-| 减弱动效 | 光标不移动，直接出现在目标处并显示 300ms 静态描边；标签照常 |
+### 12.6 预览与版本对比
 
-参考：Inspora R10 fluid tooltip（单实例标签滑动跟随）、R14 agent dashboard（委派后的“thinking”小 pill）；GSAP G2（FLIP 式飞入定位）。
+Canvas 对比生成节点的真实 take / 版本，Cut 检查时间线上的目标帧段、字幕和音轨。只展开当前任务需要的审片 UI，完成后收拢成结果与回执；不让聊天日志淹没素材。
 
-### 12.4 元素飞入与组装
+### 12.7 Run / Artifact
 
-- **来源点**：元素从产生它的地方飞出——生成结果从对应生成节点 / 光标位置；素材从对话里的附件 / 素材区；参考帧从参考帧卡。
-- **轨迹**：transform 平移 + 0.96 → 1 缩放 + 透明度 0 → 1，expressive 弹簧；同批元素错开 60ms（最多 8 个，其余直接出现）。
-- **组装**：版式子 Agent 对齐时，元素同时以 smooth 移到网格对齐位，出现 1px 对齐参考线（mint 40%）300ms 后消失；文字层逐词由模糊到清晰（参考 Inspora R18、GSAP G1 的 SplitText 式揭示，用 CSS / motion 实现，不引入 GSAP）。
-- **选中框**：正在被操作的元素显示该 Agent 色的 1px 框 + 手柄 + 左下属性标签（如“字体：思源黑体”“拆帧”）。
-- **不做**：彩纸、旋转飞入、3D 翻转、持续漂浮。
-- 减弱动效：直接出现（120ms 淡入），对齐参考线保留。
+讨论实时引用最新素材；真正运行或渲染时冻结输入版本、目标、素材指纹。任务状态持久化到 Runtime，Canvas、Cut、Drawer 只持有真实引用。
 
-### 12.5 对话栏与 trace 同步
+### 12.8 宿主上下文（可选，Experimental）
 
-- 位置：画布左侧停靠，宽 `clamp(360px, 32vw, 480px)`，可拖宽、可收起为 40px 竖条（仍显示 run 进度点）；窄容器见 §12.2 第 6 条。顶栏玻璃，正文实底（DESIGN §9.2）。
-- 结构：**对话**是主体（消息、附件、宿主上下文 chip、输入框常驻底部）；**计划卡**（Plan / Step 清单与审批，§19.2）与 **run 卡片**作为对话消息出现；**运行**（trace，§16.3）与**逆向拆解**（§12.8）是从 run 卡片展开的子面板，不另起顶层分区。待处理托盘同 §19.4。
-- **悬停 Step → 高亮元素**：trace 行 hover / 键盘聚焦时，画布上该 Step 产出或修改的元素显示该 caller 色 2px 外描边并轻微提亮（120ms），视口外的元素在边缘显示箭头；点击行平移到元素（smooth）并选中。
-- **悬停元素 → 高亮 Step**：画布元素 hover 时，对话栏中最近修改它的 Step 行或消息左侧出现同色竖条；元素右键“查看来源 Step”“在对话中引用”。
-- 实时：新 Step 行 snappy 进入；运行中的行显示该 caller 光标色的进度条。
+先通过已验证的接口只读读取工程、时间线、选择、素材和暴露的效果摘要。无法读取的 OFX/Color/Fusion/Magic Mask 内部参数需明确标未知，不推断完整可见性。写回先导入 Media Pool，经真实宿主保存重开测试后再增加新轨道/时间线分支。
 
-### 12.6 预览播放器
+### 12.9 临时界面
 
-- 入口：Render 站 / 版本条 / 对话中的“播放 vN”；在画布上以浮层打开（不离开画布），尺寸按成片比例、最大占视口 70%，背景画布暗化 40%。
-- 控件：clear 玻璃控件条（播放 / 暂停、时间码 tabular、逐帧 ←/→、速度、循环、全屏）；时间轴上显示评审 findings 钉（sun）与镜头分段（细分隔），点击钉跳到该时间并在对话栏展开该 finding。
-- 空格播放 / 暂停，J/K/L 倒放 / 暂停 / 快进，Esc 关闭；关闭后回到原视角。
-- 渲染中打开：显示最近一版 + “v3 渲染中 62%”角标，渲染完成后提示切换（不自动切换）。
-- 失败：播放器内显示原因与“重新渲染”。
+只在选角、卡点、差异审查和审批等任务需要时展示对应组件。状态必须可退出、重试或取消；成功后收拢，不新增第四个常驻工作区。
 
-### 12.7 版本对比
+### 12.10 v1 验收
 
-- 版本条（v1 … vN）在播放器下方与 Render 站；评审轮次 `r1 revise → r2 revise → r3 pass` 与版本一一对应。
-- 选两个版本 → 对比模式：**分屏滑杆**（默认）/ 并排 / 差异叠加；两个播放头锁定同步；可锁定到某条 finding 的时间点。
-- 每个版本显示：由哪个 Step / 哪条 finding 产生（fixedBy）、改了哪些层、费用；被否版本标 rejected 保留。
-- 锁定 / 解锁片段与素材规则同 §19.3。
+三个素材发给 Agent → 实际引用持久化 → 钉卡片 → 刷新与节点变更 → 重新讨论。默认不需 Resolve，不创建第二个 Agent 会话库。
 
-### 12.8 逆向拆解（Hypit 式）作为工具与面板
+### 12.11 历史原稿
 
-- 工具：`reverse.transcribe`、`reverse.align`、`reverse.timeline`、`reverse.tracks`（命名以 [11](11-iris.md) 与命令注册表为准）——由主编排在需要“复刻参考视频”时调用，各自作为 Step 出现在 trace。
-- 面板：run 卡片展开的“逆向拆解”子面板显示 Script（三栏）、转写证据、对齐结果与 Timeline（字幕 / 视觉 / 音频轨）；点击 Timeline 片段 → 画布上对应的参考帧卡与生成元素高亮。
-- 不再是独立工作台：原“逆向工程转为 Canvas 子画布”的单次 `workflow.apply` 出口保留为一个工具（“同步到画布”），由 run 调用或用户在面板中点击。
-
-### 12.9 Canvas 抽屉的去留
-
-**建议保留为轻量上下文入口**：Canvas 右侧 Assistant drawer 继续承担“就地问答 / 单步操作”（解释节点、改一个提示词、跑一个节点），不展开多步 run；当请求需要多步制作或 run 已存在时，抽屉显示 run 条与“在 Iris 中继续”，点击后带当前选中节点切到 Iris，进入**同一个 run**（同一 runId，不复制会话）。抽屉的“运行日志”分区改为只读 run 列表跳转。
-
-### 12.10 状态与出口
-
-| 状态 | 用户看到 | 主动作 | 出口 |
-| --- | --- | --- | --- |
-| 首页空 | 标题 + 输入框 + 示例卡 + 最近对话；无宿主连接时不提示连接 | 发送 | 打开最近对话 |
-| 规划中 | 输入框只读“正在规划…” | — | 取消 |
-| 待批准 | 对话里的计划卡 + 画布上的流程带骨架 | 开始制作 | 在对话里改 / 取消 / 回首页 |
-| 运行中 | 光标在画布上工作；trace 实时 | — | 暂停全部 / 停止 / 接管此步 |
-| 用户抓取 | 对应光标“等待你” | 继续编辑 | 松手后 Agent 重新计划此步 |
-| 待确认（费用 / 解锁） | 岛与对话同时提示 | 确认 | 修改 / 跳过 / 停止 |
-| 评审中 | 播放器 + findings 钉 | 接受修补 | 改意见 / 手动接管 |
-| 完成 | vN pass；“播放 / 归档” | 播放 | 再来一轮 / 回 Canvas 看节点 |
-| 失败 / 阻塞 | 失败 Step 展开原因 | 重试此步 | 跳过 / 停止 |
-| Agent 断开 | 光标灰化“已断开”；已提交任务继续 | 重连（去 Agent 页） | 换 Agent 续跑 |
-| 刷新恢复 | “正在恢复 run…” | — | 回首页 |
-| 宿主断开 | 上下文 chip 灰化“Resolve 已断开”；已带入的上下文快照保留在对话里 | 继续（用已带入的上下文或改为上传） | 重连 |
-
-### 12.11 宿主上下文连接器（可选）
-
-- **不是前提**：Iris 的每个状态都不要求先连宿主。首页、空态与错误文案都不出现“请先连接剪辑软件”；连接入口只在 `+` 菜单与 Agent 页。
-- **顺序**：DaVinci Resolve 先（native MCP / Scripting），Premiere（UXP）、剪映 / CapCut 后续。剪映 6.0+ 草稿加密，外部可能读不到（**待验证**）；CapCut 国际版草稿格式待核对（**待验证**）。见 [14](14-creative-hosts.md) §7。
-- **chip 状态**：未连接（不显示）· 连接中（spinner + 宿主名）· 已连接（宿主名 + 当前项目 / 时间线；点开选择带入范围：当前选择 / 当前时间线 / 标记区间）· 只读（默认，chip 带小锁）· 断开（灰化，见 §12.10）。
-- **带入是显式且可见的**：发送时把带入的上下文作为一条可展开的“上下文快照”附在消息上（项目名、时间线、片段数、时间范围），用户可在发送前移除；不在后台静默读取整个工程。
-- **写回**：Iris 不直接改宿主时间线；产物先在画布上比较、选定，再按 14 号文档的安全输出送回（Resolve 先 Add to Media Pool），按钮文案用动词（§7）。
-- 宿主连接管理（安装、配对、健康）在 Agent 页，不在 Iris 对话里展开。
+2026-11-17 的独立 Iris Personal Agent tab、Hark 式对话首页、多 Agent 光标飞入与独立逆向工作台是此前设计探索。原稿保存在 [2026-11-24 归档](../archive/2026-11-24-agentos-alignment/01-interaction.md)，不能据此重新开发旧导航。
 
 ## 13. Canvas 交互模型
 
@@ -452,53 +361,20 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 - 媒体与生成结果不随主题改色；画布网格、连线、选中描边随主题。
 - 每个视觉改动在两个主题下截图核对。
 
-## 16. Agent run 与 trace 的 UI 状态（与 [16 号提案](16-agent-video-pipeline.md) 一致）
 
-> 本节是交互规格；run / trace 的数据模型与权威（Runtime 保存 run → step → tool call → artifact → version → review round）以 16 号提案为准。被接受前为**设计目标**。
+## 16. Agent Run 与 Trace 的 UI
 
 ### 16.1 放置
 
-- **Iris 是 run 的主场**（2026-11-13 定案，覆盖 PR #45 的抽屉方案；2026-11-17 改为对话优先）：对话栏里 run 卡片展开的“运行”子面板按 run 显示**实时 trace**，计划卡显示 Step 清单与审批；画布上是同一份可见生产状态与 Agent 光标；顶部居中有 run 状态岛（§16.2）。
-- **Canvas Assistant drawer**：只显示 run 条与“在 Iris 中继续”（§12.9）。
-- **Agent 页**：不显示对话和 trace，最多只读“最近 run”跳转。
-- 外部 Agent 驱动时：其写入作为带 caller 徽标的 Step 与光标出现在 Iris；Canvas 只显示活动条与待确认项，对话留在外部 Agent（§6.2）。
+Canvas/Cut 展示实际素材、可见改动和状态；Drawer 展开对话、步骤、审批；Agent 页只显示连接与 Runtime 健康。Runtime 的 Run/Artifact 才是持久执行事实。
 
-### 16.2 run 状态岛（设计目标，参考 Inspora *dynamic release island*）
+### 16.2 状态与出口
 
-| 形态 | 内容 | 进入 / 切换 |
-| --- | --- | --- |
-| 收起 pill（34px 高） | run 名 · 当前 Step · 第 N 轮 · 进度扫光（填充 pill 底色）· 已花费 | 出现：expressive；进度：smooth 插值 |
-| 展开面板（点击 / 键盘 Enter） | Step 列表（每步 tool、caller、状态、耗时、产物缩略）、当前版本 vN、待确认项、“在对话中查看” | smooth；Step 逐条 snappy 淡入，间隔 30ms，最多 8 条 |
-| 待确认 | pill 变 sun 边，显示“需要确认 · 预计 ¥x” | expressive 一次 |
-| 完成 | 扫光填满 → 打勾 → 3s 后收为“已完成 vN · 打开” | 打勾 ≤ 300ms，无粒子 |
-| 失败 / 阻塞（block） | coral 边；“第 3 步失败：原因”；主动作“查看 / 重试此步” | 无抖动 |
+planned、running、waiting-approval、completed、failed、unknown 各自配合真实时间/任务 ID 与继续、取消、查询、重试或诊断操作。不要用永远旋转的动画掩盖未知提交。
 
-岛是浮动 chrome（玻璃头部 + 实底列表，DESIGN.md §9.2），可拖到画布四角，可收起为一个点；不遮挡选中节点（与选中节点包围盒相交时自动让位）。
+### 16.3 Trace
 
-### 16.3 trace 视图（Iris run 卡片的“运行”子面板）
-
-| 区域 | 内容 |
-| --- | --- |
-| run 头 | run 名、状态、轮次 `round 2/5`、预算 `已用 ¥12 / 上限 ¥40`、caller 分布 |
-| Step 行 | 状态图标 · tool 显示名（来自注册表）· caller 徽标（built-in / codex / claude-code / dsh / user，颜色同其光标）· 耗时 · 产物缩略 · 费用；hover 高亮画布元素，点击定位到节点 / 帧（§12.5） |
-| 分段进度 | 一个 run 一条横向分段条，每段一个 Step：灰 = 未开始、mint = 成功、coral 标记 = 失败、斜纹 = 运行中（参考 Inspora *tests visualised*） |
-| 版本与评审 | `v1 → v2 → v3` 链；每个版本下挂 ReviewRound：findings（时间点 / 片段、层、问题、修法）、结论 pass / revise / block、fixedBy |
-| 过滤 | caller、状态、仅看失败；chip 带计数 |
-
-状态与出口：
-
-| trace 状态 | 显示 | 出口 |
-| --- | --- | --- |
-| 无 run | 空态：一句话 + “在对话里说出要做什么” | 聚焦输入框 |
-| running | 实时追加 Step；新 Step 自动滚到可见，用户手动上滚后停止自动滚动并显示“有 N 条新步骤” | 停止 run；查看画布 |
-| awaiting_approval | 顶部固定确认卡（预算、范围），对话中同步出现 | 确认 / 修改 / 取消 |
-| failed step | 该行展开原因与建议 | 重试此步 / 跳过 / 停止 |
-| review: revise | 显示 findings 与将修改的片段（locked 片段带锁） | 接受修补 / 改意见 |
-| round limit / 连续两轮相同 | 停止并报告卡点 | 提高上限（需确认）/ 手动接管 |
-| 刷新恢复 | “正在恢复 run …”，读取后从最后未完成 Step 继续 | — |
-| 外部 caller 写入 | 新行带 caller 徽标即时出现（例如 CLI 提交的 user review） | — |
-
-现状：Canvas 抽屉的“运行日志”分区是 `AgentActivityPanel`（`view="log"`）的扁平列表，数据来自内存 200 条的 `useAgentActivityStore`，重启后清空、不按 run 分组（问题与改造见 §19.4）。
+默认按 Run → Step → Tool call → Artifact / Review 显示折叠的记录；展开能定位对应 Canvas 节点、Cut 帧段与宿主目标。模型自述不是已执行证据，不能用聊天正文替代回执。
 
 ## 17. 空态与加载
 
@@ -531,203 +407,12 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 3. 借鉴结论落到 [DESIGN.md](DESIGN.md)（视觉 / 动效 token）或本文（交互行为），不新建并列文档。
 4. 一致性检查表：每个新功能 × 用了哪档弹簧 × 是否用玻璃（且是否在允许位置）× 参考来源。
 
-## 19. 产品交互模式（设计目标）
 
-> 以下六项是**设计目标**，给出状态、转换、空 / 错误态与到现有代码的映射。实现时按 AGENTS.md 先改 contract 再改实现；涉及 run / trace 的部分以 [16 号提案](16-agent-video-pipeline.md) 被接受为前提。参考来源编号见 §20。
+## 19. 当前交互原则与可扩展方向
 
-### 19.1 视频制作流视图（pipeline flow）
+现有 Canvas/Cut/Drawer 是唯一创作与对话入口。后续按 P0/P1 接入结构化引用和独立 Context Card；再引入 Creative Proposal、逐帧审查、非破坏性结果写回与经确认的 Skill。
 
-目标：把 brief → 脚本 → 分镜 → 生成 → 渲染 → 评审轮次**画在画布上**（Iris 的产出面，§12），同一条 run 的实时 trace 在 Iris 对话栏的 run 卡片里；用户随时能看到“现在在哪一站、这一站产出了什么、下一站等什么”。
-
-**画布形态**：一个 run 是一个横向“流程带”（复用 `subgraph` 节点与 `batchId` 分组，不新建第二套图）：
-
-~~~text
-[Brief] → [Script] → [Shots ×N] → [Generate ×N] → [Render vN] → [Review r1…rK]
-   │          │           │              │               │              └─ findings 钉在成片时间轴上
-   └ artifact └ 三栏脚本   └ shot.index 排序 └ 每镜候选堆叠  └ 版本条 v1…vN
-~~~
-
-| 站点状态 | 视觉 | 转换 | 出口 |
-| --- | --- | --- | --- |
-| pending | 灰色站点、虚线入边 | 上一站成功 → ready | — |
-| ready | 实线入边、站点 hover 显示“运行此站” | 用户 / Agent 运行 → running | 跳过（需确认） |
-| running | 入边有流动点（1 个点，1.2s，减弱动效时静止）；站点内分段进度；执行它的 Agent 光标停在站点旁 | → succeeded / failed / awaiting | 停止此站 |
-| awaiting_approval | sun 边、费用徽标 | 确认 → running | 修改 / 取消 |
-| succeeded | mint 勾、产物缩略；站点宽度不变 | 下游变 ready | 重跑（产生新版本） |
-| failed | coral 边、原因一行 | 重试 → running | 跳过 / 停止 run |
-| stale | 上游改动后显示“已过期”（`workflow-node__stale-badge` 已实现） | 选择性重跑 | 保持旧结果 |
-| locked | 锁图标；修改需显式解锁并写入 trace | 解锁 → ready | — |
-
-- **评审轮次**：Review 站展开为横向轮次条 `r1 revise → r2 revise → r3 pass`；每条 finding 是成片时间轴上的钉（atSec / range），点击跳到该帧并在 Render 站显示 vN 与 vN-1 的对比（§19.3）。
-- **焦点跟随**：run 运行时，画布不自动移动视角；只在用户点击岛或 trace 行时用 smooth 平移到站点。
-- **空态**：无 run 时流程带不出现；Iris 首页示例卡“做一条产品宣传片”点击填入 brief 模板。
-- **错误态**：依赖缺失（ffmpeg / Remotion / WhisperX 未就绪）显示 `CAPABILITY_UNAVAILABLE` 的人话版 + “打开 Agent 页诊断”；不静默跳过站点。
-- **代码映射**：分组 `components/workflow/WorkflowNode.tsx`（`SubgraphFrameSurface`、batch 折叠）、`shotAssembly.ts`、`services/shotPlanning.ts`（`shot.index`）、`runState.ts`；节点 metadata 记 `runId` / `version`（16 号 §4.2）；trace 读取 `pipeline.run.get`（提案）。
-- **参考**：R1 dynamic release island（站点进度扫光）、R2 tests visualised（分段进度 + 失败标记 + 重跑修复）、R18 spreadsheet UI（脚本 / 分镜表的逐行揭示）、Figma F1（平移用弹簧、可打断）。
-
-### 19.2 Agent 计划与待办（run plan / step checklist / approvals）
-
-现状：**2026-11-20 已整体移除执行计划（任务清单）**——`iris_todo` 工具、`AgentTodoCard`、`agentTodo.ts` 与提示词里的清单规则都已删除，`flovart_todo` 只作弃用的无操作别名保留；以下为移除前的记录。原实现：模型通过 `iris_todo` 工具提交清单，`components/agent/AgentTodoCard.tsx` 只读渲染（pending / active / blocked / done 四态，active 用旋转图标）；付费 / 删除走 `AgentConfirmCard`；自动模式授权走 spend mandate（`agentSpendMandate.ts`）。
-
-问题：清单与 run 无关联（只是最近一次工具结果）；`active` 的旋转图标没有 reduced-motion 处理；卡片 12px 圆角与内联样式绕过 token；`--isl-line` 未定义；确认卡与清单分离，用户看不出“哪一步在等我”。
-
-设计：
-
-| 区块 | 内容 | 规则 |
-| --- | --- | --- |
-| Plan 卡（awaiting_approval） | 目标一句话 · 步骤预览（≤ 8 条，超出折叠）· 预计任务数 / 金额 / 最大评审轮数 · 将使用的模型 | 一次确认整个 run 预算（16 号 §4.1 费用规则）；主按钮“开始制作” |
-| Step 清单 | 每步：状态图标 · 标题 · caller · 耗时 · 产物数；`blocked` 行内显示原因与动作 | 清单项 = trace 的 Step 投影，不是模型自报；模型只能写“计划”，完成状态由命令边界回填 |
-| 行内审批 | 需要确认的步骤直接在该行展开确认（金额、范围、改动列表），与对话中的确认卡是同一个请求 | 任一处确认即生效，另一处同步（§4.3） |
-| 委派 | 某步可“交给外部 Agent”（例如 `capture.ui` 前的截图录屏），行内显示“Claude Code 正在处理”小岛 | 参考 R14 agent dashboard 的 Delegate → thinking pill |
-| 进度 | 头部 `3/8` + 分段条 | 新完成项打勾一次；不划掉正在读的行，已完成行降低对比度到 ink-soft（不删除线） |
-
-| 状态 | 主动作 | 出口 |
-| --- | --- | --- |
-| 草拟中（planning） | — | 取消 |
-| 待批准 | 开始制作 | 修改计划 / 取消；超时作废 |
-| 执行中 | — | 暂停 run；停止 |
-| 某步待确认 | 确认此步 | 跳过此步 / 停止 |
-| 某步阻塞 | 按原因：补素材 / 改参数 / 重试 | 跳过 / 停止 |
-| 预算将超 | 追加预算（需确认） | 在此停止 |
-| 完成 | 打开成片 / 归档 | 再来一轮评审 |
-
-空态：无计划时不渲染卡片（现状一致）。错误态：工具结果解析失败时显示“计划不可读，已忽略”，不让卡片消失后无提示。
-
-代码映射：`components/agent/agentTodo.ts`（解析）、`AgentTodoCard.tsx`、`AgentConfirmCard.tsx`、`agentConfirmCopy.ts`、`services/agentSpendMandate.ts`；run 关联依赖 16 号提案的 `run_steps`。
-
-### 19.3 素材管理：库、版本 v1→vN、对比、锁定、归档、拖到画布
-
-现状（已实现）：`components/studio/AssetLibraryBrowser.tsx`（文件夹 + 网格、标签筛选、`motion` 布局动画、批量管理 `BatchManageModal`、可拖拽）、`FolderTree.tsx`、`StudioMediaBrowser.tsx`；结果节点有 take 版本条（`OperationVersionStrip`，晚到显示“有新版本”）；批次有“设为主图”。“Agent 资产库尚未接入”为占位文案。
-
-设计：
-
-| 视图 | 交互 | 参考 |
-| --- | --- | --- |
-| 库 | 左侧文件夹树 + 右侧网格 / 表格切换（同一批记录在两种布局间以 smooth 重排，选中保持） | R6 admin dashboard、R13 Folders UI |
-| 文件夹预览 | hover / 打开文件夹时前 3 张缩略图从卡片内扇出（snappy，减弱动效时静态排列） | R9 interactive folder cards |
-| 筛选 | 类型 / 来源（上传、生成、run）/ 状态（final、locked、rejected）chip，带计数 | R3 UI dropdown filter（只取“状态 + 计数”） |
-| 版本条 | 素材详情底部 `v1 v2 … vN`；当前选中实心，晚到新版本带点；悬停预览缩略 | 现有 `OperationVersionStrip` 推广到素材 |
-| 对比 | 选两个版本 → 分屏滑杆（左右拖动分界）/ 并排 / 叠加差异；视频对比同步播放头，可锁定到某条 finding 的时间点 | Apple Feedback：状态就近 |
-| 锁定 | 版本或片段（镜头、声线、字体）可锁；锁定后 Agent 修补必须显式解锁并写 trace（16 号 §5） | — |
-| 废片 | 被否版本标 `rejected` 保留，默认隐藏，筛选可见，显示被否原因 | 16 号 §5“废片库” |
-| 归档 | run 完成后“归档”生成 final / spec / stems / rejected / reviews / manifest；进度卡显示文件数与大小 | R16 photo download UI |
-| 拖到画布 | 拖出时缩略图跟手（snappy），画布显示落点；松手 expressive 落定；拖入的是引用还是副本按来源语义（[10](10-canvas-workflow.md) §3） | Apple Motion：跟随手势 |
-
-| 状态 | 显示 | 出口 |
-| --- | --- | --- |
-| 空库 | “这里还没有资产” + 导入 / 从画布收集 | — |
-| 筛选无结果 | “没有匹配的资产” + 清除筛选 | 清除筛选 |
-| 本地文件夹失效 | 卡片灰化 + “重新定位”（按 ID，不按文件名猜） | 重新授权 |
-| 对比的两版不同规格 | 提示分辨率 / 时长不同，按较短者对齐 | 换版本 |
-| 解锁 | 二次确认，说明将影响哪些下游 | 取消 |
-| 归档失败 | 已写部分保留，列出失败文件 | 重试失败项 |
-
-### 19.4 Assistant drawer 改造（`IrisAgentPanel` / `AgentDrawerSections`）
-
-> 2026-11-13 放置定案后：下面“改造后的设计”整体用于 **Iris 对话栏**（§12.5，2026-11-17 起对话为主体）；Canvas 抽屉保留同一组件的轻量模式（对话 + run 条 + “在 Iris 中继续”，§12.9）。审计问题 D1–D12 对两者都成立。
-
-**现状审计（代码事实）**：
-
-| # | 问题 | 位置 |
-| --- | --- | --- |
-| D1 | 整个抽屉（含对话正文）是玻璃：`blur(24px) saturate(150%)`、卡片底 78% 透明；暗色用冷色 `rgba(28,29,34,.78)`；停靠卡片圆角 16px（token 上限 10px） | `styles/adaptive.css` `.compact-right-panel[data-docked='true']` |
-| D2 | 四个分区（对话 / 连接指引 / 连接状态 / 运行日志）藏在 Logo 下拉菜单里，没有可见的分区切换，“运行日志”难发现 | `AgentDrawerSections.tsx` `AgentLogoMenu` |
-| D3 | “连接指引 / 连接状态”属于 Agent 连接中心职责，与抽屉“只放上下文助手”的边界重叠 | 同上；`AgentHostPicker`、`AgentActivityPanel view="status"` |
-| D4 | 运行日志是扁平列表：不按 run 分组、内存 200 条、重启清空，`max-h-[420px]` 内嵌滚动造成双滚动 | `AgentActivityPanel.tsx`、`stores/useAgentActivityStore.ts` |
-| D5 | 工具调用消息默认可展开原始 JSON（`<pre>{JSON.stringify(detail)}</pre>`）；pending 用 `CircleAlert`（警告形）表示“等待执行” | `components/workflow/WorkflowAgentMessages.tsx` `ToolMessage` |
-| D6 | 运行中只有一行“Agent 正在处理...”，没有当前步骤 | `WorkflowAgentMessages` |
-| D7 | 命令显示名在组件内维护第二份中英映射 `COMMAND_LABELS`，违反 §3 | `AgentActivityPanel.tsx` |
-| D8 | 颜色与样式绕过 token：`#e5484d`、内联 `borderRadius: 12`、`rounded-xl`、未定义的 `--isl-line` | `AgentActivityPanel`、`AgentTodoCard` |
-| D9 | 硬编码中文：模式菜单说明“删除、付费生成…始终单独确认”、引用选择器“引用节点或我的素材”、发送 / 停止的 `aria-label` | `IrisAgentPanel.tsx` |
-| D10 | 待办卡、确认卡、ask 卡、分组横幅在消息与输入框之间各自堆叠，最多同时出现 4 张卡，挤压对话区 | `IrisAgentPanel.tsx` 1022–1060 行 |
-| D11 | 动效：`.compact-right-panel` 对 width 做 3.4% 过冲弹簧；状态图标 `animate-spin` 无减弱处理 | `styles/agentPanelLibtv.css`、`AgentTodoCard` |
-| D12 | 1207 行单组件持有 20+ 个 `useState`（会话、确认、ask、mandate、模式、引用、附件、模型、分组…），状态互相影响难以验证 | `IrisAgentPanel.tsx` |
-
-**改造后的设计**：
-
-~~~text
-┌ drawer 顶栏（玻璃）：项目名 · [对话 | 运行] 分段 · 会话历史 · 新建 · 收起
-├ run 条（有 run 时出现，实底）：岛的紧凑形态 —— 当前步骤 · 轮次 · 花费 · 展开
-├ 正文（实底，唯一滚动容器）
-│   对话：消息 · 工具摘要行（人话）· run 卡片（嵌在对话流中）
-│   运行：trace（§16.3）
-├ 待处理托盘（最多 1 张可见，其余计数）：确认 / 提问 / 计划 —— 按紧急度排队
-└ 输入区：附件 · @引用 · 模型 · 模式 · 发送/停止（同一位置）
-~~~
-
-| 改造 | 解决 | 映射 |
-| --- | --- | --- |
-| 顶栏可见分段 `对话 | 运行`；“连接指引 / 连接状态”移到 Agent 页，抽屉内只在断连时给一行“打开连接中心” | D2、D3 | `AgentDrawerSections` 的 `SECTIONS` 收为两项；`AgentHostPicker` 只在 Agent 页挂载 |
-| 顶栏玻璃、正文实底、停靠圆角 10px、暗色用暖色 | D1 | DESIGN.md §9.2 |
-| “运行”分区 = trace，按 run 分组，数据来自 Runtime（16 号），非 run 的零散操作归入“其他操作”折叠组 | D4 | `AgentActivityPanel` 改为读 run；`useAgentActivityStore` 降为实时缓冲 |
-| 工具消息默认一行人话摘要（来自注册表显示名 + 结果摘要），原始参数进“诊断”折叠；pending 用 `Clock` | D5、D7 | `ToolMessage`；显示名从 `tools/iris/registry.js` 元数据读 |
-| 运行中显示当前步骤（与岛同源），而不是“正在处理” | D6 | run 条 |
-| 待处理托盘：同一时刻只展开 1 张卡，按 `确认 > 提问 > 计划` 排序，其余显示“还有 2 项” | D10 | `pendingAsk`、`confirmation`、`todoItems`、`groupBanner` 合并为一个队列 |
-| token 化与 i18n | D8、D9 | DESIGN.md、`t()` |
-| 抽屉开合改 `--spring-smooth` 且只动 transform / opacity；所有旋转图标接 reduced-motion | D11 | DESIGN.md §14 |
-| 把会话、待处理队列、输入草稿拆成三个 reducer / hook，组件只组合 | D12 | 不新增 Manager 层（AGENTS §3），只是同文件内拆函数 |
-
-状态与出口：未连接 → 输入框只读提示 + “重试连接”；需要 Key → setup 卡（§6.6）；生成中 → 发送键变停止；断线 → run 条显示“已断开，任务在后台继续”；会话恢复 → 骨架消息 ≤ 3 条。
-
-参考：R1（岛）、R2（trace 分段）、R4（空态示例卡）、R14（委派小岛）、R10 fluid tooltip（顶栏图标按钮的跟随 tooltip 与快捷键）、Apple A2（材质分层）、Figma F3（浮动面板遮挡内容的教训）。
-
-### 19.5 画布节点：过时交互审计与现代化
-
-| # | 过时交互（现状） | 位置 | 现代化交互 |
-| --- | --- | --- | --- |
-| N1 | 图片工具（裁剪、滤镜、扩图、蒙版、拆分、旋转、宫格、标注、重打光、风格化、矢量化、移动、分镜、图层…）全部走 antd `Modal` 对话框，遮住画布与上下文 | `WorkflowImageToolDialogs.tsx`（601 行）、`WorkflowVideoToolDialogs.tsx`、`WorkflowAudioToolDialogs.tsx` | **就地编辑**：参数在节点旁的锚定 popover（玻璃 thick），几何类（裁剪 / 扩图 / 蒙版 / 移动）直接在节点画面上操作，Enter 应用、Esc 取消；只有破坏性“替换原图”才确认 |
-| N2 | 4 个工具（反推提示词、滤镜、扩图、蒙版）尚未迁入 Operation Registry，标签硬编码中文 | `nodeToolCatalog.ts` | 迁入 registry 后统一产出带生成记录的结果节点与 take 版本；标签来自 registry |
-| N3 | 失败只显示一个 18px 红色“!”徽标，原因藏在 `title` 悬停提示里；另有一段覆盖在媒体上的错误条 | `WorkflowNode.tsx` `workflow-node__error-badge` / `generation-error` | 节点底部状态条：图标 + 一行原因 + “重试 / 改参数”；原因可聚焦、可读屏；颜色用 `--isl-coral` |
-| N4 | Operation 节点状态文案在组件里写死中文（“旧配方结果 / 已停止 / 执行失败 / 已完成 / 执行中 / 待执行”），`Operation 配方缺失` 未翻译 | `OperationNodeCard` | 来自 i18n；状态用 §14.3 图标 + 文本 |
-| N5 | 版本条是一排 `v1 v2` 文本按钮，不能预览、不能对比 | `OperationVersionStrip` | 悬停版本即在节点画面上临时预览（松开恢复），长按 / 右键“与当前对比”打开 §19.3 对比 |
-| N6 | ~~多结果是同位叠放的 N 个节点，点堆叠选中整组，只剩组工具条~~（已改，2026-11-16） | `WorkflowAlternatesDock.tsx`、`batchAlternates.ts` | 首图是原节点，其余是它的备选：总数 ≤4 为首图后的斜叠卡片（可展开成 2 列网格），更多为节点下方网格（§13.3）；“设为首图”在展开格 / 网格的悬停操作与画廊里 |
-| N7 | ~~生成态：虚线框 + 2px 扫光无限循环 + 状态标签 2.4s 呼吸 + 透明度 2.2s 呼吸 + 整节点 1.8s 缩放呼吸；JS 动画绕过 reduced-motion~~（2026-11-16 已改，遗留 `.animate-card-neon-flow` 仍在 `styles/index.css`） | `WorkflowNode.tsx` → `WorkflowGenerationLoader.tsx`、`generationLoader.ts`、`styles/generation.css` | 已实现，见 §19.6“节点生成加载态”：网格（R20）+ 进度线（R21）+ 一行状态；阶段只来自真实信号；无百分比时为不确定短线；失败为贴底小卡 + 重试；减弱动效时全部静态 |
-| N8 | 视频节点需先点“加载视频播放器”才可播放 | `workflow-node__video-activate` | 保留懒加载（性能），但改为悬停即预取首帧 + 悬停播放静音预览，点击进入完整控件 |
-| N9 | 双击标题重命名，无可见提示 | `workflow-node__title` | 标题文字本身是可编辑字段（单击选中节点、再单击进入编辑），F2 重命名 |
-| N10 | 13px 方形缩放手柄（2px 边框、mint 填充）常驻 | `.workflow-resize` | 只在选中 / 悬停时出现，8px 圆点，命中区 24px |
-| N11 | 节点内分镜表（镜号 / 时长 / 场景 / 台词表格）在小节点里密集难读 | `ScriptNodeCard`、`WorkflowStoryboard.tsx` | 节点内只显示摘要（镜数、总时长、前 3 行），双击打开 Iris 逆向拆解风格的分镜视图；流式生成时逐行揭示（R18） |
-| N12 | hover 抬起：`.storyboard-shot-card:hover translateY(-2px)`、`.motion-surface:hover scale(1.015)` | `styles/motion.css` | 只换边框 / 背景（DESIGN.md §14.4） |
-| N13 | ~~生成信息角标（速度、Token、耗时、陈旧提示）是 4 个独立的 `blur(4px)` 小黑块~~（2026-11-16 已删除） | `workflow-node__generation-meta` 等 | 已合并进 §19.6 加载态底部的一行状态胶囊（传输明细 / 消息 + 耗时） |
-
-### 19.6 生成动效与进度
-
-阶段与视觉（从 `WorkflowNode` 的 `uploadStage`（probe / download / transcode / store）、`metadata.progress`、`generationLabel`、`elapsedSec` 扩展）：
-
-| 状态 | 节点内表现 | 动效 | 出口 |
-| --- | --- | --- | --- |
-| queued | 骨架画面（节点比例占位）+ “排队中 · 第 3 位”（有队列信息时） | 无 | 取消 |
-| submitting | 主按钮原位变“提交中”，不显示百分比 | 按钮内不确定指示器 | — |
-| running · 等待供应商（进度未知） | 骨架 + 单向扫光 + 计时 `00:42` | 扫光 1.4s；减弱动效时静态 | 停止 |
-| running · 进度已知 | 底部 2px 确定进度条 + 百分比；视频长任务另显示阶段（排队 → 生成 → 下载 → 转码 → 入库）与预计剩余（仅当供应商给出时） | 数值 smooth 插值，**不回退、不跳到 99% 停住** | 停止 |
-| streaming（文本 / 脚本） | 逐 token / 逐行出现；脚本表格逐行由模糊到清晰（R18） | 新行 snappy 淡入 | 停止（保留已生成部分） |
-| partial preview（图 / 视频） | 供应商返回中间帧时以低清预览替换骨架，角标“预览” | 交叉淡化 220ms | 停止 |
-| long-running（≥ 180s） | 追加一行“已等待较久，可继续等待或停止”（现有 `staleHint`） | 无 | 停止 / 后台继续 |
-| done | 结果由模糊到清晰（现有 `flv-gen-reveal` 680ms）；批量时候选依次落定，间隔 60ms | 结果揭示 + expressive 落定 | 重新生成 |
-| failed | 骨架变灰，底部状态条原因 + 重试 | 无抖动 | 重试 / 改参数 |
-| retrying | 状态条“第 2 次尝试”，保留上次失败原因可展开 | 同 running | 停止 |
-| canceled | “已停止”；若供应商可能计费，显示提示（§4.2） | 无 | 重新开始 |
-| unknown_submit | “正在确认是否已提交”，不允许重复提交 | 无 | 继续其他工作 |
-
-**节点生成加载态（已实现，2026-11-16）**：`components/workflow/WorkflowGenerationLoader.tsx` + `generationLoader.ts` + `styles/generation.css` `.flv-gen*`。
-
-- **网格**（参考 R20 Grid Reveal）：节点内铺满圆角小方块（`--isl-card` 方块、`--isl-surface-sunk` 缝、约 30% 格子用 `--isl-border` / `--isl-ink-ghost` 叠一档深浅），按**真实阶段**细分：准备 2×2 → 上传 / 排队 / 转码 4×4 → 生成 8×8 → 下载 / 写入 12×12；同一次生成内只前进不后退；格子小于 9px 的级别自动跳过（小节点少一级）。约 0.9s 一次深浅噪点重排（0.28s 交叉淡化），细分时格子从上一级尺寸收缩到位（0.2s 缓出）。用 canvas 绘制、`motion` 的 `animate()` 驱动，共享一个 0.9s 节拍。
-- **进度线**（参考 R21 Agent Handoff 的 thin progress line）：3px 胶囊轨道 + 8px 前沿圆点（3px 同色淡光晕），mint 渐变填充；**只显示上游真实百分比**（批量按张数），0.5s 缓出前进；没有百分比时是一段 28% 的短线在轨道上来回滑（1.6s），不画假进度。
-- **状态行**：底部左侧一枚胶囊：脉冲点 + 一行真实文案（传输明细 > 供应商消息 > 阶段名）+ 百分比（有时）+ 耗时（共享 100ms 计时器直接写 textContent，不触发渲染）；续接下载时前置“续接”小标。≥180s 时（≥240×190 的节点）追加“已等待较久”提示。
-- **尺寸降级（容器查询）**：节点高 <96px 只留进度线；宽 <180px 隐藏耗时与“续接”；≥240×190 放大间距与字号。
-- **完成**：loading → success 时同一实例切到完成态，方块按随机顺序在 0.6s 内淡出露出结果，进度线满格，状态“完成 · 总耗时”；约 1.1s 后整层淡出（减弱动效 0.6s、无动画）。
-- **失败**：贴底小卡（`--isl-card` 实底、coral 边）：× 图标 +“生成失败”+ 重试（下载失败时为“重新下载”，走原 `onRun` 续接逻辑）+ 两行原因。
-- **性能与减弱动效**：同屏最多 6 个节点跑网格闪动与不确定进度，其余静态；`prefers-reduced-motion` 时无节拍、无细分过渡、无滑动、无脉冲，结果直接出现。整节点不再缩放呼吸。
-
-**长视频任务进度卡**（多镜批量 / 渲染 / 归档）：在 run 岛展开面板与 trace 中显示环形或分段进度、`已完成 7 / 12 镜`、速度与剩余（有数据时）、失败数；完成时环变勾（R16 photo download UI）。
-
-**晚到结果（late result）**：
-- 已取消或已被新任务取代的任务返回结果时，作为新 take / 新版本挂在原节点版本条末尾，带“晚到”点；**不替换**用户当前选中的版本（[10](10-canvas-workflow.md) §3）。
-- 节点上出现一次性提示“有一个晚到的结果 · 查看”，3 秒后收为版本条上的点；不弹全局 toast。
-- 若节点已删除：结果进入素材库“未归属”筛选，不自动重建节点。
-
-**骨架与扫光规范**：骨架用 `--isl-surface-2` 实块、8px 圆角、与最终内容同尺寸；扫光是 `--isl-card` 50% 的 30° 渐变带，单向 1.4s，同屏最多 6 个扫光（其余静态），避免整屏闪烁。
-
-参考：G2 Carter Ogunsola（计数到 100 的进度）、R16 photo download UI（环形进度 + 计数 + 速度 + 剩余 + 完成打勾）、R1 dynamic release island（扫光填充 pill）、R18 spreadsheet UI（逐行模糊揭示）、R2 tests visualised（失败重跑的修复状态）、R12 glass recorder（按钮原位变成进行中 pill + 停止）、Apple A4 Progress indicators（尽量用确定进度、进度要匀速、能停止）、Figma F4（短过渡可以掩盖不可避免的延迟，但不能伪造进度）。
+旧的 Personal Agent 独立页、Crew / Director / Operator 必经编排、多 Agent 光标飞入式生产等属于历史候选，不构成当前代码任务。原稿见 [归档](../archive/2026-11-24-agentos-alignment/01-interaction.md)。
 
 ## 20. 参考与可借鉴交互
 
