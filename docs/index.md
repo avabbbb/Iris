@@ -25,7 +25,6 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [16 旧流水线提案迁移说明](design/16-agent-video-pipeline.md) | 历史流水线提案的迁移说明；原文已归档，实际能力以源码和 Support Matrix 为准 |
 | [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
 | [多模态 AIGC 评测平台计划](plans/aigc-eval-platform.md) | 在 `eval/` 内补 L4 题库：条目 / 生成 / 评分 Schema、场景 × 能力 × 难度 × dev/test/holdout、客观轨 grader 与稳定性撤回、可用 / 满意 / 惊喜率、结果库与静态看板、「设为首图」偏好事件（M0 已实现，口径以 eval.md §4.1 为准） |
 | [DSH 工作台计划](plans/dsh-workbench.md) | Iris 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（进行中：主仓库 dsh-plugin 已可用，独立仓库 / 市场未开始） |
@@ -58,7 +57,7 @@
 
 ## 4. 归档（只读）
 
-- [2026-11-24 AgentOS 定位清理](archive/2026-11-24-agentos-alignment/)：归档旧 Iris 个人 Agent tab、旧交互稿和视频流水线阶段提案，更新实际 Cut 与 Spatial Context/Proposal 的文档权威。
+- [2026-11-24 AgentOS 定位清理](archive/2026-11-24-agentos-alignment/)：旧 Iris 个人 Agent tab、交互稿和视频流水线提案已完整归档；原 16 号地址留有[迁移指引](design/16-agent-video-pipeline.md)，不再属于当前提案。
 
 - [2026-11-17 Iris 定位](archive/2026-11-17-iris/)：README 草稿（2026-11-03）、远景三条产品线（线 B / C 并入 Iris，蒸馏进 00 / 11-iris / 14）。逐份原因见该目录 README。
 - [2026-11-16 评测文档蒸馏](archive/2026-11-16-eval-distill/)：2026-11-11、11-12 两份 Agent / 工具链迭代记录；评测方法并入 eval/eval.md，遗留项并入 todo。
