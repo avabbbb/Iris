@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Iris — open-source AgentOS on an infinite canvas.</strong><br />
-  An open LibTV alternative where humans and coding agents edit the same live canvas; local-first, BYOK image/video models.
+  An agent-native creative production workspace: local-first Canvas, an editable Cut timeline, and agent tools for reviewable, non-destructive workflows.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 <p align="center">
   Open-source, local-first Workflow + Agent creative tool. The DaVinci Resolve Studio 21.1 host layer is in development (Experimental).<br />
-  Keep your edit in the host, let your Agent understand the context, and let Iris handle generation, references and durable candidates.
+  Create on the Canvas, edit in Cut, and use your agent to inspect context, compare candidates, and refine specific parts. Professional host integrations and skill distillation are evolving behind explicit verification gates.
 </p>
 
 <p align="center">
