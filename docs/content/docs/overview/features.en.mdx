@@ -9,7 +9,7 @@ Iris is currently a local-first, agent-native visual production workspace. Human
 | Surface | Responsibility | Boundary |
 | --- | --- | --- |
 | **Canvas** | GenAI generation and the base Workflow: nodes, assets, connections, generation, versions | Primary creation surface |
-| **Iris** (formerly Reverse) | All-in-one post-production assistant (personal agent). **Not available yet**: the tab is a coming-soon placeholder. Design target: a conversation-first web agent whose output lands on the Iris canvas, usable without any editor; optional local editor connectors (Resolve first, then Premiere and CapCut / 剪映) sync context so you don't upload. Hypit-style reference-video breakdown is one of its tools | Not a second Workflow authority; a chat with no canvas output is not Iris; never requires an editor connection |
+| **Cut** (internal view id still `reverse`) | In-browser video editor: multi-track timeline, subtitles, inspector, preview proxies, waveforms, MP4 export (WebCodecs, written to OPFS), export back to the canvas; the "Storyboard · Reverse" sub-view breaks a reference video into a shot table and can turn it into a canvas sub-graph; the built-in Agent edits the same project through `iris_cut_*` tools | `cutStore` is the only authority for the Cut project; needs a browser with WebCodecs; Resolve and other host context connectors are still design targets |
 | **Agent** | Agent connections and state: discover, prepare, inspect and switch local/external coding agents such as Codex and WorkBuddy | **Not a chat page**; does not embed the built-in Assistant |
 
 Canvas has a contextual right drawer: **Assistant / Context / History**. The built-in Assistant has no extra privilege over external agents and does not manage host installation or connection.

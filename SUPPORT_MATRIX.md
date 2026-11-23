@@ -15,6 +15,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行。Closed Beta 不作为主推路径 |
 | TeleAgent MCP + Skill projection | Experimental | stdio MCP handshake/tool/resource contract 与接入准备包；真实 TeleAgent client/import/NL tracer 未运行 |
+| DeepSeek Harness plugin（`dsh-plugin/`） | Experimental | 已验证 packed profile 安装、`--dump-config`、Host/Client 构建与 Cordis service lifecycle contract（见 `dsh-plugin/README.md`）；真实登录会话、真实 Harness 页面 tracer 和发布升级回滚未放行 |
 | CodeBuddy Code | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
 | Pi | Planned | stable Skill/CLI compatibility target；无本机登录 tracer |
 
@@ -25,16 +26,17 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**，同时是 Iris 的第一个上下文连接器（见下方 Iris 段）：优先验证 Blackmagic native MCP + Iris Skill / legacy `iris` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**，同时是第一个宿主上下文连接器（见下方 Cut 与宿主上下文连接器段）：优先验证 Blackmagic native MCP + Iris Skill / legacy `iris` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
 
-## Iris（个人 Agent）
+## Cut 与宿主上下文连接器
 
-Iris 是顶栏第二个 surface（原名 逆向 / Reverse，2026-11-17 改名）：对话优先、画布为产出面的全能后期助手。Web 版设计为不连任何宿主也完整可用；宿主连接器是可选增强。下表只记录当前证据，不代表已上线。
+顶栏第二个 surface 是 **Cut**（内部视图 id 仍为 `reverse`；2026-11-17 前叫 逆向 / Reverse，2026-11-17 至 11-20 曾叫 Iris）：浏览器内视频剪辑器。2026-11-17 规划的“对话优先的 Iris 个人 Agent tab”已归档，不再是该 tab 的目标。
 
 | Path | Status | Evidence / boundary |
 | --- | --- | --- |
-| Iris Web 个人 Agent | Planned | 顶栏 tab 目前是 coming-soon 占位（“优化中”，`App.tsx` `reverse-coming-soon`）；逆向拆解纯函数（`services/reverse/`）与 Canvas 子画布已实现，但不能据此宣称 Iris 可用 |
-| Resolve 上下文连接器 | Experimental（底层） | 复用上方 Resolve 行的 native MCP 路线；Iris 侧的只读上下文同步未实现，真实连接仍是 External Gate |
+| Cut 浏览器剪辑器（`components/cut/`、`services/cut/`） | 已实现（未单独认证） | 多轨时间线、字幕、属性、代理、波形、MP4 导出（Mediabunny / WebCodecs，写入 OPFS）与回画布；Vitest 覆盖编辑、时间线、字幕、导出、波形、Agent 工具与 Canvas ↔ Cut 联动（`tests/cut*.test.*`）。依赖 WebCodecs，`detectCutSupport` 不满足时显示不支持提示；真实浏览器大文件导出与跨浏览器表现未做发布级验收 |
+| Cut Agent 工具（`iris_cut_*`） | 已实现（未单独认证） | 与 UI 共用 `cutStore` 操作；经通用审批，删除类每次确认，委派回合按声明权限硬上限 |
+| Resolve 上下文连接器 | Experimental（底层） | 复用上方 Resolve 行的路线；只读上下文同步未实现，真实连接仍是 External Gate |
 | Premiere UXP 上下文连接器 | Planned | 复用 Premiere UXP 面板路线；未实现 |
 | CapCut 国际版草稿 | Planned | 草稿是否明文可读待验证；未实现 |
 | 剪映（中国版）草稿 | Blocked / 待验证 | 剪映 6.0+ 草稿加密（待验证），外部可能无法读取；不做破解，只走导出文件 / 上传 |

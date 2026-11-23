@@ -9,7 +9,7 @@ Iris 当前是 local-first、agent-native 的视觉制作工作台。人和 Codi
 | Surface | 当前职责 | 当前边界 |
 | --- | --- | --- |
 | **画布 Canvas** | GenAI 生成与 Workflow 基本盘：节点、素材、连线、生成与版本 | 当前主要创作面 |
-| **Iris**（原 逆向 Reverse） | 全能后期助手（Personal agent）。**当前不可用**：tab 是“优化中”占位。设计目标：Web 版对话优先、Iris 画布为产出面，不装剪辑软件也能用；可选连接本地剪辑软件（Resolve 先，Premiere、剪映 / CapCut 后续）同步上下文，免手动上传；Hypit 式参考视频逆向拆解是它的一组工具 | 不是第二份 Workflow 权威；没有画布产出的纯聊天页不算 Iris；不以连接剪辑软件为前提 |
+| **Cut**（内部视图 id 仍为 `reverse`） | 浏览器内视频剪辑器：多轨时间线、字幕、属性、预览代理、波形、MP4 导出（WebCodecs，写入 OPFS）、成片回画布；子页「故事版 · 逆向」把参考视频拆成镜头表并可转为画布子画布；内置 Agent 通过 `iris_cut_*` 工具操作同一个工程 | `cutStore` 是 Cut 工程的唯一权威；需要支持 WebCodecs 的浏览器；Resolve 等宿主上下文连接器仍是设计目标 |
 | **Agent** | Agent 连接与状态：Codex、WorkBuddy 等本地/外部 Coding Agent 的发现、准备、状态与切换 | **不是聊天页**，不嵌内置 Assistant |
 
 Canvas 旁边有右侧 contextual drawer：**Assistant / Context / History**。Assistant 是 Iris 内置助手；它不拥有比外部 Agent 更高的工具权限，也不承担 Host 连接管理。

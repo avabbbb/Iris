@@ -75,7 +75,7 @@ title: 后续待办
 - [ ] 现有媒体操作：补齐图片处理等尚未贯通的实际入口，统一来源与版本；减少重复 Prompt、引用数组和多处 Provider 参数处理。
 - [ ] 大图性能（剩余）：缩略图按需生成与离屏播放器暂停继续按实际性能问题优化；不先增加可替换画布端口或语义 LOD 平台。
 - [ ] Config 节点删除、Scene Prediction 与音频生成继续留作后续需求，按具体任务分别验证，不阻塞原生效果。
-- [ ] Iris Web（I0，[11 Iris](../../../design/11-iris.md)、[01 交互设计](../../../design/01-interaction.md) §11–§12）：替换当前“优化中”占位，做对话优先的个人 Agent，画布为产出面；多 Agent 光标、对话里的计划 / trace / 审批卡、预览与版本对比；Hypit 式拆解收为工具与面板。依赖 [16 号提案](../../../design/16-agent-video-pipeline.md) 的 run / trace。先按 01 §12 重画原型。
+- [ ] Spatial Context v1（P0 Turn Context + P1 Context Card，[11](../../../design/11-iris.md) §3、[00](../../../design/00-overview.md) §8）：消息与素材引用按真实会话 / 消息 ID 持久化；用户 Commit 后创建独立 `plugin:context-card`。原“Iris Web 个人 Agent（I0）”方案已归档（顶栏第二入口现为已实现的 Cut 剪辑器）。
 - [ ] Iris Resolve 只读上下文连接器（I1，[14](../../../design/14-creative-hosts.md) §7）：复用 Resolve native MCP，读当前项目、时间线与选择，免上传；写回仍只 Add to Media Pool。
 - [ ] Iris 连接器调研（I2）：Premiere UXP；CapCut 国际版草稿格式（待验证）；剪映 6.0+ 草稿加密与 11.7 起外部可读性（待验证），不做破解。
 - [ ] 内部标识迁移（单独 PR）：`canvasView: 'reverse'` → `'iris'`、`components/reverse/` 等目录改名，需持久化迁移与测试。
