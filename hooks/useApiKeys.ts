@@ -10,6 +10,7 @@ import {
 } from '../services/aiGateway';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { refreshAllProviderModels } from '../services/modelFetcher';
+import { fetchedModelToItem, refreshModelCapabilityFields } from '../services/modelThinkingLevels';
 import {
     isLikelyRunningHubModelEndpoint,
     normalizeRunningHubModelEndpoint,
@@ -51,8 +52,14 @@ const sanitizeRunningHubModelItems = (models?: ModelItem[]) => (models || [])
     })
     .filter((model): model is ModelItem => Boolean(model));
 
-const mergeFetchedModelsIntoKey = (key: UserApiKey, modelItems: ModelItem[]) => {
-    if (modelItems.length === 0) return key;
+const mergeFetchedModelsIntoKey = (key: UserApiKey, fetchedItems: ModelItem[]) => {
+    if (fetchedItems.length === 0) return key;
+    // 同 id 的已有条目：名字 / 能力以本次拉取为准，思考档位 / 上下文窗口整体刷新（拉取里没有的旧值清掉）。
+    const previousById = new Map((key.models || []).map(model => [model.id, model]));
+    const modelItems = fetchedItems.map(item => {
+        const previous = previousById.get(item.id);
+        return previous ? refreshModelCapabilityFields({ ...previous, ...item }, item) : item;
+    });
     if (key.provider !== 'runningHub') {
         return { ...key, models: modelItems, updatedAt: Date.now() };
     }
@@ -276,7 +283,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             setUserApiKeys(prev => prev.map(k => {
                 const fetched = results.get(k.id);
                 if (!fetched || fetched.length === 0) return k;
-                const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                const modelItems = fetched.map(fetchedModelToItem);
                 return mergeSuggestedProductRouteMappings(mergeFetchedModelsIntoKey(k, modelItems));
             }));
         }).catch(() => { /* silent background refresh failure */ });
@@ -316,7 +323,7 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
             .then(results => {
                 const fetched = results.get(nextKey.id);
                 if (fetched && fetched.length > 0) {
-                    const modelItems = fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                    const modelItems = fetched.map(fetchedModelToItem);
                     setUserApiKeys(prev => prev.map(k =>
                         k.id === nextKey.id ? mergeSuggestedProductRouteMappings(mergeFetchedModelsIntoKey(k, modelItems)) : k
                     ));

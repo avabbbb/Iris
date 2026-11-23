@@ -6,9 +6,9 @@ import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '.
 import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
 import {
-  AGENT_THINKING_LEVELS,
   DEFAULT_AGENT_THINKING_LEVEL,
   agentThinkingVersion,
+  availableThinkingLevels,
   clearReasoningUnsupported,
   reasoningFormatFor,
   isReasoningUnsupported,
@@ -17,6 +17,15 @@ import {
   writeAgentThinkingLevel,
   type AgentThinkingLevel,
 } from '../../services/agentThinking';
+import {
+  clampThinkingLevel,
+  fetchedModelToItem,
+  subscribeThinkingRegistry,
+  thinkingRegistryVersion,
+  type ModelThinkingInput,
+  type ResolvedModelThinking,
+} from '../../services/modelThinkingLevels';
+import { thinkingLevelText, thinkingSourceText } from './ThinkingLevelBadge';
 
 type Lang = 'en' | 'zho';
 const ui = (language: Lang, zho: string, en: string) => (language === 'en' ? en : zho);
@@ -31,37 +40,46 @@ function keyModels(key: UserApiKey): ModelItem[] {
   return text.length ? text : items;
 }
 
-const THINKING_LABEL: Record<AgentThinkingLevel, [string, string]> = {
-  off: ['不思考', 'Off'],
-  minimal: ['极简', 'Minimal'],
-  low: ['低', 'Low'],
-  medium: ['中', 'Medium'],
-  high: ['高', 'High'],
-};
+export function thinkingLevelLabel(level: AgentThinkingLevel, language: Lang, mode: ResolvedModelThinking['mode'] = 'effort'): string {
+  return thinkingLevelText(level, language, mode);
+}
 
-export function thinkingLevelLabel(level: AgentThinkingLevel, language: Lang): string {
-  return ui(language, THINKING_LABEL[level][0], THINKING_LABEL[level][1]);
+/** 存的档位就近夹到该模型可用档位（off 仍是 off）。 */
+function displayedThinkingLevel(model: string | ModelThinkingInput): AgentThinkingLevel {
+  const id = typeof model === 'string' ? model : model.id;
+  const stored = readAgentThinkingLevel(id);
+  if (stored === 'off') return 'off';
+  const { levels } = availableThinkingLevels(model);
+  const on = levels.filter(level => level !== 'off');
+  return clampThinkingLevel(stored, on.length ? on : levels);
 }
 
 /**
  * 模型胶囊上的思考强度后缀（「· 高」）：只在强度不是默认值、且模型支持时显示。
- * 逻辑与存储仍走 services/agentThinking（按模型记住、成为新的全局默认、不支持名单）。
+ * 显示的是就近夹到该模型可用档位后的那一档（与真正发出的请求一致）。
  */
-export function thinkingChipSuffix(model: string, language: Lang): string | null {
-  if (!model || isReasoningUnsupported(model)) return null;
-  const level = readAgentThinkingLevel(model);
-  return level === DEFAULT_AGENT_THINKING_LEVEL ? null : `· ${thinkingLevelLabel(level, language)}`;
+export function thinkingChipSuffix(model: string | ModelThinkingInput, language: Lang): string | null {
+  const id = typeof model === 'string' ? model : model.id;
+  if (!id || isReasoningUnsupported(id)) return null;
+  const level = displayedThinkingLevel(model);
+  if (level === DEFAULT_AGENT_THINKING_LEVEL) return null;
+  return `· ${thinkingLevelLabel(level, language, availableThinkingLevels(model).mode)}`;
 }
 
 /**
- * 该模型可选的思考强度（只改 UI，判定沿用 services/agentThinking 的规则）：
- * - 已被服务拒绝过思考参数（不支持名单）→ 没有可选强度，点模型直接选中；
- * - 「极简」只有 OpenAI / OpenRouter 真正接受，其余服务会被降成「低」，所以不单列。
+ * 该模型可选的思考强度，按模型数据决定（services/modelThinkingLevels：报错学到的 1 小时内 → /models API 字段 → pi-ai 注册表 → id 规则表）：
+ * - 已被服务拒绝过思考参数（不支持名单）或模型不思考 → 没有可选强度，点模型直接选中；
+ * - 必须思考的模型不列「不思考」；
+ * - 档位只来自规则表 / 默认值时，「极简」只对 OpenAI / OpenRouter 列出（其余服务会被降成「低」）。
  */
-export function supportedThinkingLevels(model: string, key: Pick<UserApiKey, 'provider' | 'baseUrl'>): AgentThinkingLevel[] {
-  if (!model || isReasoningUnsupported(model)) return [];
-  const acceptsMinimal = key.provider === 'openai' || reasoningFormatFor(String(key.provider || ''), key.baseUrl || '') === 'openrouter';
-  return AGENT_THINKING_LEVELS.filter(level => level !== 'minimal' || acceptsMinimal);
+export function supportedThinkingLevels(model: string | ModelThinkingInput, key: Pick<UserApiKey, 'provider' | 'baseUrl'>): AgentThinkingLevel[] {
+  const id = typeof model === 'string' ? model : model.id;
+  if (!id || isReasoningUnsupported(id)) return [];
+  const thinking = availableThinkingLevels(model);
+  if (!thinking.mandatory && thinking.levels.every(level => level === 'off')) return [];
+  const heuristic = thinking.source === 'rules' || thinking.source === 'default';
+  const acceptsMinimal = !heuristic || key.provider === 'openai' || reasoningFormatFor(String(key.provider || ''), key.baseUrl || '') === 'openrouter';
+  return thinking.levels.filter(level => level !== 'minimal' || acceptsMinimal);
 }
 
 /**
@@ -69,14 +87,16 @@ export function supportedThinkingLevels(model: string, key: Pick<UserApiKey, 'pr
  * ↑/↓ 移动，Enter / 空格选择，← / Esc 收起回到模型列表。宽面板浮在列表右侧（磨砂），≤340px 在该行下方内联展开。
  */
 function ThinkingSubmenu({ model, levels, language, onPick, onClose }: {
-  model: string;
+  model: ModelItem;
   levels: AgentThinkingLevel[];
   language: Lang;
   onPick: (level: AgentThinkingLevel) => void;
   onClose: () => void;
 }) {
-  const current = readAgentThinkingLevel(model);
+  const thinking = availableThinkingLevels(model);
+  const current = displayedThinkingLevel(model);
   const label = ui(language, '思考强度', 'Thinking effort');
+  const sourceTitle = `${label}（${ui(language, '来源', 'source')}：${thinkingSourceText(thinking.source, language)}）`;
   const ref = useRef<HTMLDivElement | null>(null);
   // 侧边模式（absolute）：顶部对齐所在行，但不超出模型浮层的上下边（浮层贴着输入框，向下会压到底栏）。内联模式不处理。
   useLayoutEffect(() => {
@@ -110,11 +130,11 @@ function ThinkingSubmenu({ model, levels, language, onPick, onClose }: {
     }
   };
   return (
-    <div ref={ref} className="agent-model-submenu flv-frost" role="menu" aria-label={`${label} · ${model}`} data-testid="agent-thinking-submenu" onKeyDown={onKeyDown}>
-      <p className="agent-model-submenu__title" aria-hidden="true"><Brain size={12} />{label}</p>
+    <div ref={ref} className="agent-model-submenu flv-frost" role="menu" aria-label={`${label} · ${model.id}`} data-testid="agent-thinking-submenu" data-thinking-source={thinking.source} onKeyDown={onKeyDown}>
+      <p className="agent-model-submenu__title" aria-hidden="true" title={sourceTitle}><Brain size={12} />{label}</p>
       {levels.map(level => (
         <button key={level} type="button" role="menuitemradio" aria-checked={level === current} tabIndex={-1} onClick={() => onPick(level)}>
-          <span>{thinkingLevelLabel(level, language)}</span>{level === current && <Check size={13} aria-hidden="true" />}
+          <span>{thinkingLevelLabel(level, language, thinking.mode)}</span>{level === current && <Check size={13} aria-hidden="true" />}
         </button>
       ))}
     </div>
@@ -156,7 +176,10 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   const label = ui(language, '选择模型', 'Choose model');
   // 思考强度变化时刷新胶囊后缀。
   useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
-  const effortSuffix = current ? thinkingChipSuffix(current.model, language) : null;
+  // pi-ai 注册表懒加载完成后按模型重算可用档位。
+  useSyncExternalStore(subscribeThinkingRegistry, thinkingRegistryVersion, thinkingRegistryVersion);
+  const currentInfo = current ? (current.key.models?.find(item => item.id === current.model) || current.model) : null;
+  const effortSuffix = currentInfo ? thinkingChipSuffix(currentInfo, language) : null;
 
   // 只保留一条 agent-text 映射，选哪个就是哪个，避免排序规则让别的 Key 抢先。
   const select = (keyId: string, modelId: string) => {
@@ -182,7 +205,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   const keyById = (keyId: string) => keys.find(key => key.id === keyId);
   const levelsFor = (keyId: string, modelId: string) => {
     const key = keyById(keyId);
-    return key ? supportedThinkingLevels(modelId, key) : [];
+    return key ? supportedThinkingLevels(keyModels(key).find(item => item.id === modelId) || modelId, key) : [];
   };
   /** 点模型 / Enter / →：有可选强度就展开子菜单（键盘时把焦点送进去），没有就直接选中。 */
   const activate = (keyId: string, modelId: string, viaKeyboard: boolean) => {
@@ -218,7 +241,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         setError(result.error || ui(language, '没有拉取到模型，请检查 URL 和 Key', 'No models found. Check the URL and key.'));
         return;
       }
-      const models: ModelItem[] = result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }));
+      const models: ModelItem[] = result.models.map(model => fetchedModelToItem(model));
       const capabilities = [...new Set<AICapability>(models.map(model => model.capability))];
       const firstText = models.find(model => model.capability === 'text') || models[0];
       // 新 Key 接管 Agent：先清掉其他 Key 的 agent-text 映射。
@@ -302,9 +325,9 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
                   {group.models.map(model => {
                     const selected = group.key.id === currentKeyId && model.id === current?.model;
                     const index = flat.findIndex(item => item.keyId === group.key.id && item.model === model);
-                    const levels = supportedThinkingLevels(model.id, group.key);
+                    const levels = supportedThinkingLevels(model, group.key);
                     const expanded = submenu?.keyId === group.key.id && submenu.modelId === model.id;
-                    const level = levels.length ? readAgentThinkingLevel(model.id) : null;
+                    const level = levels.length ? displayedThinkingLevel(model) : null;
                     return (
                       <div key={model.id} className="agent-model-picker__row" data-expanded={expanded || undefined}>
                         <button
@@ -319,12 +342,12 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
                           onClick={() => activate(group.key.id, model.id, false)}
                         >
                           <span><strong>{model.name || model.id}</strong>{model.name && model.name !== model.id && <small>{model.id}</small>}</span>
-                          {selected && level && level !== DEFAULT_AGENT_THINKING_LEVEL && <em className="agent-model-picker__effort">{thinkingLevelLabel(level, language)}</em>}
+                          {selected && level && level !== DEFAULT_AGENT_THINKING_LEVEL && <em className="agent-model-picker__effort">{thinkingLevelLabel(level, language, availableThinkingLevels(model).mode)}</em>}
                           {selected && <Check size={14} />}
                           {levels.length > 0 && <ChevronRight size={13} className="agent-model-picker__caret" aria-hidden="true" />}
                         </button>
                         {expanded && <ThinkingSubmenu
-                          model={model.id}
+                          model={model}
                           levels={levels}
                           language={language}
                           onPick={picked => { writeAgentThinkingLevel(model.id, picked); select(group.key.id, model.id); }}

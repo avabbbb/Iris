@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Agent 思考强度按模型动态：档位扩到 none(不思考) < minimal < low < medium < high < xhigh < max，可用档位按来源依次取——① 服务商 /models 字段（OpenRouter `reasoning.supported_efforts` / `mandatory` / `supported_parameters`、Anthropic `capabilities.effort`、Google `thinking`、`supported_reasoning_levels`、Kimi `supports_thinking_type` / `think_efforts.default_effort`），连同 `context_length` / `context_window` 与最大输出一起随模型保存，重新拉模型时刷新；② pi-ai 内置注册表（`getSupportedThinkingLevels`，懒加载分包）；③ `services/thinkingLevelFallback.ts` 的 id 规则表。发送前就近夹到模型支持的档位（距离相同取高档）；xhigh / max 按各家接口原样发送（OpenAI `reasoning_effort`、OpenRouter `reasoning.effort`、Anthropic 新模型 adaptive thinking + `output_config.effort`），不再压成 high；开关型模型发 `thinking.type=enabled` / `reasoning.enabled`。报错带「Supported values are …」时解析并记住 1 小时，用最近一档重试。Agent 模型选择器的思考强度子菜单（级联）、渠道模型选择、设置页模型列表只显示该模型可用的档位；胶囊后缀显示就近夹到后实际发送的档位。真实服务商接口未在沙箱里验证。
 - 桌面画布等 Runtime 任务改为长轮询（`runtime_task_wait`，UI 专用 IPC，不改 canonical 命令面）：任务一变化就返回，不再固定每 2 秒查一次；停止仍立即生效并取消上游任务。产物读取移到阻塞线程池，不占主线程。
 - 桌面产物回画布改走二进制 IPC：`runtime_artifact_read` 返回原始字节帧，不再把整段视频序列化成 JSON 数字数组再在前端转换；前端产物缓存在 16 条之外再加 512 MB 总字节上限。
 - 桌面 Runtime：任务入库后主动唤醒空闲 worker（不再最多多等约 2 秒的退避）；领单后由独立心跳线程续租，执行线程阻塞在 Provider 请求上时租约也不会过期被误接管；每次领单使用独立的所有者标记，旧执行者失去租约后无法再写回结果。这是扩展多 worker 的前置条件，本版仍是一个执行线程。

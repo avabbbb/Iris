@@ -5,9 +5,9 @@ import type { UserApiKey } from '../types';
 const { fetchModelsForProvider } = vi.hoisted(() => ({ fetchModelsForProvider: vi.fn() }));
 vi.mock('../services/modelFetcher', () => ({ fetchModelsForProvider }));
 
-import { AgentModelPicker, supportedThinkingLevels } from '../components/agent/AgentModelPicker';
+import { AgentModelPicker, supportedThinkingLevels, thinkingChipSuffix } from '../components/agent/AgentModelPicker';
 import { act } from 'react';
-import { markReasoningUnsupported, readAgentThinkingLevel, writeAgentThinkingLevel } from '../services/agentThinking';
+import { markReasoningUnsupported, readAgentThinkingLevel, writeAgentThinkingLevel, type AgentThinkingLevel } from '../services/agentThinking';
 
 const agentText = (routeId: string) => ({ target: { kind: 'runtime-capability' as const, capability: 'agent-text' as const }, routeId, order: 0 });
 
@@ -199,5 +199,19 @@ describe('AgentModelPicker', () => {
     expect(supportedThinkingLevels('ds', { provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' })).not.toContain('minimal');
     act(() => markReasoningUnsupported('ds'));
     expect(supportedThinkingLevels('ds', { provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' })).toEqual([]);
+  });
+
+  it('lists only the levels the model supports and maps a stored level to the nearest one', () => {
+    localStorage.removeItem('iris.agent.thinking');
+    const info = { id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', capability: 'text' as const, thinkingLevels: ['off', 'high', 'max'] as AgentThinkingLevel[], thinkingSource: 'api' as const };
+    const key = { provider: 'openai_compatible' as const, baseUrl: 'https://api.deepseek.com/v1' };
+    expect(supportedThinkingLevels(info, key)).toEqual(['off', 'high', 'max']);
+    // API 字段优先于「极简只给 OpenAI / OpenRouter」的规则。
+    expect(supportedThinkingLevels({ ...info, thinkingLevels: ['minimal', 'low'] }, key)).toEqual(['minimal', 'low']);
+    // 存的「中」就近夹到「高」，胶囊后缀与实际发送一致。
+    act(() => writeAgentThinkingLevel('deepseek-v4-pro', 'medium'));
+    expect(thinkingChipSuffix(info, 'zho')).toBe('· 高');
+    act(() => writeAgentThinkingLevel('deepseek-v4-pro', 'max'));
+    expect(thinkingChipSuffix(info, 'zho')).toBe('· 最大');
   });
 });

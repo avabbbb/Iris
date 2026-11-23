@@ -7,6 +7,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { UserApiKey, AIProvider, AICapability, ModelItem, ProductModelMode, ApiPricingRule, ApiBudgetPolicy, RouteMappingBinding, RouteMappingTarget, RuntimeRouteCapability } from '../types';
 import { ChannelModelPicker } from './settings/ChannelModelPicker';
+import { ThinkingLevelBadge } from './agent/ThinkingLevelBadge';
 import {
     DEFAULT_PROVIDER_MODELS,
     validateApiKey,
@@ -17,6 +18,7 @@ import {
 import { parseApiKeyText } from '../utils/apiKeyImport';
 import { formatCost, type KeyUsageSummary } from '../utils/usageMonitor';
 import { fetchModelsWithCache, type FetchedModel } from '../services/modelFetcher';
+import { fetchedModelToItem, refreshModelCapabilityFields } from '../services/modelThinkingLevels';
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
@@ -415,7 +417,12 @@ type ProviderPreset = {
 
 function mergeModelItems(existing: ModelItem[], incoming: ModelItem[]): ModelItem[] {
     const seen = new Set(existing.map(item => item.id.trim().toLowerCase()));
-    const merged = [...existing];
+    // 已有条目保留名字和手动能力，但思考档位 / 上下文窗口以本次拉取为准。
+    const incomingById = new Map(incoming.map(item => [item.id.trim().toLowerCase(), item]));
+    const merged = existing.map(item => {
+        const fresh = incomingById.get(item.id.trim().toLowerCase());
+        return fresh ? refreshModelCapabilityFields(item, fresh) : item;
+    });
     for (const item of incoming) {
         const key = item.id.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
@@ -547,6 +554,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const [showKeyModal, setShowKeyModal] = React.useState(false);
     // 模型管理
     const [editModels, setEditModels] = React.useState<ModelItem[]>([]);
+    // 模型芯片上的思考档位标签跟随界面语言（t 已按当前语言解析）。
+    const thinkingBadgeLanguage = /[\u4e00-\u9fff]/.test(t('settingsExtra.keyDialog.setDefaultModel')) ? 'zho' : 'en';
     const [editDefaultModel, setEditDefaultModel] = React.useState('');
     const [showModelPicker, setShowModelPicker] = React.useState(false);
     const [editPricingRules, setEditPricingRules] = React.useState<ApiPricingRule[]>([]);
@@ -748,7 +757,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         }
 
         const detectedModelItems: ModelItem[] = result.models?.length
-            ? result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }))
+            ? result.models.map(fetchedModelToItem)
             : [];
         // 「验证并更新」与自动拉取的列表合并，不覆盖手填模型和内置预设。
         const finalModels = mergeModelItems(editModels, detectedModelItems);
@@ -919,7 +928,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     setBaseUrl(result.effectiveBaseUrl);
                 }
                 // 自动填充到编辑模型列表
-                const fetchedItems: ModelItem[] = result.models.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                const fetchedItems: ModelItem[] = result.models.map(fetchedModelToItem);
                 // 合并而不是覆盖：保留手填模型和内置预设，拉取结果只追加新 id。
                 setEditModels(prev => mergeModelItems(prev, fetchedItems));
                 setEditDefaultModel(prev => prev || fetchedItems[0]?.id || '');
@@ -1637,6 +1646,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                                     : isDark ? 'bg-[#1B2029] text-[#98A2B3]' : 'bg-[#F2F4F7] text-[#667085]'
                                             }`}>
                                                 <button type="button" onClick={() => setEditDefaultModel(m.id)} title={t('settingsExtra.keyDialog.setDefaultModel')}>{m.name || m.id}</button>
+                                                {(!m.capability || m.capability === 'text') && <ThinkingLevelBadge model={m} language={thinkingBadgeLanguage} />}
                                                 <button type="button" onClick={() => handleRemoveModel(m.id)} title={t('settingsExtra.keyDialog.removeModel', m.name || m.id)} aria-label={t('settingsExtra.keyDialog.removeModel', m.name || m.id)} className="ml-0.5 opacity-60 hover:opacity-100">×</button>
                                             </span>
                                         ))}

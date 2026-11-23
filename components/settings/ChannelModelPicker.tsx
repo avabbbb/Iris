@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import type { AICapability, ModelItem } from '../../types';
 import type { FetchedModel } from '../../services/modelFetcher';
 import { useListboxKeyboard } from '../../hooks/useListboxKeyboard';
+import { fetchedModelToItem, refreshModelCapabilityFields } from '../../services/modelThinkingLevels';
+import { ThinkingLevelBadge } from '../agent/ThinkingLevelBadge';
 
 // 选择渠道模型：搜索、手动增加、拉取 /models、新获取/已有两栏、全选/取消、按模型指定能力
 interface ChannelModelPickerProps {
@@ -38,7 +40,7 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
   const fresh = useMemo<ModelItem[]>(() => {
     const seen = new Set(existingIds);
     const list: ModelItem[] = [];
-    for (const item of [...manual, ...fetched.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }))]) {
+    for (const item of [...manual, ...fetched.map(fetchedModelToItem)]) {
       if (seen.has(item.id)) continue;
       seen.add(item.id);
       list.push(item);
@@ -46,8 +48,14 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
     return list;
   }, [existingIds, fetched, manual]);
 
+  const fetchedById = useMemo(() => new Map(fetched.map(model => [model.id, model])), [fetched]);
+  // 已有模型如果这次也拉到了，思考档位 / 上下文窗口跟着刷新。
+  const refreshedExisting = useMemo(() => existing.map(item => {
+    const hit = fetchedById.get(item.id);
+    return hit ? refreshModelCapabilityFields(item, hit) : item;
+  }), [existing, fetchedById]);
   const visibleFresh = useMemo(() => fresh.filter(item => matches(item, query)), [fresh, query]);
-  const visibleExisting = useMemo(() => existing.filter(item => matches(item, query)), [existing, query]);
+  const visibleExisting = useMemo(() => refreshedExisting.filter(item => matches(item, query)), [refreshedExisting, query]);
 
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev);
@@ -82,7 +90,7 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
   const capabilityOf = (item: ModelItem): AICapability | '' => capabilityOverrides[item.id] || item.capability || '';
 
   const confirm = () => {
-    const next = [...existing, ...fresh]
+    const next = [...refreshedExisting, ...fresh]
       .filter(item => selected.has(item.id))
       .map(item => {
         const capability = capabilityOverrides[item.id] || item.capability;
@@ -107,6 +115,7 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
             <div key={item.id} {...listbox.getOptionProps(offset + index)} aria-selected={selected.has(item.id)} className={`flex items-center gap-2 border-b border-[var(--isl-border)] px-3 py-1.5 last:border-b-0${listbox.activeIndex === offset + index ? ' bg-[var(--isl-surface-2)]' : ''}`}>
               <input type="checkbox" aria-label={item.id} checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               <span className="min-w-0 flex-1 truncate text-xs text-[var(--isl-ink)]" title={item.id}>{item.name || item.id}</span>
+              {(!item.capability || item.capability === 'text') && <ThinkingLevelBadge model={item} />}
               <select
                 aria-label={'能力 ' + item.id}
                 value={capabilityOf(item)}

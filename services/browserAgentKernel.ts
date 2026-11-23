@@ -65,7 +65,8 @@ import {
   type AgentCompactionSettings,
 } from './agentCompaction';
 import { agentMemoryStoreBackend } from '../stores/useAgentMemoryStore';
-import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
+import { availableThinkingLevels, buildReasoningParams, effectiveAgentThinkingLevel, normalizeThinkingLevel, resolveRequestThinkingLevel, thinkingLevelAfterRejection, type AgentThinkingLevel } from './agentThinking';
+import { loadThinkingRegistry, type ModelThinkingInput } from './modelThinkingLevels';
 
 // ---------------------------------------------------------------------------
 // 会话持久化：localforage 存 InMemorySessionStorage 的 metadata + entries
@@ -210,6 +211,8 @@ export interface BrowserAgentTextRoute {
   timeouts?: Partial<{ firstChunkMs: number; idleMs: number; retries: number; retryBaseMs: number }>;
   baseUrl: string;
   apiKey: string;
+  /** 模型条目里的思考档位 / 上下文字段（来自 /models），决定可用档位与请求体形状。 */
+  modelInfo?: ModelThinkingInput;
 }
 
 export function resolveBrowserAgentTextRoute(keys: UserApiKey[]): BrowserAgentTextRoute | null {
@@ -222,6 +225,7 @@ export function resolveBrowserAgentTextRoute(keys: UserApiKey[]): BrowserAgentTe
     baseUrl: first.baseUrl,
     apiKey: first.key.key,
     ...(first.key.streamUsage === 'request' ? { streamUsage: 'request' as const } : {}),
+    ...(() => { const info = first.key.models?.find(item => item.id === first.model); return info ? { modelInfo: info } : {}; })(),
   };
 }
 
@@ -426,12 +430,12 @@ export function stripImageParts(messages: Array<Record<string, unknown>>): Array
  * 其余按服务映射（见 agentThinking.buildReasoningParams）。
  */
 export function buildBrowserAgentRequestBody(
-  route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
+  route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl' | 'modelInfo'>,
   context: { systemPrompt?: string; messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
   thinkingLevel: AgentThinkingLevel = 'off',
   options: { textOnly?: boolean } = {},
 ): Record<string, unknown> {
-  const reasoning = buildReasoningParams(thinkingLevel, route);
+  const reasoning = buildReasoningParams(thinkingLevel, route, availableThinkingLevels(route.modelInfo ?? route.model));
   const messages = toOpenAIMessages(context.messages, {
     reasoningEcho: reasoningEchoFor(route),
     emptyReasoningContent: requiresEmptyReasoningContent(route),
@@ -535,9 +539,12 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
     };
     // pi-agent-core 把 state.thinkingLevel 作为 options.reasoning 传进来（off 时为 undefined）。
     const requested = normalizeThinkingLevel((options as { reasoning?: unknown } | undefined)?.reasoning);
-    let thinkingLevel: AgentThinkingLevel = requested !== 'off' && isReasoningUnsupported(route.model) ? 'off' : requested;
+    let thinkingLevel: AgentThinkingLevel = 'off';
     const userSignal = options?.signal;
     void (async () => {
+      // 就近夹到该模型可用的档位（平局往高）；已知不支持时为 off。没有 /models 数据时先等注册表（只加载一次）。
+      if (requested !== 'off' && !route.modelInfo?.thinkingLevels?.length) await loadThinkingRegistry().catch(() => undefined);
+      thinkingLevel = resolveRequestThinkingLevel(route.modelInfo ?? route.model, requested);
       // 每次尝试一个新的 AbortController（不复用已 abort 的控制器）；用户停止通过 userSignal 级联。
       let attemptController: AbortController | undefined;
       const onUserAbort = () => attemptController?.abort(userSignal?.reason);
@@ -578,11 +585,11 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
             let response = await request(thinkingLevel);
             if (!response.ok && thinkingLevel !== 'off') {
               const body = await response.clone().text().catch(() => '');
-              if (isReasoningRejection(response.status, body)) {
-                // 该模型不接受思考参数：记住并去掉参数重试一次；选择器随后显示「不支持」。
-                markReasoningUnsupported(route.model);
-                thinkingLevel = 'off';
-                response = await request('off');
+              // 报错列出 Supported values：记住 1 小时并用最近档重试；只说不支持思考参数：记住并去掉参数重试。
+              const next = thinkingLevelAfterRejection(route.model, thinkingLevel, response.status, body);
+              if (next !== null) {
+                thinkingLevel = next;
+                response = await request(next);
               }
             }
             if (!response.ok && sentImages) {
