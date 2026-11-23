@@ -380,8 +380,8 @@ planned、running、waiting-approval、completed、failed、unknown 各自配合
 
 | 场景 | 现状（代码） | 规范 |
 | --- | --- | --- |
-| Iris 首页 | coming-soon 占位（`App.tsx`，“优化中”） | §12.1：标题 + 输入框 + 叠放示例卡（点击只填入）+ 最近对话；无宿主连接时不出现连接提示 |
-| Canvas 抽屉空会话 | `AgentEmptyState`：标题 + 4 个快捷入口（感知画布、爆款预设、上传故事、批量优化） | 保留为轻量入口；多步类入口（爆款预设、上传故事改编）改为“在 Iris 中开始”；入口列表来自 Skill 注册表 |
+| Cut 空时间线 | 现有 `CutPage` / `CutEditor` | 提供导入画布素材、打开已有项目或退出；不新增个人 Agent 对话首页 |
+| Canvas 抽屉空会话 | `AgentEmptyState`：标题 + 4 个快捷入口（感知画布、爆款预设、上传故事、批量优化） | 保留为轻量入口；需要多步执行时继续使用同一 Drawer/Run；快捷入口应按真实 Skill 能力提供，不能跳到旧个人 Agent 页 |
 | 未配置 AI 服务 | 抽屉内 `agent-setup-card` + “添加 API Key” | 保留“需要时才配置”（§6.6），配置后回到原输入 |
 | 空画布 | `WorkflowStartScreen` | 一句话 + 三个起点（导入素材 / 从模板 / 让 Assistant 开始）；可选静态线稿插画，不循环动画 |
 | 空素材库 | “这里还没有资产” / “没有匹配的资产” | 区分“空”和“筛选无结果”，后者给“清除筛选” |
@@ -428,7 +428,7 @@ planned、running、waiting-approval、completed、failed、unknown 各自配合
 | R16 | [Photo download UI design](https://www.inspora.design/posts/photo-download-ui-design)（@RaminNasibov） | 半透明卡片：点阵环形进度 + “1,077 / 2,481” + 速度 / 剩余，完成变勾 | 长视频任务 / 批量生成 / 归档进度卡（§19.6） | P0 |
 | R18 | [spreadsheet UI](https://www.inspora.design/posts/spreadsheet-ui)（@Nomandsign） | prompt 提交后空表格被一道模糊扫过，逐行变清晰并填入状态标签 | 脚本 / 分镜流式生成（§19.1、§19.6）、表格骨架 | P0 |
 | R12 | [glass recorder](https://www.inspora.design/posts/glass-recorder)（@kaolti） | 圆形麦克风按钮拉伸成录音 pill，内含计时与停止 | 生成按钮原位变进行中 pill + 停止；语音输入 | P1 |
-| R4 | [onboarding for Anything](https://www.inspora.design/posts/onboarding-for-anything)（@jaydwivedi_） | 叠放的示例 prompt 卡依次上浮到前排 | Iris 首页与抽屉空态的示例卡（§12.1、§17） | P1 |
+| R4 | [onboarding for Anything](https://www.inspora.design/posts/onboarding-for-anything)（@jaydwivedi_） | 叠放的示例 prompt 卡依次上浮到前排 | 仅作为 Drawer 空态的可选灵感；旧 Iris 首页不再实现 | P1 |
 | R6 | [admin dashboard](https://www.inspora.design/posts/admin-dashboard)（@desdivj） | 同一批用户记录在表格与卡片视图之间重排，筛选与状态标签不动 | 素材库网格 ↔ 表格（§19.3）、trace 列表 ↔ 时间线 | P1 |
 | R8 | [digital card packs](https://www.inspora.design/posts/digital-card-packs)（@Yassshhu） | 撕开卡包，卡片扇形展开并带倾斜落定 | 批量候选完成时“发牌”扇出（克制版，无彩纸）（§19.5 N6） | P1 |
 | R9 | [interactive folder cards](https://www.inspora.design/posts/interactive-folder-cards)（@damienghader） | 打开文件夹时内容缩略图从卡片扇出，出现小关闭钮 | 素材库文件夹预览（§19.3） | P1 |
