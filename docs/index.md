@@ -1,33 +1,38 @@
 # Iris 文档地图
 
-四类：**current truth**（当前产品与系统的唯一依据）→ **提案**（未接受）→ **指南与记录**（使用、进度、开发日志）→ **归档**（只读历史）。支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
+四类：**current truth**（当前产品与系统的唯一依据）→ **提案 / 计划**（未接受或进行中）→ **指南与记录**（使用、进度、质量记录）→ **归档**（只读历史）。支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
-产品地图：顶栏 **Canvas｜Cut｜Agent**。Canvas 负责无限画布、素材、生成与审片；**Cut 已是视频剪辑器**；Agent 负责模型/运行时/外部 Harness 连接。内置 Agent 的对话和 Spatial Context 通过现有 Canvas Assistant Drawer 展开。长期产品定位是 Agent-native Creative Production Workspace / OS，见 [00](design/00-overview.md) 与 [11](design/11-iris.md)。
+产品地图：**Iris** 是开源、本地优先的无限画布 AgentOS（2026-11-20 由 Flovart 更名）。顶栏三个入口 **画布 Canvas｜Cut｜Agent**：Canvas 是无限画布、生成节点与 Workflow；Cut 是已实现的浏览器内视频剪辑器（内部视图 id 仍为 `reverse`）；Agent 是 Runtime / Provider / 外部 Harness / Skill 的连接与状态中心。内置 Agent 对话在 Canvas 右侧的 Assistant Drawer，不是第四个顶栏。详见 [00](design/00-overview.md) §3。
 
-## 1. Current truth（`docs/design/`；以 00、01、DESIGN 与模块文档为准）
+## 1. Current truth（`docs/design/`，上限 12 份，见 AGENTS.md §9）
 
 | 文档 | 内容 |
 | --- | --- |
-| [00 总体设计](design/00-overview.md) | 产品一句话、三个 surface 与交接、原则、关键决策、状态归属、路线图、对外口径、术语 |
-| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、当前 Canvas/Cut/Drawer 交互、Spatial Context v1、Proposal/审片、宿主上下文目标、Canvas 交互、run / trace、参考先行、交互模式、参考表；[可点击原型](design/prototypes/index.html) |
-| [DESIGN.md](design/DESIGN.md) | 视觉与动效 token（Refero 式分层）：mood、颜色、字体、按钮、图标、间距、层级与玻璃、圆角、组件、底层逻辑、Do & Don't、动效（三档弹簧） |
+| [00 总体设计](design/00-overview.md) | 一句话定位、三个 surface 与状态权威、设计原则、关键决策（含历史 ADR 摘要）、状态归属、路线图 P0–P5、对外口径、术语、品牌兼容标识 |
+| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、当前 Canvas / Cut / Drawer 交互、Spatial Context v1、Proposal / 审片、宿主上下文目标、run / trace、参考先行、交互模式；[可点击原型](design/prototypes/index.html)（原型仍是改名前版本） |
+| [DESIGN.md](design/DESIGN.md) | 视觉与动效系统（取自 `styles/`、`components/`）：颜色、字体、间距、圆角、层级与玻璃、组件、奶蛙、Canvas / Cut / Agent 布局、动效、弹性布局 |
 | [10 Canvas / Workflow](design/10-canvas-workflow.md) | 可见生产图、mutation、素材语义、分镜 / 锚点 / 拼接等制作机制 |
-| [11 Cut / Creative AgentOS](design/11-iris.md) | Cut 已有视频编辑器、Drawer 统一 Agent 入口、Spatial Context、Creative Proposal、可选宿主与 Skill Distillation |
-| [12 Agent](design/12-agent.md) | Skill + CLI、MCP 投影、Agent 连接与状态中心、内置 Agent 的放置、安全边界 |
+| [11 Cut 与 Iris Creative AgentOS](design/11-iris.md) | 现有架构（Canvas / Cut / Agent / Drawer / Runtime）与标注清楚的路线：Spatial Context、Creative Proposal、Resolve、Skill Distillation |
+| [12 Agent](design/12-agent.md) | Skill + CLI、MCP 投影、Agent 连接与状态中心、内置 Agent、安全边界 |
 | [13 Generation & Runtime](design/13-generation-runtime.md) | 一条生成路径、Provider 路由、任务与计划卡、素材版本、流式与媒体用量 |
-| [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果；Iris 宿主上下文连接器（Resolve → Premiere → 剪映 / CapCut） |
-| [15 Web, Community & Extension](design/15-web-community-extension.md) | 网站后端、社区、浏览器导入、发行 |
+| [14 Creative Hosts](design/14-creative-hosts.md) | 宿主优先级（Resolve 首发）、Resolve 产品流程、原生效果（AE / PR / PS / OFX）、当前源码与缺口、宿主上下文连接器（设计目标） |
+| [15 Web, Community & Extension](design/15-web-community-extension.md) | 网站后端（现为全静态 + 无状态 Worker）、社区、浏览器导入扩展、安装与发行 |
 | [20 质量与治理](design/20-quality-and-governance.md) | 证据分级、评测、文档结构与规则 |
+| [references.md](design/references.md) | 设计参考登记：哪个部件借了哪件外部作品 |
 
-实现附录（在代码目录内）：[Resolve 21.1 Product & UI Spec](../integrations/studio/resolve/PRODUCT_UI_SPEC.md)、[Studio host packages](../integrations/studio/README.md) 与各宿主 `*_REAL_HOST_CHECKLIST.md`、[Workflow CLI](../skills/iris/commands/workflow.md)、[数据存储](content/docs/backend/backend-database.mdx)。
+[16 Agent 视频流水线](design/16-agent-video-pipeline.md) 已是归档存根（代码注释仍引用该路径），全文见 [archive/2026-11-24-agentos-alignment](archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md)。
 
-## 2. 提案（PROPOSAL / 进行中的计划，不是 current truth）
+架构决策：[ADR · Cut 视频编辑器引擎](adr/cut-editor.md)（Mediabunny + OpenCut classic UX，2026-11-20 accepted）。
 
-| 文档 | 内容 |
-| --- | --- |
-| [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
-| [多模态 AIGC 评测平台计划](plans/aigc-eval-platform.md) | 在 `eval/` 内补 L4 题库：条目 / 生成 / 评分 Schema、场景 × 能力 × 难度 × dev/test/holdout、客观轨 grader 与稳定性撤回、可用 / 满意 / 惊喜率、结果库与静态看板、「设为首图」偏好事件（M0 已实现，口径以 eval.md §4.1 为准） |
-| [DSH 工作台计划](plans/dsh-workbench.md) | Iris 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（进行中：主仓库 dsh-plugin 已可用，独立仓库 / 市场未开始） |
+实现附录（在代码目录内）：[Resolve 21.1 Product & UI Spec](../integrations/studio/resolve/PRODUCT_UI_SPEC.md)、[Studio host packages](../integrations/studio/README.md) 与各宿主 `*_REAL_HOST_CHECKLIST.md`、[Workflow CLI](../skills/iris/commands/workflow.md)、[数据存储](content/docs/backend/backend-database.mdx)、[DSH 插件](../dsh-plugin/README.md)、[浏览器扩展](../extension/README.md)。
+
+## 2. 提案与进行中的计划（不是 current truth）
+
+| 文档 | 状态 | 内容 |
+| --- | --- | --- |
+| [多模态 AIGC 评测平台](plans/aigc-eval-platform.md) | 进行中（M0 已在 `eval/aigc/`） | L4 题库、生成 / 评分 Schema、客观轨 grader、结果库；口径以 [eval.md](../eval/eval.md) §4.1 为准 |
+| [DSH 工作台](plans/dsh-workbench.md) | 进行中（`dsh-plugin/` 可用，独立仓库 / 市场未开始） | Iris 作为 DeepSeek Harness 工作台，DSH Agent 通过工具操作画布 |
+| [真实操作录制与剪辑 Hub](plans/recordly-capture-hub.md) | 草案，未实现 | Recordly 连接器 → Rust 录制 + 截图伴生工具 → 视频制作 Hub；许可证边界（Recordly AGPL） |
 
 ## 3. 指南与记录
 
@@ -42,28 +47,26 @@
 - [后续待办](content/docs/progress/todo.mdx)
 - [待测试确认](content/docs/progress/pending-test.mdx)
 
-质量与开发日志：
-- [评测体系总说明 eval.md](../eval/eval.md)：五层评测对象、规则 / LLM-as-a-Judge / 实验三层方法、六层漏斗 Rubric、Auto Rubrics、四步归因、三阶段上线治理；规则层跑法见 [eval/README](../eval/README.md)
+评测与质量记录：
+- [评测体系总说明 eval.md](../eval/eval.md)：五层评测对象、规则 / LLM-as-a-Judge / 实验三层方法、Rubric、归因、上线治理；规则层跑法见 [eval/README](../eval/README.md)
 - [真实 API 验收步骤](quality/real-api-acceptance.md)：导入 → 计划卡 → 提交 → 查询 → 保存 → 播放 → 导出 → 刷新重读
-- [2026-11-16 Agent 可靠性](quality/2026-11-16-agent-reliability.md)：中止文案、流式 start、卡住检测与重试、系统提示词、DeepSeek 缓存计数、运行中插话、按节点 rebase、`--title` 简写、无文本线路凭据卡；mock / real 前后基准
-- [2026-11-16 会议室现场评测](quality/2026-11-16-meeting-room-field-test.md)：网页端从配 Key 到出图的完整现场记录与问题清单
-- [2026-11-16 评测体系与 LLM-as-a-Judge](quality/2026-11-16-eval-judge.md)：eval.md 落地、执行成功率四段、Judge 层、`node.run --wait-seconds`、DSH / Skill 清理
-- [2026-11-16 多结果改为首图节点 + 备选](quality/2026-11-16-batch-alternates.md)：拖走批次后原位残留（退出动画继承无限循环）的根因与修复、旧叠放批次迁移、斜叠卡片 / 网格 / 画廊
-- [2026-11-15 DSH 链接错误与连接面板 UI](quality/2026-11-15-dsh-connection-ui.md)：链接错误分类、状态卡死、连接指引 / 状态 / 运行日志弹性布局
-- [2026-11-15 基础功能评测](quality/2026-11-15-basic-function-eval.md)：Agent 经 CLI 驱动画布，trace、定位与修复记录
-- [2026-11-03 浏览器插件 × 网页画布](blog/2026-11-03-extension-web-canvas-bridge.md)
+- 仍含未分诊问题的现场记录（问题进 todo 后归档）：
+  - [2026-11-16 Agent 可靠性](quality/2026-11-16-agent-reliability.md)：流式、重试、插话、中止、按节点 rebase；“未完成 / 后续”一节
+  - [2026-11-16 内置 Agent 模拟用户实测](quality/2026-11-16-builtin-agent-sim.md)：只经内置 Agent 面板操作的四个场景与问题分级
+  - [2026-11-16 会议室现场评测](quality/2026-11-16-meeting-room-field-test.md)：托管站从配 Key 到出图的现场记录与问题清单
 
-法律：[隐私政策](PRIVACY_POLICY.md) / [中文](PRIVACY_POLICY.zh-CN.md)、[服务条款](TERMS_OF_SERVICE.md) / [中文](TERMS_OF_SERVICE.zh-CN.md)。
+法律：[隐私政策](PRIVACY_POLICY.md) / [中文](PRIVACY_POLICY.zh-CN.md)、[服务条款](TERMS_OF_SERVICE.md) / [中文](TERMS_OF_SERVICE.zh-CN.md)、[安全策略](../SECURITY.md)。
 
 ## 4. 归档（只读）
 
-- [2026-11-24 AgentOS 定位清理](archive/2026-11-24-agentos-alignment/)：旧 Iris 个人 Agent tab、交互稿和视频流水线提案已完整归档；原 16 号地址留有[迁移指引](design/16-agent-video-pipeline.md)，不再属于当前提案。
+[归档索引 archive/README.md](archive/README.md) 逐份列出每个归档文档是什么、为什么归档、被什么取代。按批次：
 
-- [2026-11-17 Iris 定位](archive/2026-11-17-iris/)：README 草稿（2026-11-03）、远景三条产品线（线 B / C 并入 Iris，蒸馏进 00 / 11-iris / 14）。逐份原因见该目录 README。
-- [2026-11-16 评测文档蒸馏](archive/2026-11-16-eval-distill/)：2026-11-11、11-12 两份 Agent / 工具链迭代记录；评测方法并入 eval/eval.md，遗留项并入 todo。
-- [2026-11-13 设计语言与文档树清理](archive/2026-11-13-design-refresh/)：原 30 竞品机制复刻、31 Notion 式紧凑 UI、32 流式用量（蒸馏进 10 / DESIGN.md / 13）；LibTV 对标两份、计划卡设计稿（已实施）、0.3.0 内测清单、DSH 表单文案、沉浸式翻译调研、面试演示场景。逐份原因见该目录 README。
+- [2026-11-24 文档整理](archive/2026-11-24-docs-refresh/)：已修复的 11-15 / 11-16 质量记录、更名前的插件开发日志。
+- [2026-11-24 AgentOS 定位对齐](archive/2026-11-24-agentos-alignment/)：旧 11-iris（Personal Agent tab）、旧 01 交互全文、16 视频流水线能力矩阵。
+- [2026-11-17 Iris 定位](archive/2026-11-17-iris/)：README 草稿、远景三条产品线。
+- [2026-11-16 评测文档蒸馏](archive/2026-11-16-eval-distill/)：11-11、11-12 两份 Agent / 工具链迭代记录。
+- [2026-11-13 设计语言与文档树清理](archive/2026-11-13-design-refresh/)：30 / 31 / 32 号设计、LibTV 对标、计划卡设计稿、0.3.0 内测清单等。
 - [2026-10-19](archive/2026-10-19/)：Beta 评估。
 - [2026-10-07 重构归档](archive/2026-10-07/)：旧主设计、ADR、开发契约、品牌迁移、维护资料、RC 证据。
-- [更早的归档](archive/)
 
 历史文档、旧报告与 Git 历史只解释“当时为什么”，不能推翻上面的 current truth。
