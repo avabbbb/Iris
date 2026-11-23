@@ -76,19 +76,19 @@ Agent 活动条（仅 Agent 工作时）→ Connection → Current Clip → Tool
 
 ## 7. Iris 宿主上下文连接器（设计目标）
 
-Iris（顶栏第二个 surface，个人 Agent，见 [11-iris](11-iris.md)）在 Web 上独立可用；宿主连接器是**可选增强**：连上后 Iris 同步剪辑工程上下文，用户不用手动导出、上传。没有连接器时 Iris 不阻塞、不提示“请先连接”。
+Iris 通过现有 Canvas Assistant Drawer 与 Cut 编辑器独立完成日常创作。宿主连接器是**可选增强**：用户明确授权后，按当前真实 API 能力读取剪辑软件上下文，带回同一个创作工程与 Agent Turn；不连接 Resolve 也能使用 Canvas/Cut。原独立 Personal Agent tab 方案见历史归档，当前职责见 [11 Cut / Creative AgentOS](11-iris.md)。
 
 | 顺序 | 宿主 | 通道 | 起步能力 | 状态 |
 | --- | --- | --- | --- | --- |
-| 1 | DaVinci Resolve Studio 21.1 | Blackmagic native MCP / Scripting（与 §2 第一宿主同一通道） | 只读：当前项目、时间线、选择、Media Pool 素材、标记 | 设计目标；底层 native MCP 连接是 Experimental（见 SUPPORT_MATRIX） |
+| 1 | DaVinci Resolve Studio 21.1 | 官方 native MCP 或同一 Iris Resolve adapter 下经真实 API 验证的 Workflow Integration / Scripting 路径 | 只读：当前项目、时间线、选择、Media Pool 素材、标记 | 设计目标；底层 native MCP 连接是 Experimental（见 SUPPORT_MATRIX） |
 | 2 | Premiere Pro | 当期官方 UXP | 只读：序列、选择、素材、标记 | Planned |
 | 3 | CapCut 国际版 | 本地草稿文件 | 只读草稿结构；草稿是否明文**待验证** | Planned |
 | 3 | 剪映（中国版） | 本地草稿文件 | 剪映 6.0+ 草稿加密（**待验证**；有说法称 11.7 起外部完全不可读，**待验证**）。不做破解或逆向加密；读不到时只走导出文件 / 上传 | Blocked（待验证） |
 
 规则：
 - **只读起步**：连接器先只读上下文；Iris 的产物先落到画布比较、选定，写回宿主仍走 §3 的分级（Resolve P0 只 Add to Media Pool，P1 新轨道，P2 Replace / Commit）。
-- **显式带入**：带入的上下文以“上下文快照”附在用户消息上，可见、可移除（交互见 [01](01-interaction.md) §12.11）；不在后台静默读取整个工程。
+- **显式带入**：带入的上下文以“上下文快照”附在用户消息上，可见、可移除（交互见 [01](01-interaction.md) §12.8）；不在后台静默读取整个工程。
 - **本地优先**：工程上下文只在本机读取，按需交给用户选定的模型；凭据不进宿主工程、Skill、日志或素材 metadata（AGENTS §5）。
-- **一套实现**：连接器复用 §5 的 `integrations/studio/` adapter 与 native MCP，不为 Iris 另建第二套 Resolve MCP 或 Scripting wrapper。
-- **核心主张**（来自 2026-11-15 远景草案，已归档）：Agent 读完整工程上下文（图层、合成、关键帧、标记、素材），输出可编辑的工程改动，而不是烤死的成片；每一步可撤销、可比较、可回溯。长期方向包括 AE / PS 内的 UXP 面板（如静止系 MAD：节拍 → 合成标记 → 可编辑关键帧，一个撤销组）；AE UXP 的时间点与 API 覆盖（2026-11-15 记录为“MAX 2026 公测、2027 Q2 GA，CEP 2028-12 默认关闭”）**待核实**，在核实前 AE 维持 §2 的 Experimental 暂停扩张。
+- **一套实现**：能力发现和契约归一在现有 `integrations/studio/resolve/` adapter；native MCP 与原生 Workflow Integration/Scripting 可作为经过实际验证的不同读取通道，但不建立互相漂移的第二套数据模型、权限规则或写入命令。
+- **核心主张**（来自 2026-11-15 远景草案，已归档）：Agent 按能力发现读取受支持的工程上下文（可见图层、合成、关键帧、标记、素材等；不保证全部私有参数可读），输出可编辑的工程改动，而不是烤死的成片；每一步可撤销、可比较、可回溯。长期方向包括 AE / PS 内的 UXP 面板（如静止系 MAD：节拍 → 合成标记 → 可编辑关键帧，一个撤销组）；AE UXP 的时间点与 API 覆盖（2026-11-15 记录为“MAX 2026 公测、2027 Q2 GA，CEP 2028-12 默认关闭”）**待核实**，在核实前 AE 维持 §2 的 Experimental 暂停扩张。
 - Resolve 实现附录（[PRODUCT_UI_SPEC](../../integrations/studio/resolve/PRODUCT_UI_SPEC.md)、[ORCHESTRATION_CONTRACT](../../integrations/studio/resolve/ORCHESTRATION_CONTRACT.md)、[真实宿主清单](../../integrations/studio/RESOLVE_REAL_HOST_CHECKLIST.md)）同时适用于 Iris 的 Resolve 连接器。
