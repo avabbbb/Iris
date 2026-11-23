@@ -2,17 +2,17 @@
 
 四类：**current truth**（当前产品与系统的唯一依据）→ **提案**（未接受）→ **指南与记录**（使用、进度、开发日志）→ **归档**（只读历史）。支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
-产品地图：顶栏 **画布 Canvas**（GenAI 生成与 Workflow 基本盘）｜**Iris**（全能后期助手 · Personal agent：对话优先、画布为产出面，Web 独立可用，可选连接本地剪辑软件同步上下文；原名 逆向，当前为故事版 v1：项目素材 + 同一个 Agent 对话，素材与画布同一份数据）｜**Agent**（Agent 连接与状态管理）。Canvas + Agent 是 Workflow 生产工具。详见 [00](design/00-overview.md) §3.1。
+产品地图：顶栏 **Canvas｜Cut｜Agent**。Canvas 负责无限画布、素材、生成与审片；**Cut 已是视频剪辑器**；Agent 负责模型/运行时/外部 Harness 连接。内置 Agent 的对话和 Spatial Context 通过现有 Canvas Assistant Drawer 展开。长期产品定位是 Agent-native Creative Production Workspace / OS，见 [00](design/00-overview.md) 与 [11](design/11-iris.md)。
 
-## 1. Current truth（`docs/design/`，共 11 份，上限 12，见 AGENTS.md §9）
+## 1. Current truth（`docs/design/`；以 00、01、DESIGN 与模块文档为准）
 
 | 文档 | 内容 |
 | --- | --- |
 | [00 总体设计](design/00-overview.md) | 产品一句话、三个 surface 与交接、原则、关键决策、状态归属、路线图、对外口径、术语 |
-| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、Iris 个人 Agent 工作区（对话首页、对话栏 + 画布产出面、多 Agent 光标、飞入组装、trace 同步、预览、版本对比、宿主上下文连接器）、Canvas 交互、run / trace、参考先行、交互模式、参考表；[可点击原型](design/prototypes/index.html) |
+| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、当前 Canvas/Cut/Drawer 交互、Spatial Context v1、Proposal/审片、宿主上下文目标、Canvas 交互、run / trace、参考先行、交互模式、参考表；[可点击原型](design/prototypes/index.html) |
 | [DESIGN.md](design/DESIGN.md) | 视觉与动效 token（Refero 式分层）：mood、颜色、字体、按钮、图标、间距、层级与玻璃、圆角、组件、底层逻辑、Do & Don't、动效（三档弹簧） |
 | [10 Canvas / Workflow](design/10-canvas-workflow.md) | 可见生产图、mutation、素材语义、分镜 / 锚点 / 拼接等制作机制 |
-| [11 Iris](design/11-iris.md) | Iris = 全能后期助手（Personal agent）的定位与现状；Hypit 架构复刻的逆向拆解（作为工具与面板）、转为 Canvas 子画布 |
+| [11 Cut / Creative AgentOS](design/11-iris.md) | Cut 已有视频编辑器、Drawer 统一 Agent 入口、Spatial Context、Creative Proposal、可选宿主与 Skill Distillation |
 | [12 Agent](design/12-agent.md) | Skill + CLI、MCP 投影、Agent 连接与状态中心、内置 Agent 的放置、安全边界 |
 | [13 Generation & Runtime](design/13-generation-runtime.md) | 一条生成路径、Provider 路由、任务与计划卡、素材版本、流式与媒体用量 |
 | [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果；Iris 宿主上下文连接器（Resolve → Premiere → 剪映 / CapCut） |
@@ -25,7 +25,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场，2026-11-17 改名 Iris）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
+| [16 旧流水线提案迁移说明](design/16-agent-video-pipeline.md) | 历史流水线提案的迁移说明；原文已归档，实际能力以源码和 Support Matrix 为准 |
 | [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
 | [多模态 AIGC 评测平台计划](plans/aigc-eval-platform.md) | 在 `eval/` 内补 L4 题库：条目 / 生成 / 评分 Schema、场景 × 能力 × 难度 × dev/test/holdout、客观轨 grader 与稳定性撤回、可用 / 满意 / 惊喜率、结果库与静态看板、「设为首图」偏好事件（M0 已实现，口径以 eval.md §4.1 为准） |
 | [DSH 工作台计划](plans/dsh-workbench.md) | Iris 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（进行中：主仓库 dsh-plugin 已可用，独立仓库 / 市场未开始） |
@@ -57,6 +57,8 @@
 法律：[隐私政策](PRIVACY_POLICY.md) / [中文](PRIVACY_POLICY.zh-CN.md)、[服务条款](TERMS_OF_SERVICE.md) / [中文](TERMS_OF_SERVICE.zh-CN.md)。
 
 ## 4. 归档（只读）
+
+- [2026-11-24 AgentOS 定位清理](archive/2026-11-24-agentos-alignment/)：归档旧 Iris 个人 Agent tab、旧交互稿和视频流水线阶段提案，更新实际 Cut 与 Spatial Context/Proposal 的文档权威。
 
 - [2026-11-17 Iris 定位](archive/2026-11-17-iris/)：README 草稿（2026-11-03）、远景三条产品线（线 B / C 并入 Iris，蒸馏进 00 / 11-iris / 14）。逐份原因见该目录 README。
 - [2026-11-16 评测文档蒸馏](archive/2026-11-16-eval-distill/)：2026-11-11、11-12 两份 Agent / 工具链迭代记录；评测方法并入 eval/eval.md，遗留项并入 todo。
