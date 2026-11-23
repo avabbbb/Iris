@@ -1,128 +1,175 @@
 # AGENTS.md
 
-本文件约束 Iris 的 AI / 自动化开发。优先级：系统 / 开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
+给在本仓库工作的 Coding Agent（Codex、Claude Code、Copilot 等）的操作手册。优先级：系统 / 开发者指令 > 用户当前明确要求 > 本文件 > 其他项目文档。用户新确认的决定覆盖旧稿；归档文档与 Git 历史不能反过来决定当前需求。回答用中文，并区分 **已实现 / 已验证 / 设计目标 / 假设**。
 
-## 0. 品牌
+## 0. 先读什么
 
-- 对外产品名统一为 **Iris**（2026-11-20 由 Flovart 更名；更早的 2026-10 前旧代号也叫 Iris）。顶栏第二个 surface 2026-11-17–11-20 曾叫 Iris，现在叫 **Cut**（内部 `canvasView: 'reverse'` 不变）；旧文档里“Iris surface / 个人 Agent / Iris tab”指的就是现在的 Cut。
-- 兼容（2026-11-20 更名）：Agent 工具 `flovart_*` 保留为 `iris_*` 的弃用别名；`VITE_FLOVART_*` / `FLOVART_*` 环境变量作为 `VITE_IRIS_*` / `IRIS_*` 的回退；浏览器 localStorage / IndexedDB 与 `~/.flovart` 首次启动时复制到新名字（`utils/legacyStorageMigration.ts`、`tools/iris/legacy-home.js`），旧数据本版本不删除；`flovart.avabbbb.com` 在过渡期仍是受信 origin。线上协议与持久化格式标识（`flovart:` 模型 id 与事件名、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*` 头、`data-flovart-*`、`__FLOVART_*__`、`com.flovart.*`、`flovart://`、npm 包 `@flovart/*`）有意保留，改它们是独立迁移。
-- canonical 仓库为 `avabbbb/Iris`；仓库或协议迁移不混入普通品牌清理。归档与更名前的视频可保留原名并说明背景。
+| 任务 | 读 |
+| --- | --- |
+| 任何任务 | 本文件；文档地图 [docs/index.md](docs/index.md) |
+| 产品定位、状态归属、路线图 | [docs/design/00-overview.md](docs/design/00-overview.md) |
+| Canvas / Cut / Agent 职责与 AgentOS 路线 | [docs/design/11-iris.md](docs/design/11-iris.md) |
+| 交互行为 | [docs/design/01-interaction.md](docs/design/01-interaction.md) |
+| 视觉、动效、组件 | [docs/design/DESIGN.md](docs/design/DESIGN.md) |
+| 模块细节 | `docs/design/10`（Canvas）`12`（Agent）`13`（生成 / Runtime）`14`（宿主）`15`（Web / 扩展）`20`（质量） |
+| 能不能对外说“支持” | **只看** [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) |
+| 评测方法 | [eval/eval.md](eval/eval.md) |
+| 外部 Agent 怎么操作 Iris | `skills/iris/SKILL.md`（canonical Skill） |
 
-## 1. 工作方式：遵循 OpenAI GPT-6.2 工程提示建议
+小改动只读相关文件，不必通读整套文档。变化中的 SDK、宿主 API、模型能力和许可证必须核对官方资料与实际证据。
 
-优先完成用户已授权的工作；只有关键决定会改变范围、不可逆数据、费用或上线行为时才询问。复用既有类型、工具和业务函数，避免只为抽象而添加 Manager/Facade、第二套 Harness 或冗余 Agent 编排。小改动只查相关文件并跑相应验证；真实宿主、发布、费用相关变更才扩大检查范围。提供真实验证结果，标明未运行的测试。
+## 1. 产品一句话
 
-按任务读取文档：产品定位、状态归属和路线见 `docs/design/00-overview.md`；当前 Canvas/Cut/Agent 职责与宿主 / Skill 路线见 `docs/design/11-iris.md`；交互见 `docs/design/01-interaction.md`；视觉见 `docs/design/DESIGN.md`；能力认证只看 `SUPPORT_MATRIX.md`。不要让每个小改动都强制读完整套文档。仓库历史和 archive 不得反过来决定当前需求。变化中的 SDK、第三方宿主 API、模型能力和许可证必须核对官方资料与实际证据。
+**Iris：开源、本地优先的无限画布 AgentOS**（tagline「保留你的原片，多一层创意」）。人和可插拔的 Agent（内置模型或外部 Codex / Claude Code / DSH）在同一份可见状态上理解素材、提出修改、经审批执行、留下可追溯的产物与 run，再把验证过的流程沉淀为 Skill。“一个人拥有小型剪辑团队的能力”是愿景，不是当前能力或效率承诺。
 
-## 2. 产品定位与职责
+顶栏严格为 **Canvas｜Cut｜Agent**（中文 画布｜Cut｜Agent）：
 
-**Iris 是开源、local-first、BYOK 的 Agent-native Creative Production Workspace / OS。** 创作者和可插拔 Personal Agent 共同理解素材与已有工程、制定创作意图、预览修改、非破坏性制作、比较候选，并把被验证的流程沉淀为可复用 Skill。“一个人拥有小型剪辑团队的能力”是长期愿景，不能冒充当前效果或吞吐量承诺。
+| 入口 | 是什么 | 状态权威 |
+| --- | --- | --- |
+| **Canvas** | 无限画布、生成节点、素材 / 版本、Workflow | Browser Workflow（`components/workflow/store.ts`）；修改带 `projectId + expectedRevision + mutationId` |
+| **Cut** | **已实现的浏览器视频剪辑器**（时间线、字幕、属性、代理、导出）+ 子页「故事版 · 逆向」 | `services/cut/cutStore.ts`；UI 与 `iris_cut_*` 工具共用同一批操作 |
+| **Agent** | Runtime、Provider / 模型、外部 Harness、Skill 的连接与状态中心 | 不存第二份对话或工程 |
+| Assistant Drawer（Canvas 右侧，**不是**第四个顶栏） | 内置 Agent 对话、引用、工具调用、审批 | 会话归内置 Runtime 或外部 Harness |
 
-核心循环：**工程上下文 → 可审查 Proposal → 受控执行 → 真实 Artifact / Run Trace → 精确返工 → 经用户批准的 Skill**。Agent 可以来自内置模型或外部 Codex、Claude Code、DSH 等；Iris 不重造通用云电脑、跨 Agent 会话数据库或原生剪辑引擎。
+**不要构建**：第四个顶栏、第二个 Canvas、聊天消息铺满画布、统一多 Agent 会话数据库、第二套 Workflow / Provider / Task / Session Store、“万能 Resolve API”、默认上传整张画布、未经许可的付费生成或破坏性写入。
 
-当前顶栏严格为 **Canvas｜Cut｜Agent**：
-- **Canvas**：现有无限画布、GenAI 生成、Workflow、素材与候选版本；未来承载 Spatial Context Card 与可视化评审。
-- **Cut**：**已实现的视频剪辑器**（时间线、素材、字幕、编辑、预览与导出），不是旧文档中“尚未上线的个人 Agent tab”。UI 和 Agent 复用 `services/cut/cutStore.ts`；不另存一份 Cut 工程。
-- **Agent**：Runtime、Provider/模型、外部 Harness、Skill、连接状态与诊断，不新建聊天工作区。
-- **Canvas Assistant Drawer**：当前内置 Agent 的对话、选中素材上下文与操作入口；不是第四个顶栏。Canvas、Cut、Drawer 与 CLI/MCP 使用对应领域的同一业务实现、权限边界、Run 和 Artifact 引用。
+## 2. 改名：Flovart → Iris（2026-11-20）
 
-**Spatial Context v1 只做 P0+P1**：P0 在消息持久化边界保存真实 session/message ID、显式来源及内容指纹、实际送达媒体，不再靠解析文本恢复结构化关系；P1 由用户明确“钉到画布/Commit”创建独立 `plugin:context-card`，**不复用普通 text 节点**。卡片定稿不被自动重写，Context 关系默认不画 Workflow 实线；讨论使用最新授权素材，Run 自动冻结输入。外部 Agent 保留自己的会话；继续讨论可用卡片结论与素材开启新会话，不假定外部 Session Fork。
+产品名、文档、UI、CLI / MCP / Agent 工具名（`iris_*`）、环境变量（`IRIS_*` / `VITE_IRIS_*`）、本机目录（`~/.iris`）、仓库 `avabbbb/Iris`、站点 https://iris.avabbbb.com 已改名。旧文档里把第二个 tab 叫 “Iris / 个人 Agent / 逆向 / Reverse” 的，指的都是现在的 **Cut**。
 
-**专业宿主是可选连接器**：Resolve 优先只读能力发现与受限上下文，产物在 Iris 审查后先导入 Media Pool；新轨道/替换必须有真机验证、目标版本检查与明确审批。既不静默修改原时间线，也不通过未经验证的私有项目数据库解析/写入来宣称完整 Color/Fusion/Magic Mask 上下文。
+**仍然存在的遗留标识——不要在普通改动里顺手改名**（它们是线上协议、持久化格式或兼容别名；改它们是带迁移与测试的独立 PR）：
 
-**不要构建**：所有聊天消息铺满画布、通用第二大脑、第二套 Workflow/Provider/Session Store、无证据的“万能 Resolve API”、默认上传整张画布、未经用户许可的昂贵生成/破坏性写入。细节见当前设计与 Support Matrix。
+| 遗留标识 | 位置 / 用途 |
+| --- | --- |
+| `flovart_*` Agent 工具名 | `iris_*` 的弃用别名（`tools/iris/agent-tools.js`）；MCP 仅在 `includeLegacyFlovartNames: true` 时注册（`tools/iris/mcp-server.js`）；`flovart_todo` 是已删除任务清单的无操作别名（`agent/todo.js`） |
+| `FLOVART_*` / `VITE_FLOVART_*` | 环境变量回退 |
+| `~/.flovart`、浏览器旧 key | 首次启动复制到新名、不删旧数据（`tools/iris/legacy-home.js`、`utils/legacyStorageMigration.ts`） |
+| `/agent/flovart/*` | 本机 Agent 旧路径，与 `/agent/iris/*` 并存（`agent/index.js`） |
+| `flovart-state.db`、`com.flovart.desktop`、`flovart://` | 桌面 Runtime 数据库、Tauri identifier、深链接 |
+| `flovart:` 模型 id 与事件名、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*`、`data-flovart-*`、`__FLOVART_*__` | 线上协议与持久化格式 |
+| npm `@flovart/*`（如 `@flovart/dsh-plugin`）、`npm run flovart:cli` / `flovart:agent` | 包作用域与脚本别名 |
+| `canvasView: 'reverse'`、`components/reverse/`、`services/reverse/`、`useReverseStore` | Cut 的内部视图 id 与故事版 · 逆向代码；目录改名是单独迁移 |
+| CSS `--flv-*`、`.flv-glass` / `.flv-frost`、`--iris-*`（Cut / 故事版的玻璃色板） | 样式命名，见 DESIGN.md |
+| `flovart.avabbbb.com` | 过渡期仍是受信 origin（扩展配对、本机 Agent bootstrap） |
 
-## 3. 工程原则：短路径、单一权威
-
-- 同一能力只有一份业务实现；CLI / MCP / Host adapter / Iris 光标只做参数、权限上下文、结果转换与可视化。
-- 同一任务一个 durable identity、一份状态；重试靠幂等与查询，不复制任务。
-- 只有出现第二个真实复用场景、独立状态所有权或必要进程 / 凭据边界时才抽模块；不新增只转发的 Manager / Facade / Coordinator / Repository 层，不为假设建通用总线。
-- 确定性工具直接执行，不交给第二个模型重新解释。
-- 不因“精简”删除目标绑定、revision、幂等、取消、错误恢复、费用授权、素材持久化或权限校验。
-- 不顺手改无关文件；保护已有用户改动；只删已证明被当前路径取代的部分。
-
-## 4. Workflow、生成与素材
-
-Browser Workflow 是稳定 Agent operation 的可见权威；迁移 authority 先改 contract，再改实现与文档。稳定 baseline：`status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`。
+## 3. 架构地图（真实路径）
 
 ```text
-UI / Agent / Host entry → same generation/business function → Provider adapter → durable artifact/version → Workflow / Iris / Host consumer
+App.tsx / appMain.tsx / RouterHost.tsx      应用入口；StudioTopMenu 切换 Canvas | Cut | Agent
+components/
+  workflow/      画布：InfiniteWorkflow、节点、store.ts、operations / operationRegistry（节点工具）、nodeToolCatalog
+  cut/           Cut 剪辑器 UI（CutPage、CutEditor、CutTimeline、CutInspector、CutSubtitlePanel）
+  reverse/       Cut 的「故事版 · 逆向」子页（IrisStoryboardPage、ReverseWorkbench）
+  agent/         内置 Agent 面板（IrisAgentPanel）、确认 / 计划 / 提问卡、Agent 连接页（AgentWorkspace.tsx 的 AgentConnectionsPage）
+  studio/        共享外壳：StudioTopMenu、StudioRightDrawer、StudioHub、motionTokens
+  brand/         NaiwaThinking（奶蛙思考动画）
+services/
+  browserAgentKernel.ts / browserAgentRuntime.ts   内置 Agent 内核（pi-agent-core）
+  agentToolPolicy.ts       审批：read / write / exec 分级 + spend / delete 硬闸
+  agentSpendMandate.ts、generationGate.ts、generationPlan.ts、runApproval.ts   费用授权、预估、计划卡
+  agentTaskStore.ts、browserAgentTasks.ts           后台任务台账（IndexedDB）
+  cut/            cutStore、timeline、actions、agentTools（iris_cut_*）、render / exportTarget（Mediabunny、OPFS）
+  reverse/        逆向拆解纯函数
+  aiGateway.ts、providerAdapter.ts、runningHub*.ts、geminiService.ts   Provider 适配
+stores/          Zustand 全局 store（useWorkspaceStore 等）
+styles/          全部 CSS（token 在 index.css，见 DESIGN.md）
+tools/iris/      Node CLI（cli.js）、canonical 命令注册表（registry.js + contracts/runtime/command-registry.v1.json）、
+                 stdio MCP（mcp-server.js）、Agent 工具名（agent-tools.js）、视频流水线（pipeline/）
+agent/           本机 Agent 服务（index.js：HTTP + SSE，/agent/iris/*；task-store.js 任务台账 ~/.iris/agent-tasks.json）
+src-tauri/       桌面壳与 Rust Runtime（src/runtime/：任务、worker、Provider、pipeline trace、迁移）
+worker/index.ts  Cloudflare Worker：静态资源 + 无状态 /api/llm-proxy/*（网页版没有其他服务端）
+server/          Vite 开发期的 LLM 代理插件
+integrations/    studio/（Resolve、Premiere、Photoshop、After Effects 面板）、workbuddy/、teleagent/
+dsh-plugin/      DeepSeek Harness 插件（独立 package，自己的 npm ci / build）
+extension/       浏览器扩展
+skills/iris/     canonical Agent Integration Skill（.agents/skills/iris、.claude/skills/iris 是投影）
+remotion/        Remotion 合成（故事版预览、流水线渲染）
+eval/            评测：规则层、judge/、aigc/、red-team.mjs
+tests/           Vitest（*.test.ts / .tsx / .js）
+third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md）
 ```
 
-- **RunningHub 保持内置**（含预设模型与核验线路），正式商业化前不移除、不隐藏；其他第三方站点优先做成用户自定义脚本。
-- 用户自定义脚本、服务地址与模型映射必须随配置导出。
+旧 Go 后端（`backend/`）已于 2026-11-17 删除（回滚点 tag `go-backend-final`）；不要再引入服务端数据库。需要服务端逻辑时，用 TypeScript 在 Worker 里无状态实现。CLI 帮助文本里残留的 “Vite/Go/Docker” 字样是过时字符串，不代表 Go 服务仍存在。
 
-素材需要稳定来源、版本与校验；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选的新版本。
+## 4. 命令（都来自 package.json / Makefile / CI）
 
-### 4.1 Agent 视频流水线（现有工具与未验证闭环）
+| 目的 | 命令 |
+| --- | --- |
+| 安装 | `npm install`（CI 用 `npm ci`）；Node.js ≥ 22.19.0。DSH 插件另需 `npm --prefix dsh-plugin ci` |
+| 开发（UI + 本机 Agent） | `npm run iris:cli -- start --source --web --open`；隔离端口：`--web-port=0 --agent-port=0 --no-open --json` |
+| 只起 Vite | `npm run dev`（默认 37522）；Docker：`make up`（1635） |
+| 单测 | `npm test`（`vitest run`）；单文件 `npx vitest run tests/<name>.test.ts`；关键套件重复跑 `npm run test:critical` |
+| 类型检查（本仓库没有 ESLint / Prettier，tsc 就是 lint） | `npx tsc --noEmit` |
+| 文档契约 | `npm run docs:check`（Skill 投影一致、文档里的命令都在注册表、版本号一致） |
+| 构建 | `npm run build`；扩展 `npm run ext:build`；宿主包 `npm run studio:build`；DSH `npm --prefix dsh-plugin run build` |
+| Rust Runtime | `cargo test --manifest-path src-tauri/Cargo.toml --all-targets` |
+| 发布前检查 | `npm run version:check`、`npm run release:red-team`、`npm run release:secret-audit`、`git diff --check` |
+| 流水线 e2e | `npm run e2e:pipeline`（`:parity`、`:remotion`、`:capture`） |
+| 浏览器冒烟 | `npm run test:browser:chrome`（Chrome for Testing、隔离 profile 与端口；不要用 `--open`） |
+| 评测 | `npm run eval:validate`、`eval:core`、`eval:agent`、`eval:judge`、`eval:aigc` |
 
-当前实现状态以 `SUPPORT_MATRIX.md` 与实际 Runtime/pipeline 代码为准，历史阶段方案见 `docs/archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md`。相关施工遵守：
+验证匹配风险：纯文档跑 `docs:check`；代码跑相关测试 + `tsc`；宿主 / 原生效果必须进真实应用。缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally` 并说明原因。完整 IrisBench、依赖审计、CodeQL、全平台安装包属于 main / 定时 / 发布流程，不是普通 PR 前置。
 
-- **trace 唯一权威**：run（durable `runId`）由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话与画布节点只存引用。
-- **Run 不另建主场**：Canvas、Cut、Drawer 和外部 Agent 引用同一持久 runId/trace；以实际执行结果为准，不新建旧方案中的独立 Personal Agent Tab。
-- **工具只投影已有业务函数**：`pipeline.run.*`、`asset.import`、`audio.tts`、`audio.transcribe`、`timeline.align`、`composition.patch`、`composition.render`、`media.probe`、`media.frames`、`review.submit`、`run.archive`、`capture.ui` 先有业务实现再登记 canonical registry；内置 Agent、CLI、MCP、DSH 同一 schema 与权限；只在 run 激活时加载，认证后才按 Support Matrix 升级。
-- **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据交给外部 Coding Agent，以 `asset.import` 带回同一 run；网页截图录屏只走 `capture.ui`（仅 localhost / 授权文件夹页面，需用户确认）；桌面级真实操作录制将来走 Recordly 连接器或自研伴生工具，产物同样以 artifact 进入同一 run（计划，未实现）。
-- **评审可审计**：findings 写明时间点 / 片段、层、问题、修法、结论；修补基于版本号，不改 locked 片段（除非显式解锁并留痕）；轮数受 run 预算约束。
-- **素材 durable**：截图、底片、干声、转写证据、静帧、每版渲染都是带 sha256 的 artifact；被否版本标 rejected 保留。
-- **本机执行**：Remotion 渲染、WhisperX / hypit 转写、ffmpeg / ffprobe 在本地 Runtime；云端只做 Provider 生成（配音当前经 RunningHub 调 MiniMax speech，key 只走环境变量 / 安全存储）。依赖缺失返回 `CAPABILITY_UNAVAILABLE` 与诊断动作，不静默跳过。
-- **费用**：run 级预算（任务数 / 金额 / 最大评审轮数）一次确认，复用 spend mandate 与 Runtime gate；范围变化重新确认。
+**改了命令注册表**（`tools/iris/contracts/runtime/command-registry.v1.json` 或 `registry.js`）时，同步 `src-tauri/tests/runtime_contract.rs` 里钉住的 registry hash、`release-red-team` 的公开面白名单，以及 `skills/iris/` 与 `.agents/skills/iris/` 的命令文档（两者必须逐字节一致，`docs:check` 会查）。
 
-## 5. Creative host / native effect
+## 5. 安全规则（代码里真实存在的闸门，不得绕过或削弱）
 
-宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统；边界见 `docs/design/14-creative-hosts.md`，Resolve 实现还须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`（实现前重新打开 Blackmagic 当前官方页面核对视觉）。
+- **付费生成要批准。** `services/agentToolPolicy.ts` 把工具分为 `read` / `write` / `exec`，并有两个硬闸：`spend`（可能产生费用，只有生效中的付费授权能放行）和 `delete`（永远逐次确认）。即使 `yolo` 模式也不跳过硬闸。新付费工具必须声明为 spend，并在计划卡 / 预估（`workflow.cost.estimate`、`planGenerationGate`）中可见。
+- **只读和写入分开。** 只读命令（inspect、nodes.search、cost.estimate、node.tool.list、`iris_cut_get_*` 等）不弹确认；任何写入走审批。新增工具时在 policy 里给出正确 tier，不要把写入伪装成 read。
+- **Agent 自填的批准无效。** `budgetConfirmed` / `confirmed` 只接受 CLI 或界面的一次性批准；无人值守（委派）回合里任何需要询问的调用直接拒绝（fail closed）。
+- **提交状态未知时先查询，不重试扣费。** 后台任务按 command + 参数哈希去重；`unknown_submit` 需要显式确认才可重提；会话预算提交前原子预留。
+- **Workflow 修改**必须带目标、revision 与幂等键；晚到结果不能覆盖用户已选的版本。临时 URL、聊天消息、base64 不是持久产物。
+- **宿主只走官方 API。** Resolve 面板经 Media Pool `ImportMedia` 导入候选（`integrations/studio/resolve/main.js`）；**不要直接读写 Resolve 工程数据库或解析私有 .drp / .drx / Project.db 来宣称工程理解**。写回分级：P0 Add to Media Pool → P1 新轨道 → P2 Replace / Commit，后两级需真机验证与明确审批。
+- **内置 Agent 不开放任意执行**：没有 shell、任意文件读写或任意 ffmpeg 参数；本地文件只经用户授权的文件夹（`iris_local_folder` / `iris_grep`）；网页截图录屏只走 `capture.ui`（localhost / 授权页面，需确认）。
+- **凭据**：API Key 只在本机加密存储（`utils/keyVault.ts`）或安全存储；不得进入提示词、日志、Skill、宿主工程、素材 metadata 或仓库。Agent / CLI 只拿脱敏后的就绪状态。外部 Agent 不得直接写 React / Zustand 状态、浏览器存储、Runtime 数据库或 Provider 私有 API。
+- 发版、打 tag、推送、商店上架、生产签名只在用户明确要求时做。
 
-- **宿主轻面板**：当前 selection → intent / reference → plan → generate → import；复杂编排回到 Canvas / Drawer / Cut。面板是宿主原生感的 contextual inspector，不是聊天页、dashboard 或缩小版 Canvas；跟随宿主主题、密度、键盘与焦点。
-- **native effect / OFX**：宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent / Iris 在线。
-- 默认新增结果，不静默覆盖；替换必须显式且可恢复。Resolve P0 唯一安全输出是 **Add to Media Pool**，P1 才有 Add to new track，P2 才做 Replace / Commit。
-- **Resolve Studio 21.1 first**：宿主操作优先 Blackmagic native MCP；Iris Skill + `iris` CLI 提供生成与 Artifact；不建第二套 Resolve MCP，不为每个 Scripting API 建 wrapper。外部 Agent 的聊天留在 Codex / Claude 等原宿主。
-- **宿主上下文连接器**：只读同步工程上下文是第一步，写回仍走上面的安全输出。Resolve 走 native MCP / Scripting；Premiere 走当期 UXP；剪映 6.0+ 草稿加密（待验证；11.7 起外部不可读，待验证），不做破解；CapCut 国际版按明文草稿评估（待验证），实现前按当前版本核对。连接器是 Iris 的可选能力，不是使用 Iris 的前提。
-- After Effects（CEP + C++ Effect SDK）保持 Experimental，暂停扩张；Photoshop / Premiere 按当期官方 UXP API 实现。
-- Provider key、Agent token、OAuth 或私有凭据不得进入宿主工程、Skill、日志或素材 metadata。
-- 真实宿主认证覆盖：安装、目标绑定、生成 / 导入、取消 / 失败、保存重开、素材缺失、离线导出；native effect 另覆盖参数持久化、随机帧、色彩 / alpha / 帧率与关键帧。
+## 6. 工程约定
 
-## 6. UI、交互与动效
+- **一份业务实现。** CLI / MCP / DSH / 宿主面板 / 内置 Agent 只做参数、权限、结果转换；新能力先写业务函数，再登记 canonical registry 与各投影。确定性工具直接执行，不交给第二个模型重新解释。
+- **短路径。** 只有出现第二个真实复用、独立状态所有权或进程 / 凭据边界时才抽模块；不加只转发的 Manager / Facade / Coordinator / Repository。
+- **不因“精简”删掉**目标绑定、revision、幂等、取消、错误恢复、费用授权、素材持久化或权限校验。
+- 技术栈：React 19 + TypeScript + Vite + Tailwind 4 + Ant Design + Zustand（以 lockfile 为准）；动效库 `motion`（GSAP 未经决定不得加依赖）；桌面 Tauri / Rust；CLI / 本机 Agent 为 Node ESM。
+- 浏览器业务数据用 localforage / IndexedDB，localStorage 只放极小配置；存储形态变化同步 [backend-database.mdx](docs/content/docs/backend/backend-database.mdx)。
+- RunningHub 保持内置（含预设模型与线路）；其他第三方站点优先做成用户自定义脚本，并随配置导出。
+- `.editorconfig`：UTF-8、LF、末尾换行。提交信息用 Conventional Commits（`feat(cut): …`、`fix(agent): …`、`docs(…): …`）。不顺手改无关文件，保护已有用户改动。
+- 代码注释和文档多为中文，保持所在文件的语言。
 
-- **参考先行**：设计或实现任何 UI / 动效前，先查参考并在 PR 中引用实际打开的页面——Inspora（灵感）、Awwwards（审美校准）、GSAP Showcase（动效与交互）、Refero Styles（风格系统与 DESIGN.md，有 MCP）；规则见 `01-interaction.md` §18。
-- 视觉只用 `docs/design/DESIGN.md` 的 token：不写 hex、不加 `rounded-2xl` / `border-2`、不自定义过冲曲线；动效用三档弹簧（snappy / smooth / expressive），可打断，遵守 reduced-motion；**玻璃只给浮动 chrome**（包括节点工具条、左右停靠面板外壳、工具弹窗外壳），不进入节点主体、正文、trace、表格；左右面板外壳必须同一套。
-- 动效库保持 `motion`；GSAP 只是候选（授权含竞品限制，需评估），未经决定不得加依赖。
-- 复用 container-driven layout；不要重新引入 viewport inset 补丁。新 UI 必须挂到真实入口并验证可见路径；mock-only 面板不算交付。
-- 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。PromptBar、ElementToolbar 与原始媒体比例行为按现有产品保持。
-- **弹性布局是硬要求**（DESIGN.md §15）：UI 按组件自身宽度用 `@container` 逐级降级（文字 → 截断 → 图标 + title → 收纳 → 整块收成图标），不许只按一个窗口宽度做静态稿。工具行 `nowrap` + 文字 `min-width:0`；居中绝对定位浮条加 `width:max-content`；可拖面板拖过最小宽度就吸附收起；被隐藏的功能必须保留入口。
-- **样式要落地**：新写的 `className`（尤其空态、菜单、弹层）必须有对应 CSS，提交前用 grep 核对；禁止硬编码深色 rgba 和 `var(--未定义, #hex)` 兜底，统一用主题 token / `color-mix`。
-- **UI 验收**：在真实入口截宽 / 中 / 最小三档宽度 + 收起态，亮暗各一组，逐张检查重叠、折行、半截字、裁切，截图附在 PR 里。只截一个宽度不算验收。
+## 7. UI 约定（细节见 DESIGN.md）
 
-## 7. 代码边界
+- 只用 DESIGN.md 里的 token（`--isl-*`、`--space-*`、`--motion-*`、`--spring-*`）；不写裸 hex、不加 `rounded-2xl` / `border-2` / `font-extrabold`、不自定义过冲曲线。
+- 玻璃只给浮动 chrome（工具条、左右停靠面板外壳、菜单、弹窗外壳），不进节点主体、正文、trace、表格；必须有 `prefers-reduced-transparency` / `prefers-contrast` / 无 `backdrop-filter` 的实底回退。动效遵守 `prefers-reduced-motion`。
+- 弹性布局是硬要求：按组件自身宽度用 `@container` 逐级降级，被收起的功能保留入口。新 `className` 必须有对应 CSS。
+- 新 UI 必须挂到真实入口；mock-only 面板不算交付。持续任务显示真实状态，不能用动画掩盖失败或未知提交。
+- UI 验收：真实入口截宽 / 中 / 最小三档 + 收起态，亮暗各一组，截图附在 PR。设计或动效改动前先查参考（Inspora、Awwwards、GSAP Showcase、Refero），在 [references.md](docs/design/references.md) 登记出处。
+- 奶蛙（`components/brand/NaiwaThinking.tsx`）是 Agent 的形象：只头部 + 托腮的手，用于思考 / 工作状态，不改造型与关键帧。
 
-- Web：React + TypeScript + Vite + Ant Design + Tailwind + Zustand（以 lockfile 为准）；网页版全静态（无服务端；Cloudflare Worker `worker/index.ts` 只做无状态 `/api/llm-proxy/*`，需要服务端时用 TS 在 Worker 里无状态实现）；Local Runtime：Rust / Tauri；CLI / Agent：Node。不为原生效果复制第二套调度器。
-- Workflow：`components/workflow/`、`stores/workflow/`；Iris：当前代码仍在 `components/reverse/`、`services/reverse/`（`_ref/hypit` 不提交），目录改名单独迁移；Agent：`components/agent/`；共享 chrome：`components/studio/`；宿主：`integrations/studio/`。
-- 浏览器业务数据用 localforage，localStorage 只放极小配置；宿主长期素材必须是 durable file / artifact。
-- 存储形态变化同步 `docs/content/docs/backend/backend-database.mdx`，不用未来字段冒充已建表。
+## 8. 文档放在哪
 
-## 8. 验证与发布口径
+| 内容 | 位置 |
+| --- | --- |
+| 当前产品与系统设计（current truth） | `docs/design/`，上限 12 份 Markdown；产品变化改 00、交互改 01、视觉改 DESIGN.md、模块变化改 10–15 |
+| 架构决策 | `docs/adr/`（如 `cut-editor.md`）；被取代时在文件头标 Superseded，不删 |
+| 进行中的计划 / 提案 | `docs/plans/`，标状态；完成或作废即归档 |
+| 用户指南 | `docs/overview/`（中文为主，`quick-start.en.md` 是英文版） |
+| 对外进度 | `docs/content/docs/`：`features(.en).mdx` 已有功能、`progress/todo.mdx` 只放未完成、`progress/pending-test.mdx` 已实现待验证 |
+| 单轮评测 / 排障记录 | `docs/quality/<日期>-*.md`，写“trace 现象 → 根因 → 修复 → 测试”，并在 docs/index.md 留指针；问题修完或转入 todo 后归档 |
+| 评测方法 | `eval/eval.md` 与 `eval/judge/rubrics/`，不另起方法文档 |
+| 支持等级 | `SUPPORT_MATRIX.md`（唯一能升级支持状态的地方） |
+| 历史 | `docs/archive/<日期>-<主题>/`，用 `git mv` 移入，在 [docs/archive/README.md](docs/archive/README.md) 写一行“是什么 / 为什么归档 / 被谁取代”，并修好所有入链（含代码注释） |
 
-- 评测总纲是 `eval/eval.md`（评什么、怎么评、Rubric 与 Judge、上线门禁）；新口径改 eval.md 与 `eval/judge/rubrics/`，不另起方法文档。单轮评测与排障按「trace 现象 → 根因 → 修复 → 测试」写进 `docs/quality/<日期>-*.md`，并在 `docs/index.md` 留指针；不另起并列报告。
-- 测试匹配改动风险：文档跑 `npm run docs:check`；代码跑相关测试；宿主 / 原生效果进真实应用。
-- 普通开发 / PR 走快速通道：只跑与改动直接相关的一轮验证；缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally`，确定性验证可交给 GitHub Actions。10x critical、完整 IrisBench、依赖审计、CodeQL、发布验证、全平台安装包属于 main / scheduled / manual / release，不作普通 PR 前置。secret audit、目标 / revision / 幂等、unknown-after-submit、未授权破坏性写入仍 fail-closed。
-- 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；Provider 认证区分 Fake fixture 与真实账号、扣费、429、取消、unknown-submit。
+- README 以中文为主（`README.zh-CN.md`），`README.md` 是同步的英文版，`README.en.md` 只是指向 `README.md` 的跳转页。README 区分“已实现”与“规划中”，严格跟随 Support Matrix，不复制内部端口细节或过时测试数字。
+- 不新增并列的 CURRENT / TARGET / AUDIT / GOAL / HANDOFF / 对标报告类文档。
 - 不宣传未验证的实时生成、宿主 Stable、完全离线、云同步、无缝 Agent 登录态迁移或跨平台等价。
-- 浏览器验收用 Chrome for Testing / 动态隔离端口；临时文件放 `.tmp/` 或 `artifacts/`。
 
-## 9. 文档治理
+## 9. 视频流水线与 run（Experimental）
 
-`docs/index.md` 是文档地图（current truth / 提案 / 指南 / 归档）。
+现状以 `SUPPORT_MATRIX.md` 与 `tools/iris/pipeline/`、`src-tauri/src/runtime/` 为准；历史方案见 [archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md](docs/archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md)。
 
-- `docs/design/` 最多 **12 份** Markdown：`00-overview`、`01-interaction`（交互与行为）、`DESIGN.md`（视觉与动效 token）、模块文档 `10–15`、`20-quality-and-governance`，以及同时存在的提案（`16+`，最多 2 份）。超过先合并或归档。`docs/design/prototypes/` 只放 01 引用的单文件 HTML 原型，不计份数。
-- 不新增并列的 CURRENT / TARGET / AUDIT / GOAL / HANDOFF / 清单 / 对标报告类文档。产品变化改 00；交互改 01；视觉改 DESIGN；模块变化改对应模块文档。
-- 提案标 **PROPOSAL / REFERENCE**，接受后蒸馏进 current truth 再归档。`docs/plans/` 只放进行中的计划；完成或作废即归档。
-- `todo.mdx` 只放未完成；已实现待现实验证进 `pending-test.mdx`；验证后更新 features。
-- 历史施工包、对标报告、面试材料、阶段性 launch checklist 不留在 active tree：移到 `docs/archive/<日期>/` 并在 `docs/index.md` 留指针。
-- `skills/iris/` 是 canonical Skill package；`.agents/skills/iris/`、`.claude/skills/iris/` 是兼容投影，不反转、不手工漂移。
-- README outcome-first 且严格跟随 Support Matrix；不复制内部 transport、端口或过时测试数字。
+- trace 唯一权威是本地 Runtime（run → step → tool call → artifact → version → review round），Step 由命令边界自动记录，不让模型“写日志”；画布、Cut、会话只存 `runId` / version 引用。
+- 产物（截图、干声、转写、静帧、每版渲染）都是带 sha256 的 artifact；被否版本标 rejected 保留；修补基于版本号，不改 locked 片段。
+- Remotion 渲染、转写、ffmpeg 在本机执行；依赖缺失返回 `CAPABILITY_UNAVAILABLE`，不静默跳过。run 级预算一次确认，范围变化重新确认。
 
 ## 10. 提问与执行
 
-只在答案会实质改变产品范围、不可逆数据 / 发布行为或实施路线时提问；一次一个关键问题并给建议。用户已要求直接执行时，不为常规编辑、验证与收尾重复索要许可。回答使用中文，并区分 **已实现 / 已验证 / 设计目标 / 假设**。
-
-## 11. 发版本
-
-只有用户明确要求时才执行版本流程：整理 CHANGELOG、提升 VERSION、提交授权范围内的改动并打 tag。不要自行发布、推送第三方商店或做未授权的生产签名。
+只在答案会实质改变产品范围、不可逆数据、费用或发布行为时提问，一次一个关键问题并给出建议。用户已要求直接执行时，常规编辑、验证与收尾不重复索要许可。报告真实验证结果，标明哪些没跑。
