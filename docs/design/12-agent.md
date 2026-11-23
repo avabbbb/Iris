@@ -7,9 +7,9 @@
 | 概念 | 是什么 | 不是什么 |
 | --- | --- | --- |
 | **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Iris | 第二套业务实现 |
-| **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向 Iris 供应 Agent 与模型 | 对话、run 编辑、Tasks / Artifacts 工作区 |
-| **Iris（全能后期助手 · Personal agent）** | 内置 Agent 的主场：对话优先，画布是产出面；画布上可见的多 Agent 光标、对话里的计划 / trace / 审批卡；可选宿主上下文连接器（[01](01-interaction.md) §11–§12、[11](11-iris.md)） | 没有画布产出的纯聊天页、第二份 Workflow 或业务实现、把宿主连接设为前提 |
-| **Assistant drawer** | Canvas 旁的轻量上下文助手，调用同一批受控操作；多步制作“在 Iris 中继续”进入同一 run | Host picker、Agent 安装、更高权限、独立 run 主场 |
+| **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向 Canvas / Cut 的 Agent 工作流供应模型与连接 | 对话、run 编辑、Tasks / Artifacts 工作区 |
+| **Canvas Assistant Drawer（内置 Agent）** | 实际对话、创作上下文、调用受控工具与审核的当前入口；未来 Spatial Context v1 在此落地（[11](11-iris.md)） | 独立的 Personal Agent 顶栏、第二份 Workflow、跨 Harness 会话库 |
+| **Cut（当前视频剪辑器）** | 复用 `cutStore` 的编辑时间线与 `iris_cut_*` 工具、支持 UI/Agent 撤销 | 未来独立 Agent、Resolve 工程的复制品 |
 
 三者不复制彼此的 UI、会话、Host picker 或状态。
 
@@ -60,9 +60,11 @@ Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Iris CLI（生成
 
 已准备 / 需安装 / 需登录 / 离线 / 异常，每个配一个动作。内部 Writer、Projection、URL、Token、协议版本只在高级诊断。
 
-## 6.1 多步制作（提案）
+## 6.1 多步制作 / Spatial Context（目标与进展）
 
-内置 Agent 驱动多步视频制作（brief → 素材 → 配音 → 合成 → 渲染 → 帧级评审 → 定向修补 → 归档）的 run / trace 模型、pipeline 工具集与放置决定见 [16 Agent 视频流水线（PROPOSAL）](16-agent-video-pipeline.md)。放置（2026-11-13 修订）：run 在**逆向（全能助手）**发起和驱动，画布是其工具之一并以可见光标执行；Canvas 抽屉只做轻量入口并交接到同一 run；Agent 页供应 Agent / 模型 / Runtime，不放对话与 run 编辑；外部 Agent 通过 CLI / MCP 写入同一条 trace。
+Canvas、Cut、Drawer 和外部 Agent 通过真实命令操作共享的素材和工程，并引用相同 Runtime Run/Artifact。工具已分阶段实现，真实支持等级以 `SUPPORT_MATRIX.md` 为准；视频流水线早期方案已移至 [历史归档](../archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md)。
+
+Spatial Context v1 只补结构化 Turn Context（真实消息 ID/素材版本）及独立的 Context Card；后续 Creative Proposal 在 Canvas/Cut 的现有操作边界构造可审核的目标、Diff 和执行回执。内置 Agent 不额外获得 Shell 或宿主全局写权限；具体参阅 [11](11-iris.md)。
 
 ## 7. 不采用
 
