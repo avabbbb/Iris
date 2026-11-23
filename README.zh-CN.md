@@ -49,13 +49,13 @@
   <img src="pic/readme/screenshots/hero-zh.png" alt="Iris 画布：参考图、涂鸦图层与视频节点连接在同一份 Workflow 中" width="100%" />
 </p>
 
-## 先看 60 秒概念片
+## 先看 90 秒演示片
 
-[![观看 Iris：保留原片，多一层创意](pic/readme/vision/Iris_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_60s_v4.mp4)
+[![观看 Iris：一句话，交给 Agent](pic/readme/vision/Iris_Promo_90s-poster.jpg)](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_90s.mp4)
 
 **保留原片，描述变化，比较候选。** Iris 把你自己的 Coding Agent 和可见创作 Workflow 放在一起：Canvas 做生成与可见 Workflow，Agent 连接你习惯的助手，**Cut**（即将推出）是可以直接对话的全能后期助手，产出落在画布上。
 
-影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是概念片。** 产品已于 2026-11-20 由 Flovart 更名为 Iris；个人 Agent tab 现在叫 Cut（即将推出）。 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
+影片用一句话开场——「把小猫的绿幕背景，换成参考图里的场景」：Agent 先列生成计划，缺帧自己补、失败自己换路，拿不准先问你，关键一步等你批准；随后自动剪辑、卡点、调色、配乐，最后把跑通的流程存成 Skill。**画面为演示动画**，按真实工作流重制；产品已于 2026-11-20 由 Flovart 更名为 Iris。宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
 
 **0.1.1 内测版：** Windows EXE 与 macOS DMG 通过 [Releases](https://github.com/avabbbb/Iris/releases) 分发。平台安装包分别验证，打包成功不等于宿主和付费 Provider 已认证；具体状态见 [Support Matrix](SUPPORT_MATRIX.md)。
 

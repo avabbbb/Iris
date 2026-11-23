@@ -49,13 +49,13 @@
   <img src="pic/readme/screenshots/hero.png" alt="Iris canvas: references, a doodle layer and a video node connected in one Workflow" width="100%" />
 </p>
 
-## Watch the 60-second concept film
+## Watch the 90-second demo film
 
-[![Watch Iris: Your footage. Plus one layer.](pic/readme/vision/Iris_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_60s_v4.mp4)
+[![Watch Iris: one sentence, handed to the Agent](pic/readme/vision/Iris_Promo_90s-poster.jpg)](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_90s.mp4)
 
 **Keep the original. Describe the change. Compare candidates.** Iris brings your coding Agent and a visible creative Workflow together. Canvas handles generation and the visible Workflow, Agent connects your preferred assistant, and **Cut** (coming soon) is a personal post-production agent you talk to, with the canvas as its output.
 
-The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film.** The product was renamed from Flovart to Iris on 2026-11-20; the personal-agent tab is now called Cut (coming soon). Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
+The film starts from one sentence — "swap the cat's green-screen background for the scene in the reference image." The Agent drafts a generation plan, fills a missing frame, recovers from a failed call, asks when it is unsure, and waits for your approval on the key step; then it edits, cuts to the beat, grades, scores, and saves the working flow as a Skill. **Animated demo**, rebuilt from a real workflow. The product was renamed from Flovart to Iris on 2026-11-20. Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
 
 **0.1.1 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Iris/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
 
