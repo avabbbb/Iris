@@ -1,6 +1,6 @@
 # DESIGN.md · Iris
 
-> 状态：**Current truth**（2026-11-13）。本文只描述**视觉语言与动效 token**（看起来是什么、动起来是什么）；交互与行为（状态、流程、出口、谁能做什么）见 [01 交互设计](01-interaction.md)。两份不重复：本文给数值，01 引用数值。
+> 状态：**Current truth**（2026-11-24 增补 AgentOS 的审片视觉优先级；其余 token 延续 2026-11-13 规范）。本文只描述**视觉语言与动效 token**（看起来是什么、动起来是什么）；交互与行为（状态、流程、出口、谁能做什么）见 [01 交互设计](01-interaction.md)。两份不重复：本文给数值，01 引用数值。
 > 格式：参照 Refero Styles 的 DESIGN.md 分层（mood → tokens → typography → color → overview → components → logic → do/don't → motion）。所有数值取自当前代码：`styles/index.css`、`styles/motion.css`、`styles/adaptive.css`、`styles/workflow.css`、`styles/dshEmbed.css`、`components/` 扫描；标 **目标** 的是本次新增、代码尚未采用的 token。
 > 来源：原 `31-notion-compact-ui.zh-CN.md` 的已实施部分已并入本文，原文见 [archive/2026-11-13-design-refresh](../archive/2026-11-13-design-refresh/)。
 
