@@ -1,10 +1,139 @@
 {
   "extension_name": {
-    "message": "Iris Browser Import",
+    "message": "Iris",
     "description": "扩展名称"
   },
   "extension_description": {
-    "message": "把你右键选择的网页图片与视频传入 Iris Desktop 或已配对的网页画布；同步来的 API Key 本机加密保存，撤销配对即清空，不扫描整页。",
+    "message": "把你右键选择的网页图片与视频送进 Iris 画布或 Desktop，并能直接反推提示词。同步来的 Key 本机加密保存，撤销配对即清空，不扫描整页。",
     "description": "扩展描述"
+  },
+  "action_title": {
+    "message": "Iris · 送进画布"
+  },
+  "menu_import_image": {
+    "message": "添加图片到 Iris Desktop"
+  },
+  "menu_import_video": {
+    "message": "添加视频到 Iris Desktop"
+  },
+  "menu_web_image": {
+    "message": "发送图片到 Iris 画布"
+  },
+  "menu_web_video": {
+    "message": "发送视频到 Iris 画布"
+  },
+  "menu_reverse": {
+    "message": "反推图片提示词"
+  },
+  "menu_open_desktop": {
+    "message": "连接 / 打开 Iris Desktop"
+  },
+  "open_iris": {
+    "message": "打开 Iris"
+  },
+  "state_idle": {
+    "message": "等待连接"
+  },
+  "state_connecting": {
+    "message": "正在连接"
+  },
+  "state_connected": {
+    "message": "已连接"
+  },
+  "state_importing": {
+    "message": "正在处理"
+  },
+  "state_imported": {
+    "message": "完成"
+  },
+  "state_error": {
+    "message": "出了点问题"
+  },
+  "idle_message": {
+    "message": "在网页图片或视频上点右键，就能送进 Iris。"
+  },
+  "section_connections": {
+    "message": "连接"
+  },
+  "canvas_label": {
+    "message": "网页画布"
+  },
+  "canvas_none": {
+    "message": "未配对 · 在画布「设置 → 安全」里申请"
+  },
+  "canvas_connected": {
+    "message": "已连接 · 可接收媒体与反推结果"
+  },
+  "canvas_pending": {
+    "message": "请求连接 · 确认是你自己打开的画布再允许"
+  },
+  "desktop_label": {
+    "message": "Iris Desktop"
+  },
+  "desktop_idle": {
+    "message": "未连接 · 需要本机已安装 Desktop"
+  },
+  "desktop_connected": {
+    "message": "已连接"
+  },
+  "desktop_connect": {
+    "message": "连接"
+  },
+  "desktop_retry": {
+    "message": "重试"
+  },
+  "allow": {
+    "message": "允许"
+  },
+  "reject": {
+    "message": "拒绝"
+  },
+  "disconnect": {
+    "message": "断开"
+  },
+  "section_reverse": {
+    "message": "最近一次反推"
+  },
+  "copy": {
+    "message": "复制"
+  },
+  "copied": {
+    "message": "已复制"
+  },
+  "send_to_canvas": {
+    "message": "送进画布"
+  },
+  "sent": {
+    "message": "已送进画布"
+  },
+  "send_failed": {
+    "message": "发送失败"
+  },
+  "section_history": {
+    "message": "最近导入"
+  },
+  "clear": {
+    "message": "清空"
+  },
+  "untitled": {
+    "message": "未命名媒体"
+  },
+  "dest_workflow": {
+    "message": "已放进当前 Workflow"
+  },
+  "dest_inbox": {
+    "message": "已存入导入箱"
+  },
+  "connect_failed": {
+    "message": "连接失败"
+  },
+  "privacy": {
+    "message": "只传你明确选中的媒体，不扫描整页。"
+  },
+  "empty_title": {
+    "message": "还没有导入过"
+  },
+  "empty_body": {
+    "message": "右键网页上的图片：送进画布、送进 Desktop，或反推提示词。"
   }
 }

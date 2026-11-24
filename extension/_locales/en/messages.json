@@ -1,10 +1,137 @@
 {
   "extension_name": {
-    "message": "Iris Browser Import",
-    "description": "Extension name"
+    "message": "Iris"
   },
   "extension_description": {
-    "message": "Send right-clicked images/videos to Iris Desktop or a paired web canvas. Synced API keys are encrypted and cleared on unpair.",
-    "description": "Extension description"
+    "message": "Send right-clicked images and videos to your Iris canvas or Iris Desktop, and reverse-engineer prompts in place. Synced keys stay encrypted on this device and are cleared on unpair. Never scans whole pages."
+  },
+  "action_title": {
+    "message": "Iris · Send to canvas"
+  },
+  "menu_import_image": {
+    "message": "Add image to Iris Desktop"
+  },
+  "menu_import_video": {
+    "message": "Add video to Iris Desktop"
+  },
+  "menu_web_image": {
+    "message": "Send image to Iris canvas"
+  },
+  "menu_web_video": {
+    "message": "Send video to Iris canvas"
+  },
+  "menu_reverse": {
+    "message": "Reverse image prompt"
+  },
+  "menu_open_desktop": {
+    "message": "Connect / open Iris Desktop"
+  },
+  "open_iris": {
+    "message": "Open Iris"
+  },
+  "state_idle": {
+    "message": "Waiting to connect"
+  },
+  "state_connecting": {
+    "message": "Connecting"
+  },
+  "state_connected": {
+    "message": "Connected"
+  },
+  "state_importing": {
+    "message": "Working"
+  },
+  "state_imported": {
+    "message": "Done"
+  },
+  "state_error": {
+    "message": "Something went wrong"
+  },
+  "idle_message": {
+    "message": "Right-click any image or video on the web to send it to Iris."
+  },
+  "section_connections": {
+    "message": "Connections"
+  },
+  "canvas_label": {
+    "message": "Web canvas"
+  },
+  "canvas_none": {
+    "message": "Not paired · request it in canvas Settings → Security"
+  },
+  "canvas_connected": {
+    "message": "Connected · receives media and prompts"
+  },
+  "canvas_pending": {
+    "message": "Wants to connect · allow only if you opened it"
+  },
+  "desktop_label": {
+    "message": "Iris Desktop"
+  },
+  "desktop_idle": {
+    "message": "Not connected · needs Desktop installed"
+  },
+  "desktop_connected": {
+    "message": "Connected"
+  },
+  "desktop_connect": {
+    "message": "Connect"
+  },
+  "desktop_retry": {
+    "message": "Retry"
+  },
+  "allow": {
+    "message": "Allow"
+  },
+  "reject": {
+    "message": "Reject"
+  },
+  "disconnect": {
+    "message": "Disconnect"
+  },
+  "section_reverse": {
+    "message": "Latest prompt"
+  },
+  "copy": {
+    "message": "Copy"
+  },
+  "copied": {
+    "message": "Copied"
+  },
+  "send_to_canvas": {
+    "message": "Send to canvas"
+  },
+  "sent": {
+    "message": "Sent"
+  },
+  "send_failed": {
+    "message": "Send failed"
+  },
+  "section_history": {
+    "message": "Recent imports"
+  },
+  "clear": {
+    "message": "Clear"
+  },
+  "untitled": {
+    "message": "Untitled media"
+  },
+  "dest_workflow": {
+    "message": "Added to the current Workflow"
+  },
+  "dest_inbox": {
+    "message": "Saved to the import inbox"
+  },
+  "connect_failed": {
+    "message": "Connection failed"
+  },
+  "privacy": {
+    "message": "Only the media you pick is sent. Pages are never scanned."
+  },
+  "empty_title": {
+    "message": "Nothing imported yet"
+  },
+  "empty_body": {
+    "message": "Right-click an image: send it to the canvas or Desktop, or reverse its prompt."
   }
 }

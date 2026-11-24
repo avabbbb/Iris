@@ -4,44 +4,79 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
-  <title>Iris Browser Import</title>
+  <title>Iris</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <img src="../icons/icon48.png" alt="" width="32" height="32" />
-      <div><strong>Iris</strong><span id="extensionVersion">Browser Import</span></div>
+  <!-- 视觉对齐 docs/design/DESIGN.md：暖纸面、单一薄荷、扁平卡片、12px 紧凑密度、奶蛙品牌。 -->
+  <main class="pop">
+    <header class="pop__head">
+      <img class="pop__logo" src="../icons/icon48.png" alt="" width="28" height="28" />
+      <div class="pop__brand">
+        <strong>Iris</strong>
+        <span id="extensionVersion" class="pop__version"></span>
+      </div>
+      <button id="openIris" type="button" class="isl-go" data-i18n="open_iris">打开 Iris</button>
     </header>
+
     <section class="status" aria-live="polite">
-      <i id="statusDot"></i>
-      <div><strong id="statusTitle">尚未连接</strong><span id="statusMessage">连接 Desktop 后即可右键导入图片</span></div>
-    </section>
-    <section id="webPairings" class="history" hidden>
-      <span>网页画布</span>
-      <ul id="webPairingList"></ul>
-    </section>
-    <button id="openIris" type="button" class="primary-link">打开 Iris</button>
-    <button id="connectDesktop" type="button" class="secondary">连接 / 打开 Iris Desktop</button>
-    <p class="hint">在网页图片或视频上点击右键，可发送到 Iris Desktop 或已配对的网页画布。插件只传输你明确选择的媒体，不扫描整页；网页画布同步来的 API Key 在本机加密保存，撤销配对即清空。</p>
-    <section id="receipt" class="receipt" hidden>
-      <span>最近一次导入</span>
-      <strong id="receiptName"></strong>
-      <small id="receiptDestination"></small>
-    </section>
-    <section id="reverse" class="receipt" hidden>
-      <span>最近一次反推</span>
-      <p id="reversePrompt" class="reverse-text"></p>
-      <small id="reverseMeta"></small>
-      <div class="reverse-actions">
-        <button id="copyReverse" type="button">复制</button>
-        <button id="sendReverse" type="button">发送到网页画布</button>
+      <span id="statusIcon" class="status__icon" data-state="idle" aria-hidden="true"></span>
+      <div class="status__text">
+        <strong id="statusTitle" data-i18n="state_idle">等待连接</strong>
+        <span id="statusMessage" data-i18n="idle_message">在网页图片或视频上点右键，就能送进 Iris。</span>
       </div>
     </section>
-    <section id="history" class="history" hidden>
-      <div class="history__head"><span>导入历史</span><button id="clearHistory" type="button">清空</button></div>
-      <ul id="historyList"></ul>
+
+    <section class="card">
+      <h2 class="card__label" data-i18n="section_connections">连接</h2>
+      <ul id="webPairingList" class="conn"></ul>
+      <div class="conn__row">
+        <span class="conn__glyph" data-icon="desktop" aria-hidden="true"></span>
+        <div class="conn__text">
+          <strong data-i18n="desktop_label">Iris Desktop</strong>
+          <small id="desktopState" data-i18n="desktop_idle">未连接</small>
+        </div>
+        <button id="connectDesktop" type="button" class="isl-chip" data-i18n="desktop_connect">连接</button>
+      </div>
     </section>
+
+    <section id="receipt" class="card" hidden>
+      <div class="receipt">
+        <span class="conn__glyph is-done" data-icon="check" aria-hidden="true"></span>
+        <div class="conn__text">
+          <strong id="receiptName"></strong>
+          <small id="receiptDestination"></small>
+        </div>
+      </div>
+    </section>
+
+    <section id="reverse" class="card" hidden>
+      <h2 class="card__label" data-i18n="section_reverse">最近一次反推</h2>
+      <p id="reversePrompt" class="reverse__text"></p>
+      <div class="reverse__foot">
+        <small id="reverseMeta" class="reverse__meta"></small>
+        <button id="copyReverse" type="button" class="isl-chip" data-i18n="copy">复制</button>
+        <button id="sendReverse" type="button" class="isl-chip isl-chip--mint" data-i18n="send_to_canvas">送进画布</button>
+      </div>
+    </section>
+
+    <section id="history" class="card" hidden>
+      <div class="card__head">
+        <h2 class="card__label" data-i18n="section_history">最近导入</h2>
+        <button id="clearHistory" type="button" class="link-btn" data-i18n="clear">清空</button>
+      </div>
+      <ul id="historyList" class="history"></ul>
+    </section>
+
+    <section id="empty" class="empty">
+      <strong data-i18n="empty_title">还没有导入过</strong>
+      <span data-i18n="empty_body">右键网页上的图片：送进画布、送进 Desktop，或反推提示词。</span>
+    </section>
+
+    <footer class="pop__foot">
+      <span class="conn__glyph is-small" data-icon="lock" aria-hidden="true"></span>
+      <span data-i18n="privacy">只传你明确选中的媒体，不扫描整页。</span>
+    </footer>
   </main>
   <script type="module" src="popup.js"></script>
 </body>

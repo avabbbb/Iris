@@ -7,6 +7,8 @@
 
 扩展只处理用户明确选择的媒体，不扫描整页，不内嵌完整 WebUI。导入有分块进度反馈，popup 保留最近 5 条导入历史与失败引导。
 
+popup（1.6 起）视觉按 docs/design/DESIGN.md：`--isl-*` token、奶蛙 logo、「连接」卡合并网页画布配对与 Desktop；所有可见文案在 `_locales/{zh_CN,en}/messages.json`，新增文案先加 key 再在 HTML 用 `data-i18n` 引用。
+
 ## 网页画布通道
 
 允许连接的网页 origin 由 background/web-origins.js 生成并写入 manifest：正式站 iris.avabbbb.com（更名过渡期另放行旧站 flovart.avabbbb.com），以及本地 127.0.0.1:37522 与 localhost:37522。网页侧用环境变量 VITE_IRIS_EXTENSION_IDS 配置扩展 ID（32 位 a-p，逗号分隔，可同时写商店 ID 与旁加载 ID）。

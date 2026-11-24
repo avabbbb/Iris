@@ -1,43 +1,102 @@
 import { PAIRINGS_KEY, readPairings, removePairing, setPairingStatus } from '../background/web-pairings.js';
 
-const statusDot = document.getElementById('statusDot');
+// 在线版 Iris 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
+export const IRIS_WEB_URL = 'https://iris.avabbbb.com/';
+const HISTORY_KEY = 'irisImportHistory';
+// 插件内反推结果：只在 chrome.storage.session（浏览器关闭即清空）。
+const REVERSE_RESULT_KEY = 'irisReversePrompt';
+
+// 文案走 _locales（跟随浏览器语言）；取不到时用 HTML 里的中文兜底。
+const t = (name, fallback = '') => chrome.i18n?.getMessage?.(name) || fallback;
+const uiLocale = (chrome.i18n?.getUILanguage?.() || 'zh-CN');
+document.documentElement.lang = uiLocale;
+for (const node of document.querySelectorAll('[data-i18n]')) {
+  node.textContent = t(node.dataset.i18n, node.textContent);
+}
+
+// lucide 线性图标（与主应用同一套，DESIGN §7），内联以免引入依赖。
+const ICON_PATHS = {
+  idle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  error: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+  desktop: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  canvas: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
+  pending: '<path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+};
+
+function icon(name, size = 14) {
+  const span = document.createElement('span');
+  span.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ''}</svg>`;
+  return span.firstElementChild;
+}
+
+function setIcon(host, name, size) {
+  host.textContent = '';
+  host.appendChild(icon(name, size));
+}
+
+for (const node of document.querySelectorAll('[data-icon]')) {
+  setIcon(node, node.dataset.icon, node.classList.contains('is-small') ? 12 : 14);
+}
+
+const statusIcon = document.getElementById('statusIcon');
 const statusTitle = document.getElementById('statusTitle');
 const statusMessage = document.getElementById('statusMessage');
 const connectButton = document.getElementById('connectDesktop');
+const desktopState = document.getElementById('desktopState');
+const desktopGlyph = connectButton.parentElement.querySelector('.conn__glyph');
 const receipt = document.getElementById('receipt');
 const receiptName = document.getElementById('receiptName');
 const receiptDestination = document.getElementById('receiptDestination');
 const history = document.getElementById('history');
 const historyList = document.getElementById('historyList');
 const clearHistoryButton = document.getElementById('clearHistory');
+const webPairingList = document.getElementById('webPairingList');
+const emptyState = document.getElementById('empty');
+const reverseSection = document.getElementById('reverse');
+const reversePrompt = document.getElementById('reversePrompt');
+const reverseMeta = document.getElementById('reverseMeta');
+const copyReverseButton = document.getElementById('copyReverse');
+const sendReverseButton = document.getElementById('sendReverse');
 
-const HISTORY_KEY = 'irisImportHistory';
-// 在线版 Iris 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
-export const IRIS_WEB_URL = 'https://iris.avabbbb.com/';
-
-document.getElementById('extensionVersion').textContent = 'Browser Import ' + chrome.runtime.getManifest().version;
+document.getElementById('extensionVersion').textContent = 'v' + chrome.runtime.getManifest().version;
 document.getElementById('openIris').addEventListener('click', () => {
   void chrome.tabs.create({ url: IRIS_WEB_URL });
   window.close();
 });
 
+const STATE_ICON = { connected: 'check', imported: 'check', connecting: 'loader', importing: 'loader', error: 'error' };
+
 function render(status) {
   const state = status?.state || 'idle';
-  statusDot.dataset.state = state;
-  statusTitle.textContent = {
-    connected: 'Desktop 已连接',
-    connecting: '正在连接',
-    importing: '正在导入',
-    imported: '导入完成',
-    error: '连接或导入失败',
-  }[state] || '尚未连接';
-  statusMessage.textContent = status?.message || '连接 Desktop 后即可右键导入图片';
-  connectButton.textContent = state === 'error' ? '重新连接' : '连接 / 打开 Iris Desktop';
+  statusIcon.dataset.state = state;
+  setIcon(statusIcon, STATE_ICON[state] || 'idle', 15);
+  statusTitle.textContent = t('state_' + state, t('state_idle', '等待连接'));
+  statusMessage.textContent = status?.message || t('idle_message');
+
+  const desktopOn = state === 'connected';
+  desktopState.textContent = desktopOn ? t('desktop_connected', '已连接') : t('desktop_idle', '未连接');
+  desktopGlyph.classList.toggle('is-on', Boolean(desktopOn));
+  connectButton.textContent = state === 'error' ? t('desktop_retry', '重试') : t('desktop_connect', '连接');
+
   const lastReceipt = status?.receipt;
   receipt.hidden = !lastReceipt;
   if (lastReceipt) {
-    receiptName.textContent = lastReceipt.name;
-    receiptDestination.textContent = lastReceipt.destinationProjectId ? '已路由到活动 Workflow' : '保存在浏览器导入箱';
+    receiptName.textContent = lastReceipt.name || t('untitled', '未命名媒体');
+    receiptDestination.textContent = lastReceipt.destinationProjectId ? t('dest_workflow') : t('dest_inbox');
+  }
+  updateEmpty();
+}
+
+function formatTime(at) {
+  try {
+    return new Date(at).toLocaleTimeString(uiLocale, { hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch {
+    return '';
   }
 }
 
@@ -47,32 +106,29 @@ function renderHistory(entries) {
   historyList.textContent = '';
   for (const entry of list) {
     const item = document.createElement('li');
-    const when = new Date(entry.at).toLocaleTimeString('zh-CN', { hour12: false });
-    item.innerHTML = `<span>${escapeHtml(String(entry.name || '未命名图片'))}</span><small>${when} · ${escapeHtml(String(entry.destination || ''))}</small>`;
+    const name = String(entry.name || t('untitled', '未命名媒体'));
+    const glyph = document.createElement('span');
+    glyph.className = 'conn__glyph is-small';
+    glyph.appendChild(icon(/\.(mp4|webm)$/i.test(name) ? 'video' : 'image', 12));
+    const label = document.createElement('span');
+    label.textContent = name;
+    label.title = entry.destination ? `${name} · ${entry.destination}` : name;
+    const when = document.createElement('small');
+    when.textContent = formatTime(entry.at);
+    item.append(glyph, label, when);
     historyList.appendChild(item);
   }
+  updateEmpty();
 }
 
-function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, char => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[char]));
+function updateEmpty() {
+  emptyState.hidden = !(history.hidden && receipt.hidden && reverseSection.hidden);
 }
 
-chrome.storage.local.get(['irisBridgeStatus', HISTORY_KEY]).then(result => {
-  render(result.irisBridgeStatus);
-  renderHistory(result[HISTORY_KEY]);
-});
-chrome.storage.onChanged.addListener(changes => {
-  if (changes.irisBridgeStatus) render(changes.irisBridgeStatus.newValue);
-  if (changes[HISTORY_KEY]) renderHistory(changes[HISTORY_KEY].newValue);
-});
-const webPairings = document.getElementById('webPairings');
-const webPairingList = document.getElementById('webPairingList');
-
-function pairingButton(label, action) {
+function chip(label, action, variant = '') {
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = 'isl-chip' + (variant ? ' isl-chip--' + variant : '');
   button.textContent = label;
   button.addEventListener('click', () => {
     button.disabled = true;
@@ -83,41 +139,93 @@ function pairingButton(label, action) {
   return button;
 }
 
-// 网页画布配对：pending 显示允许/拒绝，approved 显示断开。拒绝与断开都会删除条目，网页可再次发起。
-function renderPairings(pairings) {
-  const entries = Object.entries(pairings && typeof pairings === 'object' ? pairings : {});
-  webPairings.hidden = entries.length === 0;
-  webPairingList.textContent = '';
-  for (const [origin, entry] of entries) {
-    const item = document.createElement('li');
-    const label = document.createElement('span');
-    label.textContent = origin;
-    const state = document.createElement('small');
-    const approved = entry?.status === 'approved';
-    state.textContent = approved ? '已连接：可导入媒体、同步配置' : '请求连接：确认是你自己打开的 Iris 画布再允许';
-    item.append(label, state);
-    if (approved) {
-      item.append(pairingButton('断开', () => removePairing(origin)));
-    } else {
-      item.append(
-        pairingButton('允许', () => setPairingStatus(origin, 'approved')),
-        pairingButton('拒绝', () => removePairing(origin)),
-      );
-    }
-    webPairingList.appendChild(item);
+function originLabel(origin) {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
   }
 }
 
+// 网页画布配对：pending 显示允许/拒绝，approved 显示断开。拒绝与断开都会删除条目，网页可再次发起。
+function renderPairings(pairings) {
+  const entries = Object.entries(pairings && typeof pairings === 'object' ? pairings : {});
+  webPairingList.textContent = '';
+  if (entries.length === 0) {
+    webPairingList.appendChild(connRow('canvas', t('canvas_label', '网页画布'), t('canvas_none'), false));
+    return;
+  }
+  // 待确认的请求排在前面，并用阳光色底提醒（DESIGN §4：警示 · 待确认）。
+  entries.sort(([, a], [, b]) => Number(a?.status === 'approved') - Number(b?.status === 'approved'));
+  for (const [origin, entry] of entries) {
+    const approved = entry?.status === 'approved';
+    const row = connRow(approved ? 'canvas' : 'pending', originLabel(origin), approved ? t('canvas_connected') : t('canvas_pending'), approved);
+    row.title = origin;
+    const actions = document.createElement('div');
+    actions.className = 'conn__actions';
+    if (approved) {
+      actions.append(chip(t('disconnect', '断开'), () => removePairing(origin), 'danger'));
+    } else {
+      row.classList.add('is-pending');
+      actions.append(
+        chip(t('reject', '拒绝'), () => removePairing(origin), 'danger'),
+        chip(t('allow', '允许'), () => setPairingStatus(origin, 'approved'), 'mint'),
+      );
+    }
+    row.appendChild(actions);
+    webPairingList.appendChild(row);
+  }
+}
+
+function connRow(iconName, title, detail, on) {
+  const row = document.createElement('li');
+  row.className = 'conn__row';
+  const glyph = document.createElement('span');
+  glyph.className = 'conn__glyph' + (on ? ' is-on' : '');
+  glyph.appendChild(icon(iconName));
+  const text = document.createElement('div');
+  text.className = 'conn__text';
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = detail;
+  text.append(strong, small);
+  row.append(glyph, text);
+  return row;
+}
+
+function renderReverse(result) {
+  reverseSection.hidden = !result?.prompt;
+  if (result?.prompt) {
+    reversePrompt.textContent = result.prompt;
+    reverseMeta.textContent = [result.provider, result.model].filter(Boolean).join(' · ');
+    copyReverseButton.textContent = t('copy', '复制');
+    sendReverseButton.textContent = t('send_to_canvas', '送进画布');
+  }
+  updateEmpty();
+}
+
+chrome.storage.local.get(['irisBridgeStatus', HISTORY_KEY]).then(result => {
+  render(result.irisBridgeStatus);
+  renderHistory(result[HISTORY_KEY]);
+});
 readPairings().then(renderPairings);
+chrome.storage.session.get(REVERSE_RESULT_KEY).then(stored => renderReverse(stored[REVERSE_RESULT_KEY]));
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[PAIRINGS_KEY]) renderPairings(changes[PAIRINGS_KEY].newValue);
+  if (area === 'local') {
+    if (changes.irisBridgeStatus) render(changes.irisBridgeStatus.newValue);
+    if (changes[HISTORY_KEY]) renderHistory(changes[HISTORY_KEY].newValue);
+    if (changes[PAIRINGS_KEY]) renderPairings(changes[PAIRINGS_KEY].newValue);
+  }
+  if (area === 'session' && changes[REVERSE_RESULT_KEY]) renderReverse(changes[REVERSE_RESULT_KEY].newValue);
 });
 
 connectButton.addEventListener('click', async () => {
   connectButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: 'IRIS_DESKTOP_CONNECT' });
-    if (!response?.ok) throw new Error(response?.error || '连接失败');
+    if (!response?.ok) throw new Error(response?.error || t('connect_failed', '连接失败'));
   } catch (error) {
     render({ state: 'error', message: error instanceof Error ? error.message : String(error) });
   } finally {
@@ -130,39 +238,17 @@ clearHistoryButton.addEventListener('click', async () => {
   renderHistory([]);
 });
 
-// 插件内反推结果：只在 chrome.storage.session（浏览器关闭即清空），可复制或发送到已配对的网页画布。
-const REVERSE_RESULT_KEY = 'irisReversePrompt';
-const reverseSection = document.getElementById('reverse');
-const reversePrompt = document.getElementById('reversePrompt');
-const reverseMeta = document.getElementById('reverseMeta');
-const copyReverseButton = document.getElementById('copyReverse');
-const sendReverseButton = document.getElementById('sendReverse');
-
-function renderReverse(result) {
-  reverseSection.hidden = !result?.prompt;
-  if (!result?.prompt) return;
-  reversePrompt.textContent = result.prompt;
-  reverseMeta.textContent = result.provider + ' · ' + result.model;
-  copyReverseButton.textContent = '复制';
-  sendReverseButton.textContent = '发送到网页画布';
-}
-
-chrome.storage.session.get(REVERSE_RESULT_KEY).then(stored => renderReverse(stored[REVERSE_RESULT_KEY]));
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'session' && changes[REVERSE_RESULT_KEY]) renderReverse(changes[REVERSE_RESULT_KEY].newValue);
-});
-
 copyReverseButton.addEventListener('click', async () => {
   await navigator.clipboard.writeText(reversePrompt.textContent || '');
-  copyReverseButton.textContent = '已复制';
+  copyReverseButton.textContent = t('copied', '已复制');
 });
 
 sendReverseButton.addEventListener('click', async () => {
   sendReverseButton.disabled = true;
   try {
     const response = await chrome.runtime.sendMessage({ type: 'IRIS_REVERSE_TO_CANVAS' });
-    sendReverseButton.textContent = response?.ok ? '已发送' : '发送失败';
-    if (!response?.ok) reverseMeta.textContent = response?.error || '发送失败';
+    sendReverseButton.textContent = response?.ok ? t('sent', '已送进画布') : t('send_failed', '发送失败');
+    if (!response?.ok) reverseMeta.textContent = response?.error || t('send_failed', '发送失败');
   } finally {
     sendReverseButton.disabled = false;
   }

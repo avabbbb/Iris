@@ -25,6 +25,11 @@ startWebBridge();
 const webKeyStore = createWebKeyStore();
 void registerWebKeyHandlers(onWebMessage, webKeyStore);
 
+// 右键菜单文案跟随浏览器语言（_locales），取不到时回落中文。
+function menuTitle(name, fallback) {
+  return chrome.i18n?.getMessage?.(name) || fallback;
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   void purgeLegacyExtensionStorage().catch(error => {
     console.error('[Iris Browser Import] 清理旧扩展数据失败', error);
@@ -32,32 +37,32 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_IMPORT,
-      title: '添加图片到 Iris',
+      title: menuTitle('menu_import_image', '添加图片到 Iris Desktop'),
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_IMPORT_VIDEO,
-      title: '添加视频到 Iris',
+      title: menuTitle('menu_import_video', '添加视频到 Iris Desktop'),
       contexts: ['video'],
     });
     chrome.contextMenus.create({
       id: MENU_WEB_IMPORT,
-      title: '发送图片到网页画布',
+      title: menuTitle('menu_web_image', '发送图片到 Iris 画布'),
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_WEB_IMPORT_VIDEO,
-      title: '发送视频到网页画布',
+      title: menuTitle('menu_web_video', '发送视频到 Iris 画布'),
       contexts: ['video'],
     });
     chrome.contextMenus.create({
       id: MENU_REVERSE_PROMPT,
-      title: '反推图片提示词（使用网页画布同步的 Key）',
+      title: menuTitle('menu_reverse', '反推图片提示词'),
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_OPEN,
-      title: '连接 / 打开 Iris Desktop',
+      title: menuTitle('menu_open_desktop', '连接 / 打开 Iris Desktop'),
       contexts: ['page', 'image', 'video', 'selection'],
     });
   });
@@ -314,7 +319,7 @@ async function setBridgeStatus(state, message, receipt = null) {
   await chrome.storage.local.set({ irisBridgeStatus: status });
   const badge = state === 'importing' || state === 'connecting' ? '…' : state === 'error' ? '!' : state === 'imported' ? '✓' : '';
   await chrome.action.setBadgeText({ text: badge });
-  if (badge) await chrome.action.setBadgeBackgroundColor({ color: state === 'error' ? '#d14343' : '#168f82' });
+  if (badge) await chrome.action.setBadgeBackgroundColor({ color: state === 'error' ? '#e8615a' : '#12a89b' });
   return status;
 }
 
