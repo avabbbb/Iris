@@ -2,13 +2,15 @@
 
 > 状态：**Current truth**（2026-11-24 按代码重写）。本文是 Iris **唯一**的视觉与动效设计文档：颜色、字体、间距、圆角、层级与玻璃、组件、奶蛙、Canvas / Cut / Agent 布局、动效与弹性布局。交互与行为（状态、流程、出口、谁能做什么）见 [01 交互设计](01-interaction.md)，本文给数值，01 引用数值。
 > 来源：数值全部取自当前代码——`styles/index.css`（主题 token）、`styles/motion.css` + `components/studio/motionTokens.ts`（动效）、`styles/glass.css` / `skillHub.css` / `studioHub.css` / `ambientGlass.css`（玻璃与磨砂）、`styles/workflow.css` / `adaptive.css` / `fluid.css`（画布与布局）、`styles/cut.css` / `irisStoryboard.css`（Cut）、`styles/naiwaThinking.css` + `components/brand/`（奶蛙）。标 **待收敛** 的是代码里仍存在、但不再新增的写法；改 token 时同步改本文。
+> 方向：2026-11-24 起产品转为 **Canvas-first**（人与 Agent 共同创作的无限画布）。§0–§16 描述**当前代码**；Agent 进入画布的对象、交互与 Workbench 见文末「Canvas-first Agent（规划中）」，均为设计目标。
 > 历史：2026-11-13 版本里的“多 Agent 光标 / 子 Agent 色”“Iris 对话首页 display 字号”属于已归档的 Personal Agent 方案（[archive/2026-11-24-agentos-alignment](../archive/2026-11-24-agentos-alignment/)），代码里没有实现，已从本文移除；需要时见 Git 历史。
 
-## 0. Agent-native Production OS 的视觉重心（2026-11-24）
+## 0. 视觉重心（2026-11-24）
 
-Iris 的界面首先服务于**看懂素材、审查 Agent 的改动、比较版本、决定是否应用**。Canvas 是素材/Workflow/审片空间；Cut 是已经可用的视频剪辑器；Agent 是连接/Runtime 管理；对话与上下文在现有 Canvas Assistant Drawer。不要按旧设计里的独立 Iris Personal Agent tab 实现 UI。
+Iris 的界面首先服务于**看懂素材、审查 Agent 的改动、比较版本、决定是否应用**。用户在哪里创作，Agent 就在哪里工作：Canvas 是默认工作区（空间），Agent 视图是同一会话的执行视图，Cut 是时间视图。**当前代码**里 Agent 对话在 Canvas 右侧 Drawer、Agent 页是连接 / Runtime 状态页；画布内 Agent 节点、Turn Card、Workbench 是规划中的方向（见文末「Canvas-first Agent（规划中）」）。不要按旧设计里的独立 Iris Personal Agent tab 实现 UI。
 
-- **Spatial Context**：只把用户明确 Commit 的结论显示成独立 Context Card；卡片短标题、正文、来源 Chip 和「继续讨论」。不把所有消息平铺为节点，来源绑定默认隐藏，选中/悬停才高亮；Workflow 执行连线保持原意。
+- **Spatial Context**：Context Card 只来自用户明确 Commit 的结论；对话轮次可以作为 Turn Card **投影**到画布（只存布局、用户控制折叠，规划中），但不倾倒原始消息气泡。来源绑定默认隐藏，选中 / 悬停才高亮；Workflow 执行连线保持原意。
+- **卡片即内容**（规划中，见文末 D）：画布卡片默认不显示徽标、模型名、时间戳、版本、来源列表、按钮行，选中 / 悬停才出现。
 - **审片与提案**（目标）：用户看得见原版/候选、变更范围、Diff、费用和批准/拒绝；失败有定位、查询或恢复动作。工具日志按需展开，不抢素材画面的空间。
 - **按任务出现的 UI**（目标）：镜头并排、帧段定位、字幕波形、审核卡只在需要时出现，结束后收拢为产物与回执；不加第四个导航入口。
 - **视觉约束**：沿用本文 `--isl-*`、暖纸面/薄荷色、现有 `motion` 与弹性布局。素材优先、浅底高信息密度、避免装饰性图、重复标题和泛化营销文案。
@@ -368,18 +370,18 @@ Iris 是给**剪辑师、创作者和他们的 Agent** 用的本地创作台。�
 ### 16.2 Canvas
 
 - 主体是无限画布（点阵 / 线格可切换）；左侧图层 / 素材 / 本地文件夹侧栏（`WorkflowSidebar`），底部居中浮动工具条（修订号、新建、聚焦、调整、历史、撤销 / 重做、缩放、Agent 开关），左下角小地图与快捷开关。浮动件用玻璃。
-- 右侧停靠抽屉 `StudioRightDrawer`：宽度 280–640px 可拖（`App.tsx`），比最小宽度再窄 72px 吸附收起；内容是内置 Agent 对话（§9.4 环境光磨砂）。
+- 右侧停靠抽屉 `StudioRightDrawer`：宽度 280–640px 可拖（`App.tsx`），比最小宽度再窄 72px 吸附收起；内容是内置 Agent 对话（§9.4 环境光磨砂）。规划中它降为画布上某个对话的详情视图（可关闭），与 Turn Card 双向定位（文末 A）。
 
 ### 16.3 Cut
 
-- 页面（`components/cut/CutPage.tsx`、`styles/cut.css`）：顶部胶囊分段切换「剪辑 / Editor」与「故事版 · 逆向 / Storyboard · Reverse」。
+- 页面（`components/cut/CutPage.tsx`、`styles/cut.css`）：顶部胶囊分段切换「剪辑 / Editor」与「故事版 · 逆向 / Storyboard · Reverse」。规划中去掉「故事版」独立子视图，数据迁成画布上的结构化 Storyboard 节点，能力保留为 Skill / 工具（文末 A）。
 - 剪辑器栅格：上排 **素材箱 | 预览 | 属性**（列宽 `minmax(220px, 280px) | minmax(0, 1fr) | minmax(220px, 270px)`），下排通栏 **时间线**（行高 `minmax(190px, 36%)`），间距 12px，内边距 `10px 16px 16px`。
 - 色板：Cut 与故事版沿用 `styles/irisStoryboard.css` 的蓝紫玻璃色板——底色 `--iris-bg-top` → `--iris-bg-bottom` 渐变（亮 `#e8ecfa` → `#d9d6f2`，暗 `#0e1324` → `#282c58`）+ 微弱光晕，面板是半透明大圆角磨砂（`--iris-glass`，圆角 `--iris-r-panel` 26px / 卡片 18px / 缩略 14px），分段与按钮用白色胶囊（`--iris-pill`）。这是用户指定的例外（覆盖“玻璃只给浮动 chrome”与圆角上限）：两块面板就是停靠面板外壳，素材格子与正文仍是低对比实色填充，不叠第二层 `backdrop-filter`。不要把这套色板带出 Cut / 故事版。
 - 浏览器缺少 WebCodecs 时显示 `cut-unsupported` 提示（`Clapperboard` 图标 + 缺失能力），而不是空白。
 
 ### 16.4 Agent 页与奶蛙
 
-- Agent 视图是连接与状态页（`AgentConnectionsPage`，`components/agent/AgentWorkspace.tsx`、`styles/agentLink.css`）：连接指引 / 连接状态 / 运行日志，事实用两列网格，日志行 `max-content | 4.5ch | 1fr`。没有聊天区。
+- Agent 视图**当前**是连接与状态页（`AgentConnectionsPage`，`components/agent/AgentWorkspace.tsx`、`styles/agentLink.css`）：连接指引 / 连接状态 / 运行日志，事实用两列网格，日志行 `max-content | 4.5ch | 1fr`。没有聊天区。规划中它成为 Agent Workbench（同一 session 的执行视图，文末 E），连接与状态收进二级入口。
 - **奶蛙（Naiwa）** 是 Agent 的形象：圆黄头、绿脸颊、一只手托腮；**只有头和手，没有身体**。
   - 静态 logo：`public/favicon.png`（顶栏、抽屉头部）。
   - 思考动画：`components/brand/NaiwaThinking.tsx` + `styles/naiwaThinking.css`——底图去掉瞳孔和嘴，SVG 叠加瞳孔、眼皮、嘴；3.6s 一个循环（往上看 → 眯眼 → 眨眼 → 换方向 → 回正，头轻晃 ±3°），右上「…」思考气泡 1.2s。关键帧与时长从 OfferU 原样移植，不要改。
@@ -387,9 +389,119 @@ Iris 是给**剪辑师、创作者和他们的 Agent** 用的本地创作台。�
   - 工作胶囊（`.agent-orb-pill`，999px 圆角）：奶蛙 + 静态阶段标签，状态全部来自真实事件（`agentWorkingPhase`）；动效只在奶蛙身上，字不扫光、不打字机；换阶段时旧胶囊模糊 + 右滑 + 淡出（`--motion-medium`），新胶囊淡入。
   - 减弱动效时奶蛙与气泡静止（气泡点全亮）。暗色主题下气泡底色另行适配。
 
+## Canvas-first Agent（规划中）
+
+> **状态：设计目标（2026-11-24 用户确认的新方向），绝大部分未实现。** 本节定义 Agent 进入画布后的对象、交互与视觉；实现时只复用上文 token，不新增色相。下表区分已有基础与目标，对外口径仍以 [SUPPORT_MATRIX.md](../../SUPPORT_MATRIX.md) 为准。代码落点与“不要构建”清单见 [AGENTS.md §1、§3.1](../../AGENTS.md)。
+
+**定位**：Iris — An infinite canvas for human and agent creation. / 人与 Agent 共同创作的无限画布。用户在哪里创作，Agent 就在哪里工作。Canvas 是默认工作区；Agent 是画布里与图片 / 视频 / 文档平级的节点；Right Drawer 是画布上某个对话的详情视图（可关闭），不是唯一入口；Agent 视图 = Agent Workbench，是**同一个** session / Run 的放大执行视图；Cut 是时间视图。三者（空间 / 执行 / 时间）共享一套 session、素材引用、run 记录与工程产物，不是严格流水线：Cut 也能发起 Agent 任务，结果回到同一份状态。
+
+| 能力 | 已实现的基础（代码里已有） | 规划中 |
+| --- | --- | --- |
+| 对话 | Right Drawer 里的内置 Agent 对话（§9.4、§16.2）；轮次时间轴与「回到最新消息」（`agentConversationNavModel.ts`） | 画布内 Agent Session 节点、Turn Card 投影、Drawer ↔ 卡片双向定位 |
+| 上下文 | @ 引用浮层与 chip（`AgentReferenceChip` / `AgentReferencePreview`）；画布编组「添加到 Agent」（`pushAgentGroup`） | 选中即开聊、连线即上下文、剪线移除、Context Card |
+| 审批 / 预算 | 确认卡、计划卡、提问卡（§11.2）；spend / delete 硬闸 | 并行 Agent 共用的预算 / 审批条 |
+| 形象 | 奶蛙 20 / 32px（§16.4） | 并行 Agent 的色环奶蛙 |
+| 执行视图 | Agent 页 = 连接与状态（§16.4） | Agent Workbench |
+| 时间视图 | Cut 剪辑器、浏览器内导出（§16.3） | 作品上的区间评论 → 精准返工 |
+
+### A. 画布上的四种对象
+
+| 对象 | 默认外观（静止） | 选中 / 悬停时出现 | 数据 |
+| --- | --- | --- | --- |
+| **Agent Session** | 一张对话卡：最新结论或输入框 | 模型 + Skill 胶囊、绑定素材的连线高亮、展开 / 打开工作台 | 绑定内置 Runtime 的 session id；素材 refs；模型；Skill |
+| **Turn Card** | 某一轮的结论片段（标题 + 1–3 行） | 「在对话中定位」、分叉、钉成 Context Card | 只存 `sessionId + turnId` + 布局（位置、折叠）；**没有第二份消息库**。点卡 → Drawer 滚到该轮并高亮；Drawer 里点轮次 → 画布平移到该卡（smooth） |
+| **Context Card** | 短标题 + 已确认的结论 | 来源 chips（缩略 + 名称 + `@rev`）、「继续讨论」 | 用户 Commit 才生成；可被其他对话 @ 引用（数据形状见 D） |
+| **Artifact / Project** | 内容本身（图、视频帧、文档首屏、代码工程预览） | 版本条、来源线、操作行 | artifact id + version；`CodeProjectNode`：workspace ref、entrypoint、renderer（`html` / `remotion` / `external`）、revision、preview / rendered artifact ids |
+
+Storyboard 不再是独立子视图：分镜作为结构化 Storyboard 节点落在画布上（属于 Artifact），分镜 / 逆向能力保留为 Skill / 工具。
+
+### B. 六个核心交互
+
+| # | 交互 | 行为 | 前瞻分镜（概念稿，仓库外维护，未提交图片） |
+| --- | --- | --- | --- |
+| 01 | **随处召唤 Agent** | 双击空白处或快捷键 → 原地出现行内输入框（composer 同款，§11.3）；Agent 自行选择搜索 / 分析 / 写代码 / 生成；付费动作仍出计划卡 | 空白画布上一只小奶蛙 + 一行输入框，光标闪烁 |
+| 02 | **选中素材 → 开始讨论** | 框选 / 多选节点 → 「用这些开始讨论」；复用 @ 引用与批量选择 chip。素材到 Session 的连线 = 上下文；剪断连线即移除。上下文只含连线 / 选中的对象，不读整张画布 | 三张素材卡被框选，三条细线汇入一张新对话卡，卡顶一排 chips |
+| 03 | **产物在对话旁生长** | 新产物自动布局在对话卡附近，带出处线（provenance）；**只给新对象找位置，绝不移动用户摆过的节点**；落定用 expressive 弹簧一次（§14.6） | 对话卡右侧依次长出两张图、一段视频，细线指回产生它们的那一轮 |
+| 04 | **从任意一轮分叉** | Turn Card 或 Drawer 里任一轮「从这里分叉」→ 新分支，可换模型 / Skill / 做法。Runtime 支持原生 session fork 时用原生分叉；不支持时新建 session 并以选中的历史作种子——两者在分支头部明确标注（「原生分叉」/「以历史为种子的新会话」），不假装等价 | 一张 Turn Card 下方分出 A / B 两条泳道，B 的头部换了模型胶囊 |
+| 05 | **重任务从 Canvas 无缝展开到 Workbench** | 卡片上「打开工作台」→ 切到 Agent 视图，打开**同一** session / Run，不重发消息、不重选 Skill；返回画布时卡片停在原位、状态同步 | 一张代码工程卡放大成全屏工作台，左对话右预览 |
+| 06 | **直接在作品上评论** | 在产物上做区间评论（见 F），按产物来源路由返工 | 视频卡时间条上框出 00:06–00:09，旁边一条批注气泡 |
+
+05 的分工：
+
+| 留在画布（in-canvas） | 进入 Workbench |
+| --- | --- |
+| 简短问答、单张图 / 单段视频生成、看结论、分叉、Commit 上下文 | 完整对话、计划、实时工程预览、逐帧检查、终端 / 工具日志、源码 diff、参数、渲染、长任务、预算、审批 |
+
+### C. Agent 节点三态
+
+| 状态 | 外观 | 进入 / 退出 |
+| --- | --- | --- |
+| **收起：结论卡** | 节点卡（§11.1）：最新结论 2–4 行；运行中左上 20px 奶蛙 | 默认；点外部收回 |
+| **原地展开：对话** | 固定尺寸的嵌入对话（提案：宽 360、高 480 世界坐标单位，随缩放等比；不随消息增长）；底部 composer | 双击或「展开」；Esc 收起 |
+| **聚焦：Workbench** | 切到 Agent 视图（见 E） | 「打开工作台」；返回键回到画布原位 |
+
+**滚轮规则**：嵌入对话**未选中**时滚轮缩放 / 平移画布；**选中后**滚轮只滚动消息列表，到顶 / 到底不把滚动传给画布。消息正文实底（§9.1 第 1 层），不上玻璃。
+
+### D. 安静卡片规则与上下文绑定（参照 Eden：卡片就是内容）
+
+- 默认**不显示**：徽标、模型名、时间戳、版本号、来源列表、按钮行。这些只在选中 / 悬停时出现（snappy 淡入，§14.3），离开后收起。
+- 例外：真实状态必须一直可见——运行中（奶蛙）、失败（`XCircle` + 文字）、待批准（阳光 `ShieldQuestion`），用图标 + 文字，不只靠颜色。
+- 连线：上下文线用 `--isl-edge`，选中时 `--isl-edge-mint`；出处线比上下文线更淡（`--isl-border`），悬停产物时才加深。Workflow 执行连线保持原意，不与上下文线混用。
+- Context Card 数据形状（沿用原「拓展 UI §6」）：
+
+  ```ts
+  interface CanvasContextCard {
+    id: string;
+    projectId: string;
+    sessionRef?: string;
+    turnId?: string;
+    runId?: string;
+    sources: Array<{ kind: 'node' | 'artifact' | 'document' | 'shot'; id: string; revision?: number }>;
+    summary?: string;
+    outputRefs: string[];
+  }
+  ```
+
+- **绑定范围可见**：选中 Session / Context Card 时，来源外包一圈上下文范围（薄荷 38% 细边 + 4.5% 底，标签「只含连线绑定的 N 个素材 · 模型不读整张画布」）；范围外节点 hover 显示 `EyeOff 未绑定`。不提供“和整张画布聊天”。
+- **实时引用 vs 冻结快照**：实时 = 薄荷实线 + `Radio 实时`、跟随最新 revision；冻结 = ink-ghost 双线 + `Snowflake` + `快照 @r12`，由某次 Run 开跑时锁定；源已更新时出阳光 tag「源已到 r14」+「用最新版重跑」（仍走计划卡审批）。快照不用虚线（虚线留给 `.isl-soon` 与占位）。
+
+### E. 并行 Agent 与 Workbench 布局
+
+**并行 Agent**：一个 session 可把工作拆给多个并发 Agent。每个子 Agent 在它负责的节点左上角显示 20px 奶蛙，外加 2px 色环区分身份（复用分支色：A 蓝 `#3f7fd9` / B 紫 `#7a5cc7` / C 阳光暗 `#b88a00`，第四个起用 `--isl-mint-deep`）；**奶蛙本身不改色、不改造型**（§16.4）。画布底部（或 Session 卡下沿）一条共享的预算 / 审批条：已用（薄荷）、待批准预估（阳光斜纹）、待批准数量、全部暂停。（2026-11-13 归档的“多 Agent 光标 / 子 Agent 色”从未实现，本条是新的规划。）
+
+**Workbench**（Agent 视图，规划中）：
+
+- 默认**两栏**：左对话（同一 session 的完整对话、计划卡、审批卡；宽 `minmax(320px, 38%)`），右实时工程预览（代码工程 iframe 预览 / 渲染结果 / 视频帧，带时间条与帧步进）。
+- **渐进披露**：Skill、历史、文件、终端 / 工具日志、源码 diff、参数、渲染队列都收在右栏顶部的分段标签或底部抽屉里，默认收起；只在相关时自动打开（如出现 diff 时提示「查看改动」），不同时铺开。
+- 顶部：session 标题、模型 + Skill 胶囊（只读，沿用画布上的选择）、预算 / 审批条、「回到画布」。原连接 / 状态页内容收进 Workbench 的二级入口，不另占顶栏。
+- 弹性布局（§15）：≤ 900px 预览叠到对话上方可切换；≤ 560px 只显示对话 + 「预览」按钮。
+
+### F. 区间评论 UI
+
+- 在产物上选区间：视频 / 动画卡的时间条上拖出一段（薄荷 18% 底 + 两端 2px 把手），图片上框选区域，文档上选中文本。
+- 批注气泡（`--isl-card` 实底 + 发丝线）：首行是只读引用 chip `产品宣传片 v2 · 00:06–00:09`，下方输入框；发送时附带 artifact id、version、时间范围（或区域）、project ref。
+- 发送前在气泡底部写明返工路径（一行 caption + 图标）：代码生成的产物 →「将修改代码」；GenAI 产物 →「将局部重生成 / 后期处理」（付费仍出计划卡）；已在 Cut 中 →「将用 Cut 编辑工具修改」。
+- 返工结果作为新版本出现在原产物版本条上（§11.1），旧版本保留，不覆盖用户已选版本。
+
+### G. 代码动画预览（规划中）
+
+HTML / JS 代码动画在沙箱 iframe 中运行（`srcdoc` / Blob URL，`sandbox="allow-scripts"`，不含 `allow-same-origin`），以 `window.seekToFrame(f)` 协议逐帧定位，供时间条拖动、帧检查与浏览器内导出（WebCodecs / mediabunny / ffmpeg.wasm）。预览框是节点内容（第 1 层，实底），播放控件是媒体叠加控件（§9.2 clear）。
+
+### H. 参考（只作参考，不代表 Iris 已具备或对方具备以下以外的能力；登记见 [references.md](references.md)）
+
+- **Eden**：画布上的对话、产物出现在对话卡旁、从某条回复分叉（[Fork a chat](https://eden.so/help/chat/fork-a-chat/)）。不据此声称 Eden 有逐轮侧栏同步。
+- **Slashspace chat node**：节点级模型 / Skill / agent 模式、折叠、分叉、工具审批、在侧栏打开（[文档](https://www.slashspace.ai/docs/nodes/chat-node)）。
+- **FLORA FAUNA**：Agent 读取选中的画布对象、创建并连接节点、运行生成（[文档](https://docs.flora.ai/editor/fauna)）。
+- **microsoft/Huabu**：开源空间化 Agent 工作区；Question Node、Agent 身份、画布上下文、工具操作（[GitHub](https://github.com/microsoft/Huabu)）。
+- **守拙 Shouzhuo-Video-Projects**（CC BY 4.0，署名 @守拙Shouzhuo）：HTML / JS 视频工程、相对事件时间线、`npm run render -- --to 1` 一秒测试渲染（[GitHub](https://github.com/Shouzhuo03/Shouzhuo-Video-Projects)）。
+
+### I. 分期
+
+P0 结构化 Turn Context + 稳定 session refs → P1 画布内 Agent Session、行内输入、从选中素材开始 → P2 每轮投影、Drawer 双向定位、产物就近布局 → P3 分叉、Context Card commit 与上下文连线 → P4 Workbench ↔ 画布会话无缝切换 → P5 Code Project（守拙式 HTML / JS 动画、Hypit 工程预览）→ P6 作品区间评审、精准返工、Cut 与 Resolve 交付。**P0–P2 是第一次有意义的 UX 测试。**
+
 ## 拓展 UI（规划中）
 
-> **规划中，均未实现。** 本节是拓展 UI 的概念规范（2026-11-24），用于后续实现时对齐视觉与交互；不是现行设计，不能当成已上线功能对外宣称。完整版设计说明与概念稿在仓库外维护，本节是精简版。所有概念复用上文 token，**不新增色相**：内容卡实底无阴影、浮动件玻璃、画布无阴影；审批一律用确认卡（左 3px `--isl-sun`）；"原样保留"用 `Lock` + ink-soft；"新分支 / 新时间线"用 `GitBranch` + 薄荷；分支色 A 蓝 `#3f7fd9` / B 紫 `#7a5cc7` / C 阳光暗 `#b88a00`。
+> **规划中，均未实现。** 本节是拓展 UI 的概念规范（2026-11-24），与上节「Canvas-first Agent」对齐：原第 6 项「空间化上下文」已并入上节的 Context Card / 分叉，Scene IR 卡、Branch Review 等作为 Artifact 出现在画布上；用于后续实现时对齐视觉与交互；不是现行设计，不能当成已上线功能对外宣称。完整版设计说明与概念稿在仓库外维护，本节是精简版。所有概念复用上文 token，**不新增色相**：内容卡实底无阴影、浮动件玻璃、画布无阴影；审批一律用确认卡（左 3px `--isl-sun`）；"原样保留"用 `Lock` + ink-soft；"新分支 / 新时间线"用 `GitBranch` + 薄荷；分支色 A 蓝 `#3f7fd9` / B 紫 `#7a5cc7` / C 阳光暗 `#b88a00`。
 
 ### 「即将推出」标签（`.isl-soon`，提案）
 
@@ -401,12 +513,16 @@ Iris 是给**剪辑师、创作者和他们的 Agent** 用的本地创作台。�
 - 多张卡共用一个同步播放头。点某条分支的镜头条 → 薄荷定位针 `MapPin 00:14`，该镜头薄荷描边，其余镜头 `Lock` + 压暗到 55%；只重生成这一个镜头，完成后版本 chip `v1 → v2`，toast"只改了 1 个镜头 · 其余不动"。
 - 降级：< 900px 上下叠放；< 560px 只显示当前分支 + "对比"按钮。
 
-### 2. Scene IR / Context Card（工程压缩卡）
+### 2. Scene IR 卡（工程压缩卡）
 
-- 内容卡：`FileText Scene IR` + `Context Card` chip；元数据"工程 · 时长 · fps · 镜头数"；四段——结构（分段色块，宽 = 时长占比）、节奏（每镜一根薄荷柱）、色彩（5 色块）、字幕（轨数 · 条数 · 版式）。
+> 与上节的 **Context Card**（用户 Commit 的决定）不是同一对象：Scene IR 卡是一种 Artifact（工程的结构化摘要），可以被 @ 引用、也可以被 Commit 进 Context Card。
+
+- 内容卡：`FileText Scene IR` chip；元数据"工程 · 时长 · fps · 镜头数"；四段——结构（分段色块，宽 = 时长占比）、节奏（每镜一根薄荷柱）、色彩（5 色块）、字幕（轨数 · 条数 · 版式）。
 - 底部 `Cpu`"整个工程压成 N tokens，再交给模型"——让人看见模型到底读到了什么。可 @ 进对话，点段展开明细。
 
 ### 3. Resolve 桥接
+
+> Resolve 属于可选的本地伴随件（Tauri / 本机 daemon），不在网页版关键路径上；未连接时画布与 Cut 功能不受影响。
 
 - 宿主面板（Workflow Integration，跟随 Resolve 中性灰、弱品牌）：`已连接` + `Eye 只读`；只读扫描清单 Media Pool / Timeline / Fusion 节点树 / 调色节点骨架，逐行 `LoaderCircle → CheckCircle2`；"只调用官方 API 读取 · 不改动原工程"。
 - 扫描结果连到画布上的 Scene IR 卡。写入前是审批闸门（确认卡）："写入前，先问你" → `GitBranch` 新建 `Timeline_v2_Agent` / `Lock` 原时间线不改动 / `Layers` 插入段；唯一主按钮"批准写入"；"删掉新时间线即可撤销"。
@@ -421,29 +537,8 @@ Iris 是给**剪辑师、创作者和他们的 Agent** 用的本地创作台。�
 
 - run 状态岛（玻璃 pill）：进度环 + "N 个任务 · 后台运行" + 阳光 chip "N 个待批准"。
 - 队列卡：右上今日预算条（薄荷 = 已用，阳光斜纹 = 待批准预估）；每行进度环（排队 `Clock` / 待批准阳光 `CircleDollarSign` / 完成 ✓）+ 模型 · 规格 · 预估费用 · 预计时长 + 动作（取消 / 跳过 · 批准 / 超预算 `Pause 先放着`）。
-- 超过阈值或超预算的任务自动进待批准；底部 `Cpu`"任务跑在本地 Iris 守护进程里 · 关掉窗口也会继续" + `History 可重启恢复`。
+- 超过阈值或超预算的任务自动进待批准；底部按真实运行位置写：网页版 = 「任务跑在浏览器里 · 关闭页面会中断，提交状态未知的任务先查询再决定」；连接了可选的本地 Iris 守护进程时才写「任务跑在本地守护进程里 · 关掉窗口也会继续」+ `History 可重启恢复`。并行 Agent 共用的预算 / 审批条与本队列是同一份数据（上节 E）。
 
-### 6. 空间化上下文 · Context Card / 对话分叉
+### 6. 空间化上下文 · Context Card / 对话分叉（已并入上节）
 
-参考 Eden 画布的"连线即上下文"，但**不把 Iris 变成通用 AI 笔记画布**：Canvas 仍是生产空间，Cut 仍是剪辑器 / 个人后期 Agent，Agent 页仍是外部 Agent 连接与运行状态；始终只有一个主 Agent。
-
-- **Context Card**：选中节点 → 右键「用这些素材开启讨论」（或从连接点拖到空白处）→ 画布上一张绑定这些来源的卡：`MessageSquare` 标题 → source chips（缩略 + 名称 + `@rev` + 状态）→ 已确认的短结论 → 产出 refs（生成计划卡、成片节点）→ "打开会话"链接。
-- **绑定范围可见**：来源 + 卡片外包一圈上下文范围（薄荷 38% 细边 + 4.5% 底，标签"只含连线绑定的 N 个素材 · 模型不读整张画布"）；范围外节点不进上下文（hover 显示 `EyeOff 未绑定`）。不提供"和整张画布聊天"，要更大范围先编组。
-- **实时引用 vs 冻结快照**：实时 = 薄荷实线 + `Radio 实时` + 跟随最新 revision；冻结 = ink-ghost 双线 + `Snowflake` 结 + `快照 @r12`，由某次 Run 开跑时锁定。源已更新时快照行出阳光 tag "源已到 r14" + "用最新版重跑"（仍走生成计划卡审批）。快照不用虚线（虚线留给「即将推出」与占位）。
-- **对话分叉**：从任意回复「从这里分叉」→ 分叉结（`GitFork`）→ 分支泳道 A / B，各自有计划 → Run → 结果节点，泳道头部写追溯"来源 @rev · 回复 #N · 分支 A"。付费分支的计划仍是确认卡（¥ 预估 + 已批准）。
-- **钉到画布**：选中确认过的回复片段 → `Pin 钉到画布` 生成 / 更新 Context Card；回复里的分镜行掉出成真实镜头节点，可拖进 Cut、可单独生成。
-- 数据形状：
-
-  ```ts
-  interface CanvasContextCard {
-    id: string;
-    projectId: string;
-    sessionRef?: string;
-    runId?: string;
-    sources: Array<{ kind: 'node' | 'artifact' | 'document' | 'shot'; id: string; revision?: number }>;
-    summary?: string;
-    outputRefs: string[];
-  }
-  ```
-
-- 分期：**P0** 选中节点作为 Cut / Assistant 上下文 → **P1** 钉成 Context Card 并跨重载保留 → **P2** 对话分叉 → **P3** 关联 Run / 候选结果 / trace（冻结快照）→ **P4** 外部 Agent 经 Skill / CLI / MCP 读取绑定（范围与画布一致）。
+本项已并入「Canvas-first Agent（规划中）」：Context Card 与绑定范围、实时引用 / 冻结快照、数据形状见上节 D；从任意一轮分叉见上节 B-04；钉到画布 = 把确认过的回复 Commit 成 Context Card，回复里的分镜行可掉出成画布上的 Storyboard / 镜头节点（上节 A）。原稿中“始终只有一个主 Agent”“Agent 页只做连接与运行状态”的限定已被新方向取代：一个 session 仍只有一个主 Agent 负责对话，但可以拆出并行子 Agent（上节 E），Agent 视图规划为 Workbench。原分期并入上节 I。
