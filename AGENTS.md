@@ -8,7 +8,7 @@
 | --- | --- |
 | 任何任务 | 本文件；文档地图 [docs/index.md](docs/index.md) |
 | 产品定位、状态归属、路线图 | [docs/design/00-overview.md](docs/design/00-overview.md) |
-| Canvas / Cut / Agent 职责与 AgentOS 路线 | [docs/design/11-iris.md](docs/design/11-iris.md) |
+| Canvas / Cut / Agent 职责与 AgentOS 路线 | [docs/design/11-iris.md](docs/design/11-iris.md)；Canvas-first 方向以本文 §1 与 DESIGN.md「Canvas-first Agent（规划中）」为准（11 未同步处以这两处为准） |
 | 交互行为 | [docs/design/01-interaction.md](docs/design/01-interaction.md) |
 | 视觉、动效、组件 | [docs/design/DESIGN.md](docs/design/DESIGN.md) |
 | 模块细节 | `docs/design/10`（Canvas）`12`（Agent）`13`（生成 / Runtime）`14`（宿主）`15`（Web / 扩展）`20`（质量） |
@@ -20,18 +20,55 @@
 
 ## 1. 产品一句话
 
-**Iris：开源、本地优先的无限画布 AgentOS**（tagline「保留你的原片，多一层创意」）。人和可插拔的 Agent（内置模型或外部 Codex / Claude Code / DSH）在同一份可见状态上理解素材、提出修改、经审批执行、留下可追溯的产物与 run，再把验证过的流程沉淀为 Skill。“一个人拥有小型剪辑团队的能力”是愿景，不是当前能力或效率承诺。
+**Iris — An infinite canvas for human and agent creation. / 人与 Agent 共同创作的无限画布。**（副句：Think spatially. Create with anything. Stay in control. / 在空间中思考，以任何合适的方式创作，始终掌握作品的控制权。）「开源的无限画布 AgentOS」仍可作描述语。一句话原则：**用户在哪里创作，Agent 就在哪里工作。** 人和可插拔的 Agent（内置模型或外部 Codex / Claude Code / DSH）在同一份可见状态上理解素材、提出修改、经审批执行、留下可追溯的产物与 run，再把验证过的流程沉淀为 Skill。“一个人拥有小型剪辑团队的能力”是愿景，不是当前能力或效率承诺。
 
-顶栏严格为 **Canvas｜Cut｜Agent**（中文 画布｜Cut｜Agent）：
+> 2026-11-24 起的方向是 **Canvas-first**（下文 §1.1–§1.5）。除特别标注“已实现”外，Canvas 内 Agent、Turn Card、Workbench、Code Project 都是**设计目标**；现状以代码和 [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) 为准，视觉规范见 [DESIGN.md「Canvas-first Agent（规划中）」](docs/design/DESIGN.md)。
 
-| 入口 | 是什么 | 状态权威 |
+顶栏严格为 **Canvas｜Cut｜Agent**（中文 画布｜Cut｜Agent）。三者是同一套会话、素材引用、run 记录和工程产物的**三种视图**（空间 / 执行 / 时间），不是严格流水线：Cut 也可以发起 Agent 任务，结果回到同一份状态。
+
+| 视图 | 目标定位 | 现状（已实现） | 状态权威 |
+| --- | --- | --- | --- |
+| **Canvas**（空间，默认工作区） | 无限画布；Agent 作为与图片 / 视频 / 文档平级的节点嵌在画布里 | 画布、生成节点、素材 / 版本、Workflow；Agent 对话在右侧 Drawer | Browser Workflow（`components/workflow/store.ts`）；修改带 `projectId + expectedRevision + mutationId` |
+| **Agent**（执行）= Agent Workbench | **同一个** session / Run 的放大执行视图：完整对话、计划、实时工程预览、帧检查、终端 / 工具日志、源码 diff、参数、渲染、长任务、预算、审批。从画布「打开工作台」进入，不重发消息、不重选 Skill | 连接与状态页（`AgentConnectionsPage`，`components/agent/AgentWorkspace.tsx`） | 会话归内置 Runtime 或外部 Harness；Workbench 不存第二份对话或工程 |
+| **Cut**（时间） | 时间线拼装与交付 | **已实现的浏览器视频剪辑器**（时间线、字幕、属性、代理、导出）+ 子页「故事版 · 逆向」（计划迁移，见 §1.3） | `services/cut/cutStore.ts`；UI 与 `iris_cut_*` 工具共用同一批操作 |
+| Right Drawer（Canvas 右侧，**不是**第四个顶栏） | 画布上某个对话的详情视图，可关闭；不是 Agent 的唯一入口 | 内置 Agent 对话、引用、工具调用、审批的唯一入口 | 同上 |
+
+### 1.1 画布上只有四种 Agent 相关对象（设计目标）
+
+| 对象 | 是什么 | 硬约束 |
 | --- | --- | --- |
-| **Canvas** | 无限画布、生成节点、素材 / 版本、Workflow | Browser Workflow（`components/workflow/store.ts`）；修改带 `projectId + expectedRevision + mutationId` |
-| **Cut** | **已实现的浏览器视频剪辑器**（时间线、字幕、属性、代理、导出）+ 子页「故事版 · 逆向」 | `services/cut/cutStore.ts`；UI 与 `iris_cut_*` 工具共用同一批操作 |
-| **Agent** | Runtime、Provider / 模型、外部 Harness、Skill 的连接与状态中心 | 不存第二份对话或工程 |
-| Assistant Drawer（Canvas 右侧，**不是**第四个顶栏） | 内置 Agent 对话、引用、工具调用、审批 | 会话归内置 Runtime 或外部 Harness |
+| **Agent Session** | 活的对话卡：绑定素材（连线 / 选中）、模型 + Skill | 绑定内置 Runtime 已有的 session id；不新建会话系统 |
+| **Turn Card** | 同一 session 某一轮的**投影**（按 `turnId`） | 只存布局（位置、折叠），不存消息副本；点卡 → Drawer 定位到该轮，反之亦然 |
+| **Context Card** | 用户 Commit 的决定，可被其他对话引用 | 只有用户确认才生成；带来源 refs |
+| **Artifact / Project** | 图 / 视频 / 文档 / 代码与可编辑工程；`CodeProjectNode` = workspace ref、entrypoint、renderer（`html` / `remotion` / `external`）、revision、preview / rendered artifact ids | 产物是持久 artifact，不是聊天消息、临时 URL 或 base64 |
 
-**不要构建**：第四个顶栏、第二个 Canvas、聊天消息铺满画布、统一多 Agent 会话数据库、第二套 Workflow / Provider / Task / Session Store、“万能 Resolve API”、默认上传整张画布、未经许可的付费生成或破坏性写入。
+Agent 节点三态：收起的结论卡 / 原地展开的对话 / 聚焦（Workbench）。一个 session 可拆成多个并行 Agent，共用一条预算 / 审批条。
+
+### 1.2 不要构建
+
+- 第四个顶栏、第二个 Canvas、“万能 Resolve API”、第二套 Workflow / Provider / Task / Session Store、**第二个聊天数据库**或统一多 Agent 会话库。
+- Agent 对话轮次**可以**作为 Turn Card 投影到画布（投影、只存布局、由用户控制折叠）；但**不要**不受控地把原始消息气泡倾倒在画布上。
+- 不要让 Agent 移动用户手动摆放的节点：新产物自动布局在对话旁，用户放过的位置不动。
+- 不要默认上传整张画布：上下文 = 连线 / 选中的对象；剪断连线即移除上下文。
+- 未经批准的付费生成或破坏性写入（§5 闸门照旧）。
+- 不要把本地 Runtime（Tauri、本机 daemon、Resolve、Hypit CLI、本地 Claude Code / Codex）放上关键路径：它们是可选伴随件，网页版必须独立可用（§1.4）。
+- 不要为 Storyboard 再造独立子视图；不要让 Adapter 统一时间线 schema；不要假设 Skill 与 Adapter 一一对应（§1.3）。
+
+### 1.3 Adapter、Skill 与 Storyboard（设计目标）
+
+- **Adapter** 统一的是工程生命周期：`detect` / `capabilities` / `inspect` / `preview` / `collectArtifacts`，**不**统一各家时间线 schema。**Skill ≠ Adapter**，不是一一对应：一个 Skill 可用多个 Adapter，一个 Adapter 服务多个 Skill。
+- **Storyboard**：去掉 Cut 下的独立子视图（`components/reverse/IrisStoryboardPage.tsx`、`WorkflowStoryboardView`），数据迁成画布上的结构化 Storyboard 节点；分镜 / 逆向的业务能力保留为 Skill / 工具（`services/reverse/`）。迁移是带数据迁移与测试的独立 PR。
+
+### 1.4 部署现实（静态网页优先）
+
+- 网页版是纯静态站（https://iris.avabbbb.com），部署在 Cloudflare；BYOK，模型请求经 `worker/index.ts` 的无状态 `/api/llm-proxy/*`；业务数据在 IndexedDB（localforage）。没有服务端数据库。
+- HTML / JS 代码动画（目标）在沙箱 iframe 里运行：`srcdoc` 或 Blob URL、`sandbox="allow-scripts"`（不加 `allow-same-origin`），通过 `window.seekToFrame(f)` 协议逐帧定位；导出在浏览器内用 WebCodecs / mediabunny / ffmpeg.wasm。
+- 画布引擎：当前是 **DOM + CSS transform**（`InfiniteWorkflow.tsx` 的 `.workflow-world`）。`konva` / `react-konva` 虽在 `package.json` 里，但源码没有引用；不要假设画布是 Konva，换引擎需单独决定。
+- Tauri / 本地 Runtime（`src-tauri/`、`agent/`、Resolve、Hypit CLI、本地 Claude Code / Codex）是可选伴随件；依赖缺失时返回 `CAPABILITY_UNAVAILABLE`，网页功能不受影响。
+
+### 1.5 路线图（设计目标）
+
+P0 结构化 Turn Context + 稳定 session refs → P1 画布内 Agent Session、行内输入、从选中素材开始 → P2 每轮投影、Drawer 双向定位、产物就近布局 → P3 分叉、Context Card commit 与上下文连线 → P4 Workbench ↔ 画布会话无缝切换 → P5 Code Project（守拙式 HTML / JS 动画、Hypit 工程预览）→ P6 对作品的区间评审、精准返工、Cut 与 Resolve 交付。**P0–P2 是第一次有意义的 UX 测试。**
 
 ## 2. 改名：Flovart → Iris（2026-11-20）
 
@@ -91,6 +128,24 @@ third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md
 
 旧 Go 后端（`backend/`）已于 2026-11-17 删除（回滚点 tag `go-backend-final`）；不要再引入服务端数据库。需要服务端逻辑时，用 TypeScript 在 Worker 里无状态实现。CLI 帮助文本里残留的 “Vite/Go/Docker” 字样是过时字符串，不代表 Go 服务仍存在。
 
+### 3.1 Canvas-first Agent 的落点（复用现有文件，不建并行系统）
+
+下列路径均已在仓库中核对存在（2026-11-24）；“落点”列是**设计目标**，不是已实现能力。
+
+| 功能 | 复用的现有文件 | 落点 |
+| --- | --- | --- |
+| 会话权威 / 稳定 session ref（P0） | `services/browserAgentKernel.ts`（pi-agent-core session，localforage key `iris.agent.sessions.<projectId>`）、`components/agent/IrisAgentPanel.tsx`（`activeSessionId`） | Agent Session、Turn Card 只引用这里的 session id / turnId。`WorkflowProject.agentSessions`（`components/workflow/types.ts`）是项目格式里的旧字段，当前代码只初始化为空、不写入，**不要**把它扩成第二份会话库 |
+| 轮次切分 / Turn Context（P0、P2） | `components/agent/agentConversationNavModel.ts`、`AgentConversationNav.tsx`、`agentTranscript.ts`、`agentTurnText.ts`、`agentMessageRefs.ts` | 稳定 turnId 从现有“一轮 = 一条用户消息 + 其后回复”的切分派生；Drawer 定位复用 Conversation Nav |
+| Right Drawer / 打开工作台 | `components/studio/StudioRightDrawer.tsx`、`components/agent/AgentDrawerSections.tsx`、`components/workflow/agentDrawerRequest.ts`、`components/agent/AgentWorkspace.tsx` | Drawer = 对话详情；Workbench 是 Agent 视图承载同一 session（替换 / 扩展现有连接页，连接与状态收进 Workbench 的二级入口） |
+| 选中素材开始讨论、@ 引用（P1） | `stores/useAgentGroupInboxStore.ts`（`pushAgentGroup`，已有「添加到 Agent」）、`components/agent/AgentReferenceChip.tsx`、`AgentReferencePreview.tsx`、`components/workflow/WorkflowNodeLasso.tsx` | 复用 @ 引用与批量选择 chip；连线即上下文 |
+| 画布节点 / 连线 / 布局（P1–P3） | `components/workflow/InfiniteWorkflow.tsx`、`WorkflowNode.tsx`、`WorkflowConnections.tsx`、`arrange.ts`、`agentOps.ts`、`draftAuthority.ts`、`services/workflowAgentBridge.ts` | Agent Session / Turn / Context / Code Project 作为新节点类型进入同一 Workflow（带 revision + 幂等）；就近布局只放新节点 |
+| Skill 启动 | `components/agent/ProductionSkillDeck.tsx`、`services/productionSkillLaunch.ts`、`stores/useProductionSkillComposerStore.ts` | 画布行内输入与 Workbench 共用同一 Skill 选择，切视图不重选 |
+| 计划 / 预算 / 审批 / 长任务 | `components/agent/agentRunPlanStore.ts`、`AgentRunPlanCard.tsx`、`services/agentToolPolicy.ts`、`services/agentTaskStore.ts`、`services/browserAgentTasks.ts`；本机 `agent/task-store.js` | 并行 Agent 共用一条预算 / 审批条，数据仍走这些台账 |
+| 外部 Agent 与工作区 | `agent/workspace-lease.js`（带 revision 的工作区租约）、`agent/host-projection.js`（把 Iris Skill 投影到外部 Agent 宿主——**不是** Turn 投影） | 外部 Harness 写画布仍经租约与 revision |
+| 产物登记 | `services/studio/artifactRegistry.ts`、`services/productionProjectionAdapter.ts` | Artifact / CodeProjectNode 的 artifact id 与 run 引用 |
+| Cut 与 Agent | `services/cut/agentOps.ts`、`agentTools.ts`、`render.ts`、`exportTarget.ts` | Cut 内的范围评论走现有 `iris_cut_*` 操作 |
+| Storyboard 迁移 | `components/reverse/IrisStoryboardPage.tsx`、`components/workflow/WorkflowStoryboardView.tsx`、`productionBible.ts`、`stores/useReverseStore.ts`、`services/reverse/` | 数据迁成画布 Storyboard 节点，能力留作 Skill / 工具 |
+
 ## 4. 命令（都来自 package.json / Makefile / CI）
 
 | 目的 | 命令 |
@@ -121,6 +176,7 @@ third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md
 - **Workflow 修改**必须带目标、revision 与幂等键；晚到结果不能覆盖用户已选的版本。临时 URL、聊天消息、base64 不是持久产物。
 - **宿主只走官方 API。** Resolve 面板经 Media Pool `ImportMedia` 导入候选（`integrations/studio/resolve/main.js`）；**不要直接读写 Resolve 工程数据库或解析私有 .drp / .drx / Project.db 来宣称工程理解**。写回分级：P0 Add to Media Pool → P1 新轨道 → P2 Replace / Commit，后两级需真机验证与明确审批。
 - **内置 Agent 不开放任意执行**：没有 shell、任意文件读写或任意 ffmpeg 参数；本地文件只经用户授权的文件夹（`iris_local_folder` / `iris_grep`）；网页截图录屏只走 `capture.ui`（localhost / 授权页面，需确认）。
+  Workbench（规划中）里的终端 / 工具日志只展示外部 Harness 或本地 Runtime 的真实输出，不因此给内置 Agent 开 shell；代码动画只在沙箱 iframe（不含 `allow-same-origin`）里执行。
 - **凭据**：API Key 只在本机加密存储（`utils/keyVault.ts`）或安全存储；不得进入提示词、日志、Skill、宿主工程、素材 metadata 或仓库。Agent / CLI 只拿脱敏后的就绪状态。外部 Agent 不得直接写 React / Zustand 状态、浏览器存储、Runtime 数据库或 Provider 私有 API。
 - 发版、打 tag、推送、商店上架、生产签名只在用户明确要求时做。
 
@@ -142,6 +198,7 @@ third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md
 - 弹性布局是硬要求：按组件自身宽度用 `@container` 逐级降级，被收起的功能保留入口。新 `className` 必须有对应 CSS。
 - 新 UI 必须挂到真实入口；mock-only 面板不算交付。持续任务显示真实状态，不能用动画掩盖失败或未知提交。
 - UI 验收：真实入口截宽 / 中 / 最小三档 + 收起态，亮暗各一组，截图附在 PR。设计或动效改动前先查参考（Inspora、Awwwards、GSAP Showcase、Refero），在 [references.md](docs/design/references.md) 登记出处。
+- **卡片即内容**（Canvas-first，规划中）：画布上的 Agent / Turn / 产物卡默认不显示徽标、模型名、时间戳、版本、来源列表、按钮行，只在选中 / 悬停时出现；嵌入对话固定尺寸，未选中时滚轮缩放画布、选中后才滚动消息。细则见 DESIGN.md「Canvas-first Agent（规划中）」。
 - 奶蛙（`components/brand/NaiwaThinking.tsx`）是 Agent 的形象：只头部 + 托腮的手，用于思考 / 工作状态，不改造型与关键帧。
 
 ## 8. 文档放在哪

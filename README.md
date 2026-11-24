@@ -1,13 +1,14 @@
 <h1 align="center">Iris</h1>
 
 <p align="center">
-  <strong>Iris — an open-source AgentOS on an infinite canvas.</strong><br />
+  <strong>Iris — An infinite canvas for human and agent creation.</strong><br />
+  <sub>An open-source AgentOS on an infinite canvas · 人与 Agent 共同创作的无限画布</sub><br />
   An agent-native creative production workspace: the Canvas organizes assets and generation, Cut edits the video timeline, and your agent helps you understand the project, review candidates and refine specific parts. Local-first, bring your own model keys (BYOK).
 </p>
 
 <p align="center">
-  <strong>Keep your footage. Add a creative layer.</strong><br />
-  <sub>保留你的原片，多一层创意</sub>
+  <strong>Think spatially. Create with anything. Stay in control.</strong><br />
+  <sub>在空间中思考，以任何合适的方式创作，始终掌握作品的控制权</sub>
 </p>
 
 <p align="center">

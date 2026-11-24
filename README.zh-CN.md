@@ -1,12 +1,13 @@
 <h1 align="center">Iris</h1>
 
 <p align="center">
-  <strong>Iris —— 开源的无限画布 AgentOS。</strong><br />
+  <strong>Iris —— 人与 Agent 共同创作的无限画布。</strong><br />
+  <sub>开源的无限画布 AgentOS · 用户在哪里创作，Agent 就在哪里工作。</sub><br />
   Agent-native 创作生产工作台：Canvas 组织素材与生成流程，Cut 剪辑视频时间线，Agent 帮你理解工程、审查候选、精准返工；本地优先，模型自带密钥（BYOK）。
 </p>
 
 <p align="center">
-  <strong>保留你的原片，多一层创意。</strong>
+  <strong>在空间中思考，以任何合适的方式创作，始终掌握作品的控制权。</strong>
 </p>
 
 <p align="center">
