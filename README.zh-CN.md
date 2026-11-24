@@ -41,29 +41,9 @@
   <sub>README 展示次数 · 第三方计数，非独立访客</sub>
 </p>
 
-<p align="center">
-  <img src="pic/readme/screenshots/hero-zh.png" alt="Iris 画布：参考图、涂鸦图层与视频节点连接在同一份 Workflow 中" width="100%" />
-  <br />
-  <sub>截图摄于 2026-11-20 更名前，界面仍显示旧名 Flovart 和旧的第二个 tab 名。</sub>
-</p>
-
-## 先看 90 秒演示片
-
-https://github.com/user-attachments/assets/2c77106e-8795-4308-82ce-51688d3ea259
-
-<sub>页面内为 720p · [1080p 原片](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_90s.mp4)</sub>
-
-一句话开场——「把小猫的绿幕背景，换成参考图里的场景」：Agent 先列生成计划，缺帧自己补、失败自己换路，拿不准先问你，关键一步等你批准；随后剪辑、卡点、调色、配乐，最后把跑通的流程存成 Skill。
-
-**画面为演示动画**，按真实工作流重制，展示的是方向而不是逐项已验证的能力。哪些已经实现、哪些在规划中，见下面两节与 [Support Matrix](SUPPORT_MATRIX.md)。
-
-## 前瞻片：Iris 接下来的方向（规划中）
-
 https://github.com/user-attachments/assets/9eadf0d3-ec36-4f40-8115-342c9891de40
 
-<sub>页面内为 720p · [1080p 原片](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Foresight_100s.mp4)</sub>
-
-100 秒讲清 Canvas-first：Agent 就在画布上、在作品旁边工作；历史对话变成卡片，任意一轮都能分叉成新分支；重任务一键展开到 Agent 工作台；多个 Agent 并行协作；直接在成片的某个时间段上留评论让它返工。**片中内容均为规划，尚未上线**，设计细节见 [DESIGN.md](docs/design/DESIGN.md)。
+<p align="center"><sub>演示动画，部分功能为规划中，见<a href="#规划中roadmap">规划中</a> · <a href="https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Foresight_100s.mp4">1080p 原片</a></sub></p>
 
 **跳转：** [已实现](#已实现) · [规划中](#规划中roadmap) · [快速开始](#快速开始) · [界面一览](#界面一览) · [架构](#架构) · [兼容性](#兼容性) · [本地优先与安全](#本地优先与安全) · [参与贡献](#参与贡献)
 
