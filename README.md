@@ -50,11 +50,21 @@
 
 ## Watch the 90-second demo film
 
-[![Watch Iris: one sentence, handed to the Agent](pic/readme/vision/Iris_Promo_90s-poster.jpg)](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_90s.mp4)
+https://github.com/user-attachments/assets/2c77106e-8795-4308-82ce-51688d3ea259
+
+<sub>720p inline · [1080p original](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Promo_90s.mp4)</sub>
 
 It starts from one sentence — "swap the cat's green-screen background for the scene in the reference image." The Agent drafts a generation plan, fills a missing frame, recovers from a failed call, asks when it is unsure and waits for your approval on the key step; then it edits, cuts to the beat, grades, scores, and saves the working flow as a Skill.
 
 **This is an animated demo**, rebuilt from a real workflow. It shows the direction, not a list of verified capabilities — see the next two sections and the [Support Matrix](SUPPORT_MATRIX.md) for what exists today and what is planned.
+
+## Foresight film: where Iris is heading (planned)
+
+https://github.com/user-attachments/assets/9eadf0d3-ec36-4f40-8115-342c9891de40
+
+<sub>720p inline · [1080p original](https://github.com/avabbbb/Iris/raw/refs/heads/main/pic/readme/vision/Iris_Foresight_100s.mp4)</sub>
+
+The canvas-first direction in 100 seconds: the Agent lives on the canvas next to your work, past turns become cards, any reply can fork into a branch, heavy tasks open in the Agent Workbench, several agents work in parallel, and you comment directly on a time range of the result. **Everything in this film is planned, not shipped** — see [DESIGN.md](docs/design/DESIGN.md) for the design.
 
 **Jump to:** [What works today](#what-works-today) · [Roadmap](#roadmap-planned) · [Quick start](#quick-start) · [Feature tour](#feature-tour) · [Architecture](#architecture) · [Compatibility](#compatibility) · [Local-first and security](#local-first-and-security) · [Contributing](#contributing)
 
