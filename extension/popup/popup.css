@@ -1,4 +1,4 @@
-/* Iris 扩展弹窗：token 取自 docs/design/DESIGN.md §2/§4（--isl-*），只用于弹窗。 */
+/* Iris 扩展弹窗：token 取自 docs/design/DESIGN.md §2/§4（--isl-*），玻璃取自 §9.2 / §9.4（--glass-* / --amb-*），只用于弹窗。 */
 :root {
   color-scheme: light dark;
   --isl-font: "Inter", "Noto Sans SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
@@ -143,6 +143,74 @@ button:disabled { cursor: wait; opacity: .5; }
 .empty span { color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; }
 
 .pop__foot { display: flex; align-items: center; gap: 4px; padding: 0 2px; color: var(--isl-ink-ghost); font-size: 10px; line-height: 14px; }
+
+/* ── 玻璃 · DESIGN.md §9.2 + §9.4 ──
+   弹窗本身是浮在网页之上的 chrome：底层是环境光（顶部薄荷、右中淡紫、底部蜜桃），
+   卡片是磨砂卡（半透明 + blur + 顶部内高光 + 柔和远投影），主按钮带内高光与薄荷光晕。
+   卡片互为兄弟、不嵌套玻璃；减弱透明度 / 高对比 / 不支持 backdrop-filter 时回退实底。 */
+:root {
+  --amb-p1: rgba(25, 200, 185, .30);
+  --amb-p2: rgba(150, 140, 235, .22);
+  --amb-p3: rgba(245, 160, 110, .24);
+  --amb-card: rgba(255, 255, 255, .56);
+  --amb-card-strong: rgba(255, 255, 255, .72);
+  --amb-card-filter: blur(20px) saturate(160%);
+  --amb-stroke: rgba(255, 255, 255, .75);
+  --amb-card-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 .5px rgba(31, 29, 26, .07), 0 8px 22px -12px rgba(31, 29, 26, .18);
+  --amb-sunk: rgba(31, 29, 26, .045);
+  --amb-chip: rgba(255, 255, 255, .5);
+  --amb-go-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 4px 12px -4px rgba(25, 200, 185, .65);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --amb-p1: rgba(58, 217, 201, .16);
+    --amb-p2: rgba(130, 120, 255, .16);
+    --amb-p3: rgba(240, 122, 114, .14);
+    --amb-card: rgba(255, 255, 255, .06);
+    --amb-card-strong: rgba(255, 255, 255, .10);
+    --amb-card-filter: blur(20px) saturate(140%);
+    --amb-stroke: rgba(255, 255, 255, .10);
+    --amb-card-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 0 0 .5px rgba(0, 0, 0, .5), 0 10px 26px -14px rgba(0, 0, 0, .7);
+    --amb-sunk: rgba(0, 0, 0, .22);
+    --amb-chip: rgba(255, 255, 255, .06);
+    --amb-go-shadow: inset 0 1px 0 rgba(255, 255, 255, .30), 0 4px 14px -4px rgba(58, 217, 201, .45);
+  }
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media not all and (prefers-reduced-transparency: reduce) {
+    @media not all and (prefers-contrast: more) {
+      body { position: relative; isolation: isolate; }
+      /* 环境光画在 ::before 上，卡片的 backdrop-filter 才有东西可糊 */
+      body::before {
+        content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none;
+        background:
+          radial-gradient(90% 38% at 12% 0%, var(--amb-p1), transparent 72%),
+          radial-gradient(60% 42% at 104% 42%, var(--amb-p2), transparent 70%),
+          radial-gradient(95% 36% at 40% 104%, var(--amb-p3), transparent 72%),
+          var(--app-bg);
+      }
+      .card, .status {
+        border-color: var(--amb-stroke);
+        background: var(--amb-card);
+        -webkit-backdrop-filter: var(--amb-card-filter);
+        backdrop-filter: var(--amb-card-filter);
+        box-shadow: var(--amb-card-shadow);
+      }
+      .empty { border-color: color-mix(in srgb, var(--isl-border-strong) 80%, transparent); background: color-mix(in srgb, var(--amb-card) 60%, transparent); }
+      .reverse__text { background: var(--amb-sunk); }
+      .conn__glyph:not(.is-on):not(.is-done):not(.is-small) { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }
+      .conn__row.is-pending { background: color-mix(in srgb, var(--isl-sun-bg) 70%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--isl-sun) 35%, transparent); }
+      .history li { border-top-color: color-mix(in srgb, var(--isl-border) 60%, transparent); }
+      .isl-chip { border-color: var(--amb-stroke); background: var(--amb-chip); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 0 .5px rgba(31, 29, 26, .08); }
+      .isl-chip:hover { border-color: var(--amb-stroke); background: var(--amb-card-strong); }
+      .isl-chip--mint { background: color-mix(in srgb, var(--isl-mint) 16%, transparent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 0 .5px color-mix(in srgb, var(--isl-mint) 45%, transparent); }
+      .isl-go { border-radius: 999px; box-shadow: var(--amb-go-shadow); }
+      .link-btn:hover { background: var(--amb-card-strong); }
+      .pop__logo { box-shadow: 0 0 0 .5px rgba(31, 29, 26, .08), 0 4px 10px -4px rgba(31, 29, 26, .25); }
+    }
+  }
+}
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
