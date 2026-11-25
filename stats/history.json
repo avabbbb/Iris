@@ -938,6 +938,14 @@
       "watchers": 0,
       "releases": 6,
       "downloads": 37
+    },
+    {
+      "date": "2026-11-25",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 7,
+      "downloads": 37
     }
   ],
   "releaseAssets": [
@@ -1080,6 +1088,48 @@
       "updatedAt": "2026-11-22T16:58:44Z"
     },
     {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_0.1.1_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:05:50Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:03:09Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_0.1.1_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:03:05Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:05:21Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_0.1.1_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:10:11Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:05:53Z"
+    },
+    {
+      "release": "nightly-312-2656cee",
+      "name": "Iris_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-25T04:10:14Z"
+    },
+    {
       "release": "nightly-311-4ecbe93",
       "name": "Iris_0.1.1_aarch64.dmg",
       "downloads": 0,
@@ -1200,5 +1250,5 @@
       "updatedAt": "2026-11-20T02:10:39Z"
     }
   ],
-  "updatedAt": "2026-11-24T10:02:50.100Z"
+  "updatedAt": "2026-11-25T08:47:31.505Z"
 }
