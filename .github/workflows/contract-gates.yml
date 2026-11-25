@@ -1,0 +1,50 @@
+name: Contract gates (PR)
+
+# The Rust runtime contract pins the command registry hash
+# (src-tauri/tests/runtime_contract.rs). CI only ran `cargo test` after merge,
+# so a registry change reached main with a stale pin (466abae3 -> e1ddce1).
+# Run the contract test on PRs that touch the registry or the Rust runtime.
+# Pushes to main keep running the full `cargo test` in ci.yml.
+on:
+  pull_request:
+    paths:
+      - 'tools/iris/contracts/**'
+      - 'tools/iris/registry.js'
+      - 'src-tauri/**'
+      - 'scripts/build-agent-sidecar.mjs'
+      - '.github/workflows/contract-gates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contract-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-contract:
+    name: Rust runtime contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tauri's build script requires the externalBin sidecar to exist (0eb7671d).
+      - name: Build Tauri agent sidecar fixture
+        run: node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
+
+      - name: Runtime contract tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test runtime_contract

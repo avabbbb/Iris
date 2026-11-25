@@ -60,8 +60,9 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run version:check
 
+      # Also on PRs (audit PR1 / C1): the public-surface allowlist drifted twice
+      # because red-team only ran after merge (b24d6512, 94a7f8e8).
       - name: Release red-team invariants
-        if: github.event_name != 'pull_request'
         run: npm run release:red-team
 
       - name: Tracked secret audit

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 护栏：PR 也跑契约门禁——`ci.yml` 的 `release:red-team` 不再只在 main 上跑（公开面白名单曾两次在合并后才发现漂移，b24d6512 / 94a7f8e8）；新增 `.github/workflows/contract-gates.yml`，PR 改到 `tools/iris/contracts/**`、`tools/iris/registry.js`、`src-tauri/**` 时运行 `cargo test --test runtime_contract`（466abae3 改了注册表、Rust 里钉住的 registry hash 直到 e1ddce1 才在 main 上补）。main 的 push 仍跑完整 `cargo test`。
 - 护栏：生产构建（`vite build`，production 模式）前运行 `scripts/check-build-env.mjs`，任何一条命中即构建失败——生效的扩展 ID 为空（06d1647 之前线上画布因此配不上扩展，构建却不报错）、`VITE_IRIS_EXTENSION_IDS` 里有会被静默丢掉的无效 ID、`IRIS_SIDELOAD_EXTENSION_ID` 与 `extension/manifest.json` 的 key 推导值不一致、环境里有 `vite-env.d.ts` 未声明的 `VITE_IRIS_*` / `VITE_FLOVART_*`（拼错的变量名）。新增 `tests/buildEnvCheck.test.ts`（含旁加载 ID 与 manifest key 对拍）。
 - 护栏：根 `npx tsc --noEmit` 回到 0 错误且不再依赖 dsh-plugin 的安装——引用 `dsh-plugin/` 的测试（`tests/dsh*`、`tests/agentToolRegistryParity.test.ts`）移到 `tsconfig.dsh-tests.json` 单独检查。之前没装 dsh 依赖时固定有 17 条「基线错误」，Agent 只能按「没有新增」判断，真错误会被淹没（a9eeeecd）。CI 在安装 dsh 依赖之前跑根 tsc（任何错误即失败），装完再查 dsh 测试。
 - 护栏：`npm run guard:module-case`（`scripts/check-module-case.mjs`，CI 运行）拒绝只差大小写的路径，以及同一目录下去掉扩展名后只差大小写的源码模块（e933c60 之前 `agentConversationNav.ts` 与 `AgentConversationNav.tsx` 让 Windows / macOS 构建红了 5 天）；`--rev <commit>` 可直接检查历史树。
