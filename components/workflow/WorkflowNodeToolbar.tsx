@@ -2,7 +2,7 @@ import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, Aud
 import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Box, Camera, Focus, LayoutGrid, Mic, Mountain, Music, Sparkles, StretchHorizontal, StretchVertical, Space, UserRound } from 'lucide-react';
 import { sequencedFileNames, type WorkflowAlignment, type WorkflowArrangeLayout, type WorkflowDistributeAxis } from './arrange';
 import { useRef, useState } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { MessageSquarePlus, MoreHorizontal } from 'lucide-react';
 import { saveMediaUrl } from '../../services/desktopNetwork';
 import { WorkflowToolbarActions, WorkflowToolbarMenu, WorkflowToolbarShell, type WorkflowToolbarAction } from './WorkflowToolbarPrimitives';
 import { useWorkflowMediaUrl } from './media';
@@ -46,7 +46,7 @@ export interface WorkflowAudioToolHandlers {
 }
 
 // LibTV 式：常用媒体工具直接带文字露出，其余收进「更多」。
-const PRIMARY_KEYS = new Set(['stop', 'run', 'copy', 'group', 'execute-group', 'ungroup', 'add-to-agent', 'export-selection', 'delete', 'upscale', 'remove-background', 'split', 'reverse-prompt', 'video-trim', 'video-merge']);
+const PRIMARY_KEYS = new Set(['discuss-agent', 'stop', 'run', 'copy', 'group', 'execute-group', 'ungroup', 'add-to-agent', 'export-selection', 'delete', 'upscale', 'remove-background', 'split', 'reverse-prompt', 'video-trim', 'video-merge']);
 const ARRANGE_GAPS = [0, 16, 24, 48, 96] as const;
 // LibTV 式：下载 / 放大预览放在工具条最右侧，只显示图标。
 const ICON_KEYS = new Set(['download', 'preview']);
@@ -56,7 +56,7 @@ const TOOL_LABELS_EN: Record<string, string> = {
   'split-grid': 'Split grid', 'video-trim': 'Trim video', 'video-merge': 'Merge videos', 'audio-trim': 'Trim audio', 'audio-speed': 'Audio speed', 'audio-stem-split': 'Split stems',
 };
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onAddToAgent, onGenerateAsset, onMergeNotePrompt, toolHints, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false, language = 'zho' }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onDiscussWithAgent, onAddToAgent, onGenerateAsset, onMergeNotePrompt, toolHints, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false, language = 'zho' }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -78,6 +78,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onArrange?: (ids: string[], layout: WorkflowArrangeLayout, gap: number) => void;
   /** 按排列顺序批量下载，文件名 prefix_01、prefix_02… */
   onSequencedExport?: (ids: string[], prefix: string) => void;
+  /** 选区旁放一张 Agent 会话卡，选中素材绑定为这一轮的引用。 */
+  onDiscussWithAgent?: (ids: string[]) => void;
   onAddToAgent?: (ids: string[]) => void;
   /** 文本节点「生成资产」：派生一个连好线的图片生成节点（不自动运行）。 */
   onGenerateAsset?: (id: string, kind: WorkflowTextAssetKind) => void;
@@ -117,12 +119,13 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   const toolLabel = (key: keyof typeof WORKFLOW_NODE_TOOL_LABELS) => (en ? TOOL_LABELS_EN[key] || WORKFLOW_NODE_TOOL_LABELS[key] : WORKFLOW_NODE_TOOL_LABELS[key]);
   const actions: Array<WorkflowToolbarAction | null | false | undefined> = [
     onFrameSelection && { key: 'frame-selection', label: L('聚焦选中 (F)', 'Frame selection (F)'), icon: <Focus size={18} />, onClick: () => onFrameSelection() },
+    onDiscussWithAgent && nodes.some(item => item.type !== 'plugin:agent-session') && { key: 'discuss-agent', label: L('与 Agent 讨论', 'Discuss with Agent'), icon: <MessageSquarePlus size={18} />, onClick: () => onDiscussWithAgent(ids) },
     { key: 'copy', label: L('复制节点', 'Copy node'), icon: <Copy size={18} />, onClick: () => onCopy(ids) },
     nodes.length > 1 && onGroup && { key: 'group', label: L('打组 (Ctrl+G)', 'Group (Ctrl+G)'), icon: <Group size={18} />, onClick: () => onGroup(ids) },
     nodes.length > 1 && onExecuteGroup && { key: 'execute-group', label: L('整组执行', 'Run group'), icon: <Play size={18} />, onClick: () => onExecuteGroup(ids) },
     onUngroup && nodes.some(n => (nodes.length > 1 && n.batchId) || (n.type === 'subgraph' && n.metadata.groupKind === 'group')) && { key: 'ungroup', label: L('取消打组', 'Ungroup'), icon: <Ungroup size={18} />, onClick: () => onUngroup(ids) },
     nodes.length > 1 && selectedMedia.length > 0 && onExport && { key: 'export-selection', label: L('批量导出所选媒体', 'Export selected media'), icon: <Download size={18} />, onClick: () => onExport(nodes) },
-    (nodes.length > 1 || Boolean(node)) && onAddToAgent && { key: 'add-to-agent', label: nodes.length > 1 ? L('添加到 Agent', 'Add to Agent') : L('加入 Agent 上下文', 'Add to Agent context'), icon: <Bot size={18} />, onClick: () => onAddToAgent(ids) },
+    (nodes.length > 1 || Boolean(node)) && onAddToAgent && nodes.some(item => item.type !== 'plugin:agent-session') && { key: 'add-to-agent', label: nodes.length > 1 ? L('添加到 Agent', 'Add to Agent') : L('加入 Agent 上下文', 'Add to Agent context'), icon: <Bot size={18} />, onClick: () => onAddToAgent(ids) },
     nodes.length > 1 && onArrange && { key: 'arrange-grid', label: L('网格排列', 'Arrange in grid'), icon: <LayoutGrid size={18} />, onClick: () => onArrange(ids, 'grid', arrangeGap) },
     nodes.length > 1 && onArrange && { key: 'arrange-row', label: L('横向排成一行', 'Arrange in a row'), icon: <StretchVertical size={18} />, onClick: () => onArrange(ids, 'row', arrangeGap) },
     nodes.length > 1 && onArrange && { key: 'arrange-column', label: L('纵向排成一列', 'Arrange in a column'), icon: <StretchHorizontal size={18} />, onClick: () => onArrange(ids, 'column', arrangeGap) },

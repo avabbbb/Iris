@@ -1,6 +1,7 @@
 // 内置 Browser Agent 的运行时句柄：把 kernel 从 React 面板里抽出来，
 // 让同一页面的其它服务（命令面 / 委派回合）能在项目维度拿到它。
 // 面板仍是生命周期所有者：卸载时 close，行为与抽取前一致。
+import type { TurnContextDraft } from './turnContext';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import type { AgentConfirmRequest } from './agentSpendMandate';
@@ -42,16 +43,17 @@ export interface RuntimeKernel {
   close(): Promise<void>;
   subscribe(listener: RuntimeListener): () => void;
   snapshot(): Promise<unknown>;
-  send(text: string, images?: ImageContent[], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown>;
+  send(text: string, images?: ImageContent[], skillAttachment?: ProductionSkillAttachment | null, turnContext?: TurnContextDraft | null): Promise<unknown>;
   cancel(): void;
   /** 运行中插话；没在跑时返回 false。旧替身可不实现。 */
-  steer?(text: string, images?: ImageContent[], id?: string): boolean;
+  steer?(text: string, images?: ImageContent[], id?: string, turnContext?: TurnContextDraft | null): boolean;
   /** 撤回尚未到步骤边界的插话。旧替身可不实现。 */
   withdrawSteer?(id: string): boolean;
   /** 取走这一轮结束时仍未送达的插话 id。旧替身可不实现。 */
   takePendingSteers?(): string[];
   listSessions(): Promise<Array<{ id: string; title: string; updatedAt: string }>>;
-  newSession(): Promise<unknown>;
+  /** fresh：不复用最近的空会话（后台运行时要独占的新会话）。 */
+  newSession(options?: { fresh?: boolean }): Promise<unknown>;
   openSessionById(sessionId: string): Promise<unknown>;
   deleteSession(sessionId: string): Promise<void>;
   branchSession(fromSessionId: string, upto: string | readonly string[]): Promise<unknown>;
@@ -102,6 +104,20 @@ const TURN_LEDGER_LIMIT = 16;
 
 const runtimes = new Map<string, BrowserAgentRuntime>();
 
+/**
+ * 会话归属（Session Authority）：同一个内置会话同一时刻只能由一个运行时打开写入。
+ * 画布会话卡在面板忙时另起的「后台运行时」认领它跑的会话；面板主运行时切到被认领的会话会被拒绝（SESSION_BUSY），
+ * 等后台这一轮结束、运行时关闭后自动释放。不同会话互不影响。
+ */
+const sessionClaims = new Map<string, BrowserAgentRuntime>();
+const claimKey = (projectId: string, sessionId: string) => projectId + '\u0000' + sessionId;
+
+/** 该会话正被另一个运行时认领（后台运行中）。 */
+export function browserAgentSessionClaimed(projectId: string, sessionId: string, except?: BrowserAgentRuntime): boolean {
+  const owner = sessionClaims.get(claimKey(projectId, sessionId));
+  return Boolean(owner && owner !== except && !owner.isClosed);
+}
+
 interface SnapshotMessage {
   role?: string;
   text?: string;
@@ -151,7 +167,11 @@ export class BrowserAgentRuntime {
   /** 创建并打开会话，注册到项目维度；同一项目后连的实例覆盖注册。 */
   static async connect(
     deps: BrowserAgentRuntimeDeps,
-    options: { kernel?: RuntimeKernel } = {},
+    /**
+     * register=false：不登记为项目的活动运行时（画布后台运行时用，委派回合与命令面仍只找面板主运行时）。
+     * session：后台运行时打开指定会话（认领它）或新建一个会话（认领新会话）。
+     */
+    options: { kernel?: RuntimeKernel; register?: boolean; session?: { id: string } | 'new' } = {},
   ): Promise<BrowserAgentRuntime> {
     const policyState = { override: null as DelegatedTurnPolicy | 'default' | null };
     // 技能：打包的 .agents/skills 立即可用；有本机 Agent 服务时再补上它注册表里安装的技能（失败忽略）。
@@ -190,7 +210,19 @@ export class BrowserAgentRuntime {
     runtime.detach = kernel.subscribe(event => {
       for (const listener of runtime.listeners) listener(event);
     });
-    runtimes.set(deps.projectId, runtime);
+    if (options.session) {
+      if (options.session === 'new') await kernel.newSession({ fresh: true });
+      else {
+        if (browserAgentSessionClaimed(deps.projectId, options.session.id, runtime)) {
+          await kernel.close();
+          throw new AgentRuntimeError('AGENT_BUSY', '这个会话正在另一处运行。');
+        }
+        await kernel.openSessionById(options.session.id);
+      }
+      const sessionId = String((await kernel.snapshot() as RuntimeSnapshot).sessionId || '');
+      if (sessionId) runtime.claim(sessionId);
+    }
+    if (options.register !== false) runtimes.set(deps.projectId, runtime);
     return runtime;
   }
 
@@ -209,8 +241,8 @@ export class BrowserAgentRuntime {
     return this.kernel.snapshot();
   }
 
-  send(text: string, images?: ImageContent[], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
-    return this.kernel.send(text, images, skillAttachment);
+  send(text: string, images?: ImageContent[], skillAttachment?: ProductionSkillAttachment | null, turnContext?: TurnContextDraft | null): Promise<unknown> {
+    return turnContext ? this.kernel.send(text, images, skillAttachment, turnContext) : this.kernel.send(text, images, skillAttachment);
   }
 
   cancel(): void {
@@ -218,8 +250,8 @@ export class BrowserAgentRuntime {
   }
 
   /** 运行中把新消息作为插话注入当前这一轮（下一个步骤边界生效）；没在跑或不支持时返回 false。 */
-  steer(text: string, images?: ImageContent[], id?: string): boolean {
-    return this.kernel.steer?.(text, images, id) ?? false;
+  steer(text: string, images?: ImageContent[], id?: string, turnContext?: TurnContextDraft | null): boolean {
+    return (turnContext ? this.kernel.steer?.(text, images, id, turnContext) : this.kernel.steer?.(text, images, id)) ?? false;
   }
 
   withdrawSteer(id: string): boolean {
@@ -239,7 +271,19 @@ export class BrowserAgentRuntime {
   }
 
   openSessionById(sessionId: string): Promise<unknown> {
+    // Session Authority：后台运行时正在跑的会话不能同时被另一个运行时打开写入。
+    if (browserAgentSessionClaimed(this.projectId, sessionId, this)) {
+      return Promise.reject(new AgentRuntimeError('AGENT_BUSY', '这个会话正在画布上运行，这一轮结束后再打开。'));
+    }
     return this.kernel.openSessionById(sessionId);
+  }
+
+  private claimed: string | null = null;
+  /** 认领一个会话（后台运行时）；关闭时释放。 */
+  claim(sessionId: string): void {
+    if (this.claimed) sessionClaims.delete(claimKey(this.projectId, this.claimed));
+    this.claimed = sessionId;
+    sessionClaims.set(claimKey(this.projectId, sessionId), this);
   }
 
   deleteSession(sessionId: string): Promise<void> {
@@ -336,6 +380,8 @@ export class BrowserAgentRuntime {
     this.turnInFlight.clear();
     this.turnResults.clear();
     await this.kernel.close();
+    if (this.claimed && sessionClaims.get(claimKey(this.projectId, this.claimed)) === this) sessionClaims.delete(claimKey(this.projectId, this.claimed));
+    this.claimed = null;
     if (runtimes.get(this.projectId) === this) runtimes.delete(this.projectId);
   }
 }

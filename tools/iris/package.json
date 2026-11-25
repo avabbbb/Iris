@@ -57,7 +57,8 @@
     "workspace-client.js",
     "workspace-command-surface.js",
     "web-discovery.js",
-    "legacy-forward.js"
+    "legacy-forward.js",
+    "link"
   ],
   "keywords": [
     "iris",

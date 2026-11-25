@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, Quote, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
-import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { isTauri } from '@tauri-apps/api/core';
@@ -10,9 +10,10 @@ import {
   type IrisAgentTurnEvent,
 } from '../../services/managedIrisAgent';
 import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/workflowAgentBridge';
+import { notifyAgentLinkDecision, notifyAgentLinkRunner, registerAgentLinkHost } from '../../services/link/agentLinkHost';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { AgentCompactionLive } from './AgentCompaction';
-import type { WorkflowProject } from '../workflow/types';
+import type { WorkflowNode, WorkflowProject } from '../workflow/types';
 import { useWorkflowStore } from '../workflow/store';
 import { insertLocalImagesIntoProject } from '../workflow/WorkflowWorkspace';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
@@ -45,6 +46,17 @@ import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/us
 import { useUserSkillsStore } from '../../stores/useUserSkillsStore';
 import { isUserSkillAttachment, skillSystemContext } from '../../services/userSkillContext';
 import { AgentReferenceChip } from './AgentReferenceChip';
+import { ContextCardReview, defaultContextCardTitle, type ContextCardReviewDraft } from './ContextCardReview';
+import { commitContextCard, planContinueDiscussion, type ContextCardSourceMessage } from '../workflow/contextCard';
+import { agentSessionTurnReferences, bindAgentSessionCard, isAgentSessionNode, recordAgentSessionTurn } from '../workflow/agentSessionCard';
+import { useCanvasAgentStore, type CanvasAgentApprovalHandler, type CanvasAgentStopHandler } from '../../stores/useCanvasAgentStore';
+import { agentHarnessIdentity, currentTurnMessages, reduceAgentSessionTrace, resolveCardApprovalDecision, type AgentSessionApproval } from '../workflow/agentSessionTrace';
+import { CanvasSessionRunners, defaultRunnerStorage, type CanvasRunnerRequest, type CanvasRunnerState, type CanvasSessionRunnerDeps } from './canvasSessionRunners';
+import { cardApprovalFrom, runnerLive } from './canvasRunnerProjection';
+import { consumeWorkflowAgentDrawerTarget, subscribeWorkflowAgentDrawer } from '../workflow/agentDrawerRequest';
+import { agentThinkingVersion, availableThinkingLevels, effectiveAgentThinkingLevel, subscribeAgentThinking } from '../../services/agentThinking';
+import { thinkingLevelText } from './ThinkingLevelBadge';
+import type { AgentMessageReference } from './agentMessageRefs';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
 import { resolveSearchCredential } from '../../services/agentWebSearch';
 import { readApprovalMode, readUserToolPolicy, resolveToolApproval, sessionGrantKey, toolApprovalFor, writeApprovalMode, writeUserToolPolicy, type ApprovalContext, type ApprovalMode, type ToolPolicy } from '../../services/agentToolPolicy';
@@ -62,6 +74,8 @@ import { applyThinkingDelta, applyTextDelta, carryLiveState, finishThinking } fr
 import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
 import { AgentMediaTiles } from './AgentMediaTiles';
 import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
+import type { ImageContent } from '@earendil-works/pi-ai';
+import { buildTurnContextDraft, sentNodeMedia, turnContextReferences, type NodeMediaSent, type TurnContextDraft, type TurnContextRecord } from '../../services/turnContext';
 import { abortedNoticeText, isAbortMessage } from './agentAbort';
 import { AgentInputQueueTray } from './AgentInputQueueTray';
 import { draftHasContent, draftIsEmpty, draftPreview, mergeDrafts, moveToFront, popLastQueued, promoteToSteer, queuedCount, removeInput, requeueSteers, routeRunningSubmit, shiftQueued, trayOrder, type ComposerDraft, type PendingInput, type RunningSubmitKey } from './agentInputQueue';
@@ -96,6 +110,8 @@ interface AgentReference {
   type: 'node' | 'asset';
   label: string;
   mediaType?: string;
+  /** 来自画布「添加到 Agent」分组：发送时冻结进本轮来源记录。 */
+  group?: { label: string; batchId?: string };
 }
 
 function isAgentTextConfigurationError(error?: string) {
@@ -153,7 +169,7 @@ function mergeCompactionDivider(items: WorkflowAgentDisplayMessage[], fromSnapsh
 }
 
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; images?: Array<{ mimeType: string; data: string }>; compaction?: { tokensBefore: number } }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; images?: Array<{ mimeType: string; data: string }>; compaction?: { tokensBefore: number }; turnContext?: TurnContextRecord; usage?: { input: number; output: number; reasoning?: number } }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => {
@@ -169,9 +185,11 @@ function displayMessages(snapshot: {
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
     ...(message.role === 'tool' ? { toolName: message.toolName, toolCallId: message.toolCallId } : {}),
-    ...(message.role === 'user' ? userReferences(message.text) : {}),
+    // 结构化来源记录优先（P0）；旧会话没有记录时才从文本里的「引用上下文」解析。
+    ...(message.role === 'user' ? (message.turnContext?.sources.length ? { references: turnContextReferences(message.turnContext) } : userReferences(message.text)) : {}),
     ...(thumbs.length ? { attachments: thumbs } : {}),
     ...(message.compaction ? { compaction: message.compaction } : {}),
+    ...(message.role === 'assistant' && message.usage ? { usage: message.usage } : {}),
   };
   });
 }
@@ -197,6 +215,7 @@ export function IrisAgentPanel({ project, onActivityChange, onOpenSettings, asse
   const client = useRef<ManagedIrisAgentClient | undefined>(undefined);
   const kernelRef = useRef<BrowserAgentRuntime | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
+  const unregisterLinkRef = useRef<(() => void) | undefined>(undefined);
 const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
   // 内核只在 route 变化时重建：无 Key 打开面板后再导入 Key/切模型，必须重新解析 route，否则一直停在 credential 阻塞。
@@ -232,6 +251,13 @@ const userApiKeysRef = useRef(userApiKeys);
   const askRef = useRef<PendingAsk | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
+  // 画布会话卡的后台运行（canvasSessionRunners）：面板忙时卡片请求不再排在面板后面。
+  const runnersRef = useRef<CanvasSessionRunners | null>(null);
+  // 这一轮是用户停下的（面板或卡片上的停止）：卡片显示「已停止」而不是出错 / 未读。
+  const turnStoppedRef = useRef(false);
+  const prepareCanvasRunRef = useRef<(request: CanvasRunnerRequest) => Promise<{ text: string; images?: ImageContent[]; turnContext?: TurnContextDraft | null }>>(async request => ({ text: request.text }));
+  const projectRunnerRef = useRef<(state: CanvasRunnerState) => void>(() => undefined);
+  const finishRunnerRef = useRef<(state: CanvasRunnerState) => void>(() => undefined);
   // 会话授权：「本会话总是允许此工具」覆盖同一工具、同一 tier 的后续调用；切换会话或项目时清空。
   const sessionGrantsRef = useRef(new Set<string>());
   // 按工具的用户策略（allow | deny | prompt），存本机，每种模式都生效，但绕不过工具自身的 deny 与安全覆盖。
@@ -246,6 +272,8 @@ const userApiKeysRef = useRef(userApiKeys);
   // 内核工具（media_view）在会话期间读取最新画布节点。
   const projectRef = useRef(project);
   projectRef.current = project;
+  const assetLibraryRef = useRef(assetLibrary);
+  assetLibraryRef.current = assetLibrary;
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   // 计划卡挂在发起它的那一轮末尾：确认弹出时记下当前是第几轮。
   const userTurnCountRef = useRef(0);
@@ -639,6 +667,63 @@ const userApiKeysRef = useRef(userApiKeys);
       });
       if (!active) { await kernel.close(); return; }
       kernelRef.current = kernel;
+      // 画布会话卡的后台运行：面板忙时卡片请求交给这里（同一条线路、同一套工具策略 / 付费授权，不登记为项目活动运行时）。
+      // 后台运行时工厂：画布会话卡与 Iris Link（CLI 发起的回合）共用这一份（同一条线路、系统提示、Tool Policy）。
+      const connectBackground: CanvasSessionRunnerDeps['connect'] = ({ session, confirm: runnerConfirm, ask }) => BrowserAgentRuntime.connect({
+        projectId: project.id,
+        route,
+        confirm: runnerConfirm,
+        ask,
+        systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
+        getNodes: () => projectRef.current.nodes,
+        webSearch: searchCredential ?? undefined,
+        // 每个会话单独审批：沿用审批模式与按工具策略，但不继承面板会话的「本会话总是允许」。
+        getApproval: () => ({ mode: modeRef.current, userPolicy: userToolPolicyRef.current }),
+        getDraftVersion: () => projectRef.current.draftVersion,
+      }, { register: false, session });
+      const runnerMandate = {
+        get: () => mandateRef.current,
+        set: (next: AgentSpendMandate) => { mandateRef.current = next; setMandate(next); },
+        enabled: () => modeRef.current !== 'always-ask',
+      };
+      const isSessionBusy = (sessionId: string) => turnRef.current.phase !== 'idle' && activeSessionIdRef.current === sessionId;
+      const runners = new CanvasSessionRunners({
+        projectId: project.id,
+        language: language === 'zho' ? 'zho' : 'en',
+        connect: connectBackground,
+        prepare: request => prepareCanvasRunRef.current(request),
+        toDisplay: snap => displayMessages(snap as IrisAgentSnapshot, languageRef.current),
+        mandate: runnerMandate,
+        isSessionBusy,
+        onChange: state => { projectRunnerRef.current(state); notifyAgentLinkRunner(project.id, state); },
+        onSession: async (cardNodeId, sessionId, request) => {
+          const bound = await bindAgentSessionCard({ projectId: project.id, nodeId: cardNodeId, sessionId, prompt: request.text });
+          if (bound.ok === false) throw new Error(bound.error);
+        },
+        onFinished: state => { finishRunnerRef.current(state); notifyAgentLinkRunner(project.id, state); },
+        storage: defaultRunnerStorage(),
+        toolLabel: name => agentToolLabel(name, languageRef.current === 'zho' ? 'zho' : 'en'),
+        toolResultText: result => toolResultText(result, languageRef.current),
+      });
+      runnersRef.current = runners;
+      runners.restore();
+      // Iris Link：把这些现成能力登记给 CLI 命令（本机 loopback 或线上中继进来的）；Key 只在 connectBackground 里使用。
+      unregisterLinkRef.current?.();
+      unregisterLinkRef.current = registerAgentLinkHost({
+        projectId: project.id,
+        language: languageRef.current === 'zho' ? 'zho' : 'en',
+        connectBackground,
+        prepare: request => prepareCanvasRunRef.current(request),
+        toDisplay: snap => displayMessages(snap as IrisAgentSnapshot, languageRef.current),
+        listSessions: () => kernel.listSessions(),
+        canvasRunners: runners,
+        mandate: runnerMandate,
+        approval: () => ({ mode: modeRef.current, userPolicy: userToolPolicyRef.current }),
+        isSessionBusy,
+        model: () => ({ id: route.model, provider: route.provider }),
+        toolLabel: name => agentToolLabel(name, languageRef.current === 'zho' ? 'zho' : 'en'),
+        toolResultText: result => toolResultText(result, languageRef.current),
+      });
       const snapshot = await kernel.snapshot() as IrisAgentSnapshot;
       const unsubscribe = kernel.subscribe(event => {
         if (!active) return;
@@ -727,6 +812,10 @@ const userApiKeysRef = useRef(userApiKeys);
       workspaceBridge.current = undefined;
       unsubscribeRef.current?.();
       unsubscribeRef.current = undefined;
+      unregisterLinkRef.current?.();
+      unregisterLinkRef.current = undefined;
+      void runnersRef.current?.dispose();
+      runnersRef.current = null;
       void kernelRef.current?.close();
       kernelRef.current = undefined;
     };
@@ -945,6 +1034,103 @@ const userApiKeysRef = useRef(userApiKeys);
     }
   };
 
+  // 「钉到画布」：审查步骤（可改标题 / 正文、看见来源 Chip），明确 Commit 才写画布。
+  const [pinDraft, setPinDraft] = useState<(ContextCardReviewDraft & { sourceMessage: ContextCardSourceMessage }) | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const openPinReview = (message: WorkflowAgentDisplayMessage) => {
+    const index = transcriptMessages.indexOf(message);
+    // 来源 = 这条回复所回答的那条用户消息的显式来源（结构化记录优先），不自动增添其他来源。
+    const user = [...transcriptMessages.slice(0, index < 0 ? transcriptMessages.length : index)].reverse().find(item => item.role === 'user');
+    const sources: AgentMessageReference[] = (user?.references || []).filter(ref => ref.id);
+    const persistedId = message.id && !message.id.startsWith('stream-') ? message.id : undefined;
+    setPinError('');
+    setPinDraft({
+      messageId: message.id,
+      title: defaultContextCardTitle(message.text),
+      body: message.text,
+      sources,
+      sourceMessage: kernelRef.current
+        ? { host: 'iris', ...(activeSessionId ? { sessionId: activeSessionId } : {}), ...(persistedId ? { messageId: persistedId } : {}) }
+        : { host: 'external', ...(persistedId ? { messageId: persistedId } : {}) },
+    });
+  };
+  const commitPin = async (result: { title: string; body: string; sources: AgentMessageReference[] }) => {
+    if (!pinDraft) return;
+    setPinBusy(true);
+    setPinError('');
+    try {
+      const committed = await commitContextCard({
+        projectId: project.id,
+        title: result.title,
+        body: result.body,
+        sourceMessage: pinDraft.sourceMessage,
+        sources: result.sources.filter(ref => ref.id).map(ref => ({ kind: ref.kind, id: ref.id!, label: ref.label })),
+        assets: assetLibraryRef.current?.items,
+      });
+      if (committed.ok === false) { setPinError(committed.error); return; }
+      setPinDraft(null);
+      onFocusNode?.(committed.nodeId);
+      flashCopied(committed.status === 'existing' ? (language === 'zho' ? '卡片已在画布上' : 'Card already on canvas') : (language === 'zho' ? '已钉到画布' : 'Pinned to canvas'));
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
+  // 「继续讨论」：原内置会话还在就打开并定位到那条消息；否则开新会话，以卡片定稿 + 仍有效的来源作为输入框种子（不自动发送）。
+  const [jumpToMessage, setJumpToMessage] = useState<string | null>(null);
+  const pendingDiscussion = useAgentGroupInboxStore(state => state.pendingDiscussion);
+  useEffect(() => {
+    if (!pendingDiscussion || pendingDiscussion.projectId !== project.id || status === 'connecting' || sending) return;
+    const payload = useAgentGroupInboxStore.getState().consumeDiscussion();
+    if (!payload) return;
+    // 卡片刚由画布写入：以 Workflow store 为准（面板的 project prop 可能还没刷新）。
+    const liveNodes = useWorkflowStore.getState().projects.find(item => item.id === payload.projectId)?.nodes || projectRef.current.nodes;
+    const card = liveNodes.find(node => node.id === payload.cardNodeId);
+    if (!card) return;
+    void (async () => {
+      const kernel = kernelRef.current;
+      try {
+        const sessions = kernel ? await kernel.listSessions() : [];
+        const plan = planContinueDiscussion(card, { sessionExists: id => sessions.some(item => item.id === id), nodes: liveNodes, assets: assetLibraryRef.current?.items });
+        if (plan.mode === 'open' && kernel) {
+          await kernel.openSessionById(plan.sessionId);
+          setMessages(displayMessages(await kernel.snapshot() as IrisAgentSnapshot, languageRef.current));
+          await refreshSessions();
+          if (plan.messageId) { stickToBottom.current = false; setJumpToMessage(plan.messageId); }
+          return;
+        }
+        if (plan.mode === 'new') {
+          if (kernel) {
+            await kernel.newSession();
+            setMessages(displayMessages(await kernel.snapshot() as IrisAgentSnapshot, languageRef.current));
+            await refreshSessions();
+          }
+          setPrompt('');
+          setQuote({ messageId: '', text: (plan.title ? plan.title + '\n\n' : '') + plan.body });
+          setReferences(plan.references.map(ref => ({ id: ref.id, type: ref.kind, label: ref.label, mediaType: ref.kind === 'node' ? liveNodes.find(node => node.id === ref.id)?.type : assetLibraryRef.current?.items.find(item => item.id === ref.id)?.mimeType })));
+          focusComposer();
+        }
+      } catch (error) {
+        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+      }
+    })();
+  }, [pendingDiscussion, project.id, status, sending]);
+  useEffect(() => {
+    if (!jumpToMessage) return;
+    // 「toolcall:<id>」= 工具调用（卡片轨迹行），其余是消息 entry id。
+    const selector = jumpToMessage.startsWith('toolcall:')
+      ? `[data-tool-call-id="${CSS.escape(jumpToMessage.slice(9))}"]`
+      : `[data-message-id="${CSS.escape(jumpToMessage)}"]`;
+    const target = messagesRef.current?.querySelector<HTMLElement>(selector);
+    if (!target) return;
+    target.scrollIntoView?.({ block: 'center' });
+    target.setAttribute('data-jump-target', '');
+    const timer = window.setTimeout(() => target.removeAttribute('data-jump-target'), 1600);
+    setJumpToMessage(null);
+    return () => window.clearTimeout(timer);
+  }, [jumpToMessage, messages]);
+
   useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
 
   useEffect(() => { handleEventRef.current = handleEvent; });
@@ -1151,8 +1337,20 @@ const userApiKeysRef = useRef(userApiKeys);
     return {
       images: [...attachmentMedia.images, ...nodeMedia.images].slice(0, 6),
       notes: [...attachmentMedia.notes, ...nodeMedia.notes],
+      // 本地附件排在前面，节点画面从其后计数；超过 6 张的部分没有送达。
+      nodeSent: sentNodeMedia('sources' in nodeMedia ? nodeMedia.sources : undefined, attachmentMedia.images.length, 6),
     };
   };
+
+  /** Spatial Context P0：本轮显式来源（发送那一刻冻结），内核在用户消息落盘后按真实 id 写入会话。 */
+  const turnContextFor = (references: QueueDraft['references'], nodeSent?: NodeMediaSent): TurnContextDraft | null => buildTurnContextDraft({
+    projectId: projectRef.current.id,
+    projectRevision: projectRef.current.draftVersion || 1,
+    references,
+    nodes: projectRef.current.nodes,
+    assets: assetLibraryRef.current?.items,
+    media: nodeSent,
+  });
 
   // 正在准备画面、还没交给内核的插话；期间被删掉的不再送出。
   const steerPreparing = useRef(new Set<string>());
@@ -1164,7 +1362,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const steerDraft = async (draft: QueueDraft, outgoing: OutgoingTurn, key: string): Promise<boolean> => {
     const id = outgoing.id;
     if (!kernelRef.current) return false;
-    if (!draftHasMedia(draft)) return kernelRef.current.steer(outgoing.requestText, [], id);
+    if (!draftHasMedia(draft)) return kernelRef.current.steer(outgoing.requestText, [], id, turnContextFor(draft.references));
     steerPreparing.current.add(id);
     try {
       const media = await loadTurnMedia(draft.references, draft.attachments);
@@ -1173,7 +1371,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const current = (inputQueuesRef.current[key] || []).find(entry => entry.id === id);
       if (!current || current.kind !== 'steer') return false;
       const text = media.notes.length > 0 ? outgoing.requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : outgoing.requestText;
-      return Boolean(kernelRef.current?.steer(text, media.images, id));
+      return Boolean(kernelRef.current?.steer(text, media.images, id, turnContextFor(draft.references, media.nodeSent)));
     } catch {
       return false;
     } finally {
@@ -1331,6 +1529,7 @@ const userApiKeysRef = useRef(userApiKeys);
   }, []);
 
   const runTurn = async (outgoing: OutgoingTurn) => {
+    turnStoppedRef.current = false;
     const { requestText, attachments: turnAttachments, references: turnReferences } = outgoing;
     const assistantId = `stream-${crypto.randomUUID()}`;
     const turnKey = conversationKeyRef.current;
@@ -1353,7 +1552,9 @@ const userApiKeysRef = useRef(userApiKeys);
         const media = await loadTurnMedia(turnReferences, turnAttachments);
         turnAttachments.forEach(releaseComposerAttachment);
         const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : requestText;
-        await kernelRef.current.send(kernelText, media.images, skillAttachment);
+        const turnContext = turnContextFor(turnReferences, media.nodeSent);
+        if (turnContext) await kernelRef.current.send(kernelText, media.images, skillAttachment, turnContext);
+        else await kernelRef.current.send(kernelText, media.images, skillAttachment);
         const snapshot = await kernelRef.current.snapshot() as IrisAgentSnapshot;
         if (latestTurnFailed(snapshot)) failed = true;
         handleEvent({ type: 'snapshot', snapshot: snapshot as IrisAgentSnapshot }, assistantId);
@@ -1407,6 +1608,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const stop = () => {
     const { phase, turnId } = turnRef.current;
     if (phase !== 'sending' && phase !== 'awaitingConfirmation') return;
+    turnStoppedRef.current = true;
     dispatchTurn({ type: 'stop' });
     // 停止就是结束这一轮：插话与排队都退回输入框（排在正在写的内容前面），一条也不发；内核的插话缓冲在 cancel 里清空。
     const stopKey = turnConversationKey.current;
@@ -1474,11 +1676,290 @@ const userApiKeysRef = useRef(userApiKeys);
     const byId = new Map(project.nodes.map(node => [node.id, node]));
     const groupRefs = payload.nodeIds.flatMap(id => {
       const node = byId.get(id);
-      return node ? [{ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type }] : [];
+      return node ? [{ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type, group: { label: payload.label, ...(payload.batchId ? { batchId: payload.batchId } : {}) } }] : [];
     });
     setReferences(current => [...current, ...groupRefs.filter(ref => !current.some(item => item.type === 'node' && item.id === ref.id))]);
     setGroupBanner({ ...payload, nodeIds: groupRefs.map(ref => ref.id) });
   }, [pendingGroup, project.nodes]);
+
+  // ── 画布 Agent 会话卡（plugin:agent-session）：卡片只是这个面板会话的投影 ──
+  // 卡片把「发送 / 打开」放进 useCanvasAgentStore.requests；这里用同一个内核与会话执行（不另起运行时），
+  // 并把绑定会话的实时进度写回 live，一轮结束只把 entryId + 摘录记到节点上。
+  const canvasRequests = useCanvasAgentStore(state => state.requests);
+  const canvasBusyRef = useRef(false);
+  // 刚由画布发起的一轮：会话 id 写进节点前（或托管 Agent 没有会话 id）也能找到对应卡片。
+  const canvasTurnRef = useRef<{ cardId: string; sessionId: string } | null>(null);
+  // 本面板里跑过一轮的卡片：只为这些卡片记录摘要（单纯打开旧会话不写画布）。
+  const canvasTurnCards = useRef(new Set<string>());
+  const canvasRecorded = useRef(new Set<string>());
+  const boundCardId = useMemo(() => {
+    const viaTurn = canvasTurnRef.current && canvasTurnRef.current.sessionId === activeSessionId ? canvasTurnRef.current.cardId : null;
+    if (viaTurn && liveNodes.some(node => node.id === viaTurn)) return viaTurn;
+    if (!activeSessionId) return null;
+    return liveNodes.find(node => isAgentSessionNode(node) && node.metadata.agentSession?.sessionId === activeSessionId)?.id ?? null;
+  }, [liveNodes, activeSessionId]);
+  useEffect(() => {
+    if (status === 'connecting') return;
+    const store = useCanvasAgentStore.getState();
+    const nodes = useWorkflowStore.getState().projects.find(item => item.id === project.id)?.nodes || projectRef.current.nodes;
+    const runners = runnersRef.current;
+    // 逐个看队列：能当场处理的（打开当前会话、交给后台运行）立刻处理；暂时不能的跳过，不挡后面的请求（排队修复）。
+    let request: (typeof canvasRequests)[number] | undefined;
+    let card: WorkflowNode | undefined;
+    let meta: NonNullable<WorkflowNode['metadata']['agentSession']> | undefined;
+    for (const candidate of canvasRequests) {
+      if (candidate.projectId !== project.id) continue;
+      const candidateCard = nodes.find(node => node.id === candidate.cardNodeId);
+      const candidateMeta = candidateCard?.metadata.agentSession;
+      if (!candidateCard || !candidateMeta) { store.take(candidate.id); continue; }
+      // 「展开」：卡片的会话正在跑时它本来就是当前会话，直接放行。
+      if (candidate.kind === 'open' && (!candidateMeta.sessionId || candidateMeta.sessionId === activeSessionIdRef.current)) { store.take(candidate.id); continue; }
+      // 会话正在画布后台运行（Session Authority 认领中）：这一轮结束前不能在 Drawer 里打开写入。
+      if (candidate.kind === 'open' && candidateMeta.sessionId && runners?.isRunningSession(candidateMeta.sessionId)) {
+        store.take(candidate.id);
+        flashCopied(language === 'zho' ? '这个会话正在画布上运行，结束后可在这里查看完整记录' : 'This conversation is running on the canvas; open it here when it finishes');
+        continue;
+      }
+      // 卡片的会话就是面板正在跑的这个会话：等面板这一轮结束再在面板里接着跑（同一会话不能两个运行时同时写）；跳过，不挡后面的请求。
+      if (candidate.kind === 'send' && (sending || canvasBusyRef.current) && candidateMeta.sessionId && candidateMeta.sessionId === activeSessionIdRef.current && !runners?.isActive(candidateCard.id)) continue;
+      // 面板忙（正在跑 / 等审批）或这张卡已经在后台跑：发送交给后台运行时，不排在面板后面干等。
+      if (candidate.kind === 'send' && runners && (sending || canvasBusyRef.current || runners.isActive(candidateCard.id))) {
+        store.take(candidate.id);
+        const liveNow = useWorkflowStore.getState().projects.find(item => item.id === project.id)?.nodes || nodes;
+        canvasTurnCards.current.delete(candidateCard.id);
+        runners.enqueue({
+          id: candidate.id,
+          cardNodeId: candidateCard.id,
+          ...(candidateMeta.sessionId ? { sessionId: candidateMeta.sessionId } : {}),
+          text: candidate.text,
+          references: agentSessionTurnReferences(candidateMeta, liveNow),
+        });
+        continue;
+      }
+      if (sending || canvasBusyRef.current) continue;
+      if (!request) { request = candidate; card = candidateCard; meta = candidateMeta; }
+    }
+    if (!request || !card || !meta) return;
+    store.take(request.id);
+    canvasBusyRef.current = true;
+    const target = { request, card, meta };
+    void (async () => {
+      const { request, card, meta } = target;
+      const kernel = kernelRef.current;
+      try {
+        if (request.kind === 'open') {
+          if (!kernel || !meta.sessionId) return;
+          const sessions = await kernel.listSessions();
+          if (!sessions.some(item => item.id === meta.sessionId)) { flashCopied(language === 'zho' ? '这张卡片的会话已删除' : 'This card\'s conversation was deleted'); return; }
+          await kernel.openSessionById(meta.sessionId);
+          setMessages(displayMessages(await kernel.snapshot() as IrisAgentSnapshot, languageRef.current));
+          await refreshSessions();
+          return;
+        }
+        if (!kernel && !client.current) {
+          // 没有可用模型 / 本机 Agent 离线：面板里给出原有的引导，卡片上给一句话和去处。
+          connectionBlocked();
+          const missingModel = !isTauri() && !browserRouteSignature;
+          store.setLive(card.id, {
+            phase: 'error',
+            preview: '',
+            prompt: request.text,
+            error: missingModel ? (language === 'zho' ? '还没有可用的文本模型。' : 'No text model is configured yet.') : (language === 'zho' ? 'Agent 暂时连不上。' : 'Agent is not reachable.'),
+            errorKind: missingModel ? 'no-model' : 'failed',
+          });
+          return;
+        }
+        let sessionId = '';
+        if (kernel) {
+          const sessions = await kernel.listSessions();
+          if (meta.sessionId && sessions.some(item => item.id === meta.sessionId)) {
+            if (activeSessionIdRef.current !== meta.sessionId) await kernel.openSessionById(meta.sessionId);
+          } else {
+            await kernel.newSession();
+          }
+          const snapshot = await kernel.snapshot() as IrisAgentSnapshot;
+          sessionId = String((snapshot as { sessionId?: string }).sessionId || '');
+          setMessages(displayMessages(snapshot, languageRef.current));
+          setActiveSessionId(sessionId);
+          if (sessionId) {
+            const bound = await bindAgentSessionCard({ projectId: project.id, nodeId: card.id, sessionId, prompt: request.text });
+            if (bound.ok === false) throw new Error(bound.error);
+          }
+        }
+        canvasTurnRef.current = { cardId: card.id, sessionId };
+        canvasTurnCards.current.add(card.id);
+        store.setLive(card.id, { phase: 'running', preview: '', prompt: request.text });
+        const liveNow = useWorkflowStore.getState().projects.find(item => item.id === project.id)?.nodes || nodes;
+        await dispatchOutgoing(buildOutgoing({ text: request.text, quote: null, references: agentSessionTurnReferences(meta, liveNow), attachments: [] }));
+      } catch (error) {
+        store.setLive(card.id, { phase: 'error', preview: '', prompt: request.kind === 'send' ? request.text : undefined, error: errorMessage(error), errorKind: 'failed' });
+      } finally {
+        canvasBusyRef.current = false;
+        // 处理完一个后让 effect 再看一眼队列（同一 tick 里到达的请求）。
+        useCanvasAgentStore.setState(state => ({ requests: [...state.requests] }));
+      }
+    })();
+  }, [canvasRequests, project.id, status, sending]);
+  // 把绑定会话的这一轮投影到卡片：进度 + 前几行 + 运行轨迹（思考 / 工具 / Skill / 记忆）+ 审批；结束后记 entryId + 摘录（同一 entryId 只写一次）。
+  // 轨迹只从面板已有的显示消息与确认队列归约（agentSessionTrace），不另建存储。
+  const drawerOpen = useCanvasAgentStore(state => state.drawerOpen);
+  useEffect(() => {
+    const cardId = boundCardId;
+    if (!cardId) return;
+    const { prompt: userMessage, after } = currentTurnMessages(messages);
+    if (!userMessage) return;
+    const prompt = String(userMessage.text || '').split(/\n\n引用：|\n\n附件：/)[0];
+    const assistant = [...after].reverse().find(item => item.role === 'assistant' && item.text);
+    const failure = after.find(item => item.role === 'error');
+    const store = useCanvasAgentStore.getState();
+    const lang = language === 'zho' ? 'zho' : 'en';
+    const trace = reduceAgentSessionTrace(after, { running: sending, nodes: liveNodes, language: lang, prompt: userMessage });
+    if (sending) {
+      // 在 Drawer 里继续这个会话也算：这一轮结束后同样更新卡片摘要。
+      canvasTurnCards.current.add(cardId);
+      let approval: AgentSessionApproval | undefined;
+      if (turn.phase === 'awaitingConfirmation' && confirmation) {
+        // 普通工具的询问（按审批模式 / tier）：标题用「工具 · 目标」；付费 / 删除仍用确认卡的那句人话（与后台运行共用 cardApprovalFrom）。
+        approval = cardApprovalFrom({
+          id: confirmation.id || '',
+          ...(confirmation.request ? { request: confirmation.request } : {}),
+          summary: confirmation.summary,
+          blocked: confirmation.blocked,
+          queued: queuedConfirmations,
+          trace,
+          nodes: liveNodes,
+          language: lang,
+        });
+      } else if (turn.phase === 'awaitingConfirmation' && pendingAsk) {
+        approval = { id: pendingAsk.id, title: lang === 'en' ? 'The agent has a question for you' : 'Agent 在问你问题', ask: true };
+      }
+      const tool = turn.phase === 'awaitingConfirmation'
+        ? (language === 'zho' ? '等待你确认' : 'awaiting approval')
+        : [...after].reverse().find(item => item.role === 'tool' && item.status === 'pending')?.title;
+      store.setLive(cardId, { phase: 'running', preview: assistant?.text || '', prompt, trace, ...(approval ? { approval } : {}), ...(tool ? { tool } : {}) });
+      return;
+    }
+    if (!canvasTurnCards.current.has(cardId)) return;
+    const previous = store.live[cardId];
+    const traceKey = (value: unknown) => JSON.stringify(value ?? null);
+    if (failure) {
+      const completedKey = failure.id;
+      if (previous?.phase !== 'error' || traceKey(previous.trace) !== traceKey(trace)) store.setLive(cardId, { phase: 'error', preview: '', prompt, error: failure.text, errorKind: setupBlocker === 'credential' ? 'no-model' : 'failed', trace, completedKey });
+      if (drawerOpen) store.markSeen(cardId, completedKey);
+      return;
+    }
+    // 用户停下了这一轮（面板或卡片上的停止）：面板会补一条「已停止」系统消息。
+    const aborted = turnStoppedRef.current || after.some(item => item.role === 'system' && item.text === abortedNoticeText(language));
+    if (!assistant) {
+      // 这一轮结束了但没有正文（停在思考 / 工具中途，或模型只调了工具）：卡片不能一直挂着「运行中」。
+      if (previous?.phase === 'running' || previous?.phase === 'queued') store.setLive(cardId, { phase: 'done', preview: '', prompt, trace, completedKey: userMessage.id, ...(aborted ? { stopped: true } : {}) });
+      return;
+    }
+    const entryId = assistant.id && !assistant.id.startsWith('stream-') ? assistant.id : undefined;
+    const completedKey = previous?.completedKey && previous.phase === 'done' && !entryId ? previous.completedKey : (entryId || assistant.id);
+    if (previous?.phase !== 'done' || previous.preview !== assistant.text || traceKey(previous.trace) !== traceKey(trace) || previous.completedKey !== completedKey || Boolean(previous.stopped) !== aborted) {
+      store.setLive(cardId, { phase: 'done', preview: assistant.text, prompt, trace, completedKey, ...(aborted ? { stopped: true } : {}) });
+    }
+    // Drawer 正显示这个会话：完成即已读。
+    if (drawerOpen) store.markSeen(cardId, completedKey);
+    const recordKey = cardId + ':' + (entryId || assistant.id) + ':' + assistant.text.length;
+    if (canvasRecorded.current.has(recordKey)) return;
+    canvasRecorded.current.add(recordKey);
+    void recordAgentSessionTurn({ projectId: project.id, nodeId: cardId, turn: { ...(entryId ? { entryId } : {}), prompt, reply: assistant.text, status: 'done', at: new Date().toISOString() } });
+  }, [boundCardId, messages, sending, turn.phase, project.id, setupBlocker, language, confirmation, pendingAsk, queuedConfirmations, liveNodes, drawerOpen]);
+
+  // 卡片上的「批准 / 拒绝」：按确认 id 对上当前确认，走与 Drawer 确认卡同一个入口（decideConfirmation / decideRunPlan → runApproval 的 verdict）。
+  // 预算门挡住的批次不能从卡片批准；卡片只给「仅这一次」，会话授权 / 付费授权仍在 Drawer 里给。
+  const canvasApprovalRef = useRef<CanvasAgentApprovalHandler>(() => false);
+  canvasApprovalRef.current = ({ cardNodeId, approvalId, approved }) => {
+    // 后台运行的卡片：审批在它自己的会话队列里（A 等审批不挡 B）。
+    // 先告诉 Iris Link 是谁、批还是拒（decide 会同步推进运行状态，轨迹里要记下这次决定）。
+    if (runnersRef.current?.get(cardNodeId)?.approval?.id === approvalId) notifyAgentLinkDecision(project.id, { cardNodeId, approvalId, approved });
+    if (runnersRef.current?.decide(cardNodeId, approvalId, approved)) return true;
+    const pending = confirmationRef.current.current;
+    if (!pending) {
+      const ask = askRef.current;
+      if (ask && ask.id === approvalId && !approved) { settleAsk(ask, { ok: false, cancelled: true }); return true; }
+      return false;
+    }
+    const decision = resolveCardApprovalDecision({ pendingId: pending.id, approvalId, approved, plan: isRunPlanRequest(pending.request), blocked: pending.blocked });
+    if (decision.kind === 'ignored') return false;
+    if (decision.kind === 'plan') decideRunPlan(pending, decision.decision, { session: false });
+    else decideConfirmation(pending, decision.approved, decision.scope);
+    return true;
+  };
+  useEffect(() => {
+    const handler: CanvasAgentApprovalHandler = input => canvasApprovalRef.current(input);
+    useCanvasAgentStore.getState().setApprovalHandler(handler);
+    return () => { if (useCanvasAgentStore.getState().approvalHandler === handler) useCanvasAgentStore.getState().setApprovalHandler(null); };
+  }, []);
+
+  // 卡片上的「停止」：后台运行的卡片只取消它自己的运行时；面板主运行时那一轮（卡片绑定的就是当前会话）走面板的停止。
+  const canvasStopRef = useRef<CanvasAgentStopHandler>(() => false);
+  canvasStopRef.current = cardNodeId => {
+    if (runnersRef.current?.cancel(cardNodeId)) return true;
+    if (boundCardId === cardNodeId && sending) { stop(); return true; }
+    return false;
+  };
+  useEffect(() => {
+    const handler: CanvasAgentStopHandler = cardNodeId => canvasStopRef.current(cardNodeId);
+    useCanvasAgentStore.getState().setStopHandler(handler);
+    return () => { if (useCanvasAgentStore.getState().stopHandler === handler) useCanvasAgentStore.getState().setStopHandler(null); };
+  }, []);
+  // 后台运行 → 卡片投影；结束时把摘录记到节点（与面板那一轮同一个 recordAgentSessionTurn）。
+  projectRunnerRef.current = state => {
+    const nodes = useWorkflowStore.getState().projects.find(item => item.id === project.id)?.nodes || projectRef.current.nodes;
+    useCanvasAgentStore.getState().setLive(state.request.cardNodeId, runnerLive(state, { nodes, language: languageRef.current === 'zho' ? 'zho' : 'en' }));
+  };
+  finishRunnerRef.current = state => {
+    if (state.phase !== 'done') return;
+    const reply = [...state.messages].reverse().find(item => item.role === 'assistant' && item.text);
+    if (!reply) return;
+    const entryId = reply.id.startsWith('stream-') ? undefined : reply.id;
+    void recordAgentSessionTurn({ projectId: project.id, nodeId: state.request.cardNodeId, turn: { ...(entryId ? { entryId } : {}), prompt: state.request.text, reply: reply.text, status: 'done', at: new Date().toISOString() } });
+    // 刚结束的会话若正是 Drawer 里列表的一项：刷新标题。
+    void refreshSessions();
+  };
+  // 后台轮次要发给内核的文本 / 画面 / turn context：与面板发送同一口径（引用上下文 + @引用画面 + turnContextFor）。
+  prepareCanvasRunRef.current = async request => {
+    const references = request.references || [];
+    const outgoing = buildOutgoing({ text: request.text, quote: null, references, attachments: [] }, request.id);
+    const media = await loadTurnMedia(references, []);
+    const text = media.notes.length > 0 ? outgoing.requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : outgoing.requestText;
+    return { text, images: media.images, turnContext: turnContextFor(references, media.nodeSent) };
+  };
+  // 面板这一轮结束（会话空出来）：让排在后台队列里、等这个会话的请求重新调度。
+  useEffect(() => { if (!sending) runnersRef.current?.pump(); }, [sending]);
+
+  // 卡片轨迹行 → Drawer 定位：agentDrawerRequest 带上 entryId / toolCallId，面板取走后滚到对应消息或工具卡。
+  useEffect(() => {
+    const take = () => {
+      const target = consumeWorkflowAgentDrawerTarget();
+      if (!target) return;
+      stickToBottom.current = false;
+      setJumpToMessage(target.toolCallId ? 'toolcall:' + target.toolCallId : target.entryId || null);
+    };
+    take();
+    return subscribeWorkflowAgentDrawer(take);
+  }, []);
+
+  // 头部身份行：当前运行时（浏览器内核 / 本机 Tauri runtime / 外部 harness）· 模型 · 思考档位。所有内置会话卡共用这一份。
+  const thinkingVersion = useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
+  useEffect(() => {
+    const store = useCanvasAgentStore.getState();
+    if (status !== 'ready') return;
+    const lang = language === 'zho' ? 'zho' : 'en';
+    const route = resolveBrowserAgentTextRoute(userApiKeys);
+    if (kernelRef.current && route) {
+      const level = effectiveAgentThinkingLevel(route.model);
+      const mode = availableThinkingLevels(route.modelInfo ?? route.model).mode;
+      store.setHarness(agentHarnessIdentity({ runtime: 'browser', model: route.model, thinkingLabel: thinkingLevelText(level, lang, mode), language: lang }));
+    } else if (client.current) {
+      store.setHarness(agentHarnessIdentity({ runtime: isTauri() ? 'tauri' : 'external', ...(workspaceBridge.current ? { scope: lang === 'en' ? 'workspace-lease · this project' : 'workspace-lease · 当前项目' } : {}), language: lang }));
+    } else {
+      store.setHarness(null);
+    }
+  }, [status, kernelRouteSignature, userApiKeys, language, thinkingVersion]);
 
   const saveGroupAsSkill = async () => {
     if (!groupBanner) return;
@@ -1652,6 +2133,8 @@ const userApiKeysRef = useRef(userApiKeys);
           onBranchMessage={kernelRef.current ? branchFromMessage : undefined}
           branchDisabled={sending}
           onQuoteMessage={message => { setQuote({ messageId: message.id, text: message.text }); focusComposer(); }}
+          onPinMessage={openPinReview}
+          pinDisabled={sending}
           renderTurnFooter={renderTurnPlans}
           compaction={compaction}
         /></div>
@@ -1702,6 +2185,16 @@ const userApiKeysRef = useRef(userApiKeys);
             }}
           />
         </div>}
+        {pinDraft && <ContextCardReview
+          key={pinDraft.messageId}
+          draft={pinDraft}
+          nodes={project.nodes}
+          language={language === 'zho' ? 'zho' : 'en'}
+          busy={pinBusy}
+          error={pinError}
+          onCommit={result => void commitPin(result)}
+          onCancel={() => setPinDraft(null)}
+        />}
         {pendingAsk && <AgentAskCard
           key={pendingAsk.id}
           form={pendingAsk.form}

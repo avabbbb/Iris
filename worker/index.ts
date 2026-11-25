@@ -3,10 +3,15 @@
 // served straight from the asset layer with the COOP/COEP headers from public/_headers, so
 // static traffic costs no Worker invocations.
 //   /api/llm-proxy/*  → server/llmProxy.ts (stateless same-origin CORS proxy for allowlisted gateways)
+//   /api/link/*       → worker/linkRelay.ts (Iris Link relay: CLI ↔ browser tab, Durable Object per pairing;
+//                       forwards frames only — never stores canvas content or touches model keys)
 //   other /api/*      → 404 JSON (there is no other server API; the web app is fully static)
 import { handleLlmProxy, LLM_PROXY_PREFIX } from '../server/llmProxy';
+import { handleLinkRequest, LINK_PREFIX, type LinkEnv } from './linkRelay';
 
-export interface Env {
+export { IrisLinkRelay } from './linkRelay';
+
+export interface Env extends LinkEnv {
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** Optional comma-separated extra origins, e.g. a preview domain. */
   LLM_PROXY_ALLOWED_ORIGINS?: string;
@@ -25,6 +30,7 @@ export default {
     if (pathname.startsWith(LLM_PROXY_PREFIX)) {
       return handleLlmProxy(request, { allowedOrigins: parseAllowedOrigins(env.LLM_PROXY_ALLOWED_ORIGINS) });
     }
+    if (pathname.startsWith(LINK_PREFIX)) return handleLinkRequest(request, env);
     if (pathname === '/api' || pathname.startsWith('/api/')) {
       return new Response(JSON.stringify({ error: 'not_found' }), {
         status: 404,

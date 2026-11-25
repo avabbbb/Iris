@@ -77,7 +77,15 @@ const ToolStep = memo(function ToolStep({ tool, running, now, language, single }
   const title = tool.title || (en ? 'Tool call' : '工具调用');
 
   return (
-    <li className="agent-step" data-status={state} data-live={live ? '' : undefined} data-testid="agent-tool-card">
+    <li
+      className="agent-step"
+      data-status={state}
+      data-live={live ? '' : undefined}
+      data-testid="agent-tool-card"
+      // 画布会话卡的轨迹行据此定位到这次工具调用（实时卡 id 是 tool-<callId>，快照里另带 toolCallId）。
+      data-message-id={tool.id}
+      data-tool-call-id={tool.toolCallId || (tool.id.startsWith('tool-') ? tool.id.slice(5) : undefined)}
+    >
       <div className="agent-step__row">
         <span className="agent-step__icon" aria-hidden="true">
           {live ? <AgentOrbIcon state={orb} size={20} />

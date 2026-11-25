@@ -30,6 +30,7 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { useWorkflowStore } from '../components/workflow/store';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
+import { TURN_CONTEXT_ENTRY, TURN_CONTEXT_SCHEMA_VERSION, isTurnContextRecord, turnContextsByMessage, type TurnContextDraft, type TurnContextRecord } from './turnContext';
 import { createCutAgentTools, CUT_TOOL_DOCS } from './cut/agentTools';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
@@ -174,6 +175,20 @@ class BrowserSessionStore {
   }
 }
 
+/**
+ * 同一项目的会话列表是「整表读改写」：画布后台运行时与面板主运行时同时落盘会互相覆盖（后写的丢掉先写的会话 / 条目）。
+ * 同一页面里所有内核共用这把按项目排队的锁，persist / delete 串行执行。
+ */
+const sessionWriteLocks = new Map<string, Promise<unknown>>();
+function withSessionWriteLock<T>(projectId: string, task: () => Promise<T>): Promise<T> {
+  const previous = sessionWriteLocks.get(projectId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(task);
+  const settled = next.catch(() => undefined);
+  sessionWriteLocks.set(projectId, settled);
+  void settled.then(() => { if (sessionWriteLocks.get(projectId) === settled) sessionWriteLocks.delete(projectId); });
+  return next;
+}
+
 class BrowserSessionRepo {
   constructor(private readonly projectId: string, private readonly store = new BrowserSessionStore(projectId)) {}
 
@@ -206,12 +221,18 @@ class BrowserSessionRepo {
   }
 
   async delete(sessionId?: string): Promise<void> {
-    if (!sessionId) { await localforage.removeItem(sessionsKey(this.projectId)); return; }
-    const sessions = await this.store.loadAll();
-    await this.store.saveAll(sessions.filter(item => item.id !== sessionId));
+    return withSessionWriteLock(this.projectId, async () => {
+      if (!sessionId) { await localforage.removeItem(sessionsKey(this.projectId)); return; }
+      const sessions = await this.store.loadAll();
+      await this.store.saveAll(sessions.filter(item => item.id !== sessionId));
+    });
   }
 
-  async persist(session: Session): Promise<void> {
+  persist(session: Session): Promise<void> {
+    return withSessionWriteLock(this.projectId, () => this.persistNow(session));
+  }
+
+  private async persistNow(session: Session): Promise<void> {
     const storage = session.getStorage();
     const metadata = await storage.getMetadata();
     const entries = (await storage.getEntries()) as unknown[];
@@ -1406,6 +1427,8 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 默认只操作当前已绑定的可见 Browser Workflow；没有 Browser binding 时必须显式失败，不能切换到 Native、隐藏图或从 React/localforage 读取 Workflow 图，也不能自行解析 Provider。
 生成只用 iris_generate（或对已写好提示词的节点用 iris_workflow_node_run），其余修改用 iris_workflow_apply 的结构化 operations，全部交给同一个 WorkflowExecutor；不得模拟鼠标、直接改 React state，或用 CLI、文件桥在后台另做一份结果。
 文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 iris_note_write。改已有节点的提示词也用 iris_generate（不传 run、也不传 references），节点已有的参考、顺序与用途原样保留；结果 model.submode 与 references 和你预期不符、或有 warnings 时先修正，不要运行。多参考时给每个参考写 purpose（subject 主体 / style 风格 / background 背景…），不要只靠「图片1/图片2」的编号表达用途。
+Context Card（plugin:context-card）节点是用户亲自定稿（Commit）的创作结论：当作上下文阅读，绝不连线、改写或删除它们。
+Agent 会话卡（plugin:agent-session）是对话在画布上的投影，不是素材：不要读取、连线、改写或删除它们；新建的节点放在来源旁的空位，不要移动用户已摆放的节点。
 写操作使用稳定的 idempotencyKey；只有工具返回成功后，才能声称画布已变化。可逆修改直接落到用户可见的同一 Workflow 并合并为本轮 ChangeSet，每次修改后读取返回的 draftVersion/objectVersions 再继续：返回的 draftVersion 已是所有内部写入（含运行）之后的最终版本，直接作为下一次 expectedRevision。
 费用：用户没指定模型时，先用 iris_models_list 的 costTier 给出一个省钱档（cheap）和一个质量档（premium/standard）的模型让用户选，说明差别；有 priceRange 时报真实单价。
 删除、付费执行、Production 审批和运行会要求用户确认，不得绕过；普通可逆布局和节点编辑无需逐次确认。没有用户确认的 Production Mandate 时不得声称付费制作已经开始。
@@ -1442,6 +1465,28 @@ export function branchEntryIndex(
   return -1;
 }
 
+/**
+ * 快照里不显示只有工具调用的助手消息；它们的 token 用量并到下一条显示的助手消息上，Budget 不漏算。
+ * 返回一个有状态的 filter（每次快照新建一个）。
+ */
+function keepSnapshotMessage() {
+  let carried: { input: number; output: number; reasoning?: number } | undefined;
+  return (message: { role: string; text?: string; thinking?: string; error?: string; usage?: { input: number; output: number; reasoning?: number } }) => {
+    const keep = message.role !== 'assistant' || Boolean(message.text || message.thinking || message.error);
+    if (message.role !== 'assistant') return keep;
+    if (!keep) {
+      if (message.usage) carried = { input: (carried?.input || 0) + message.usage.input, output: (carried?.output || 0) + message.usage.output, ...(message.usage.reasoning !== undefined || carried?.reasoning !== undefined ? { reasoning: (carried?.reasoning || 0) + (message.usage.reasoning || 0) } : {}) };
+      return false;
+    }
+    if (carried) {
+      const own = message.usage;
+      message.usage = { input: carried.input + (own?.input || 0), output: carried.output + (own?.output || 0), ...(own?.reasoning !== undefined || carried.reasoning !== undefined ? { reasoning: (carried.reasoning || 0) + (own?.reasoning || 0) } : {}) };
+      carried = undefined;
+    }
+    return true;
+  };
+}
+
 function snapshotMessage(entry: { type: string; id: string; message?: AgentMessage; customType?: string }): {
   id: string;
   role: string;
@@ -1457,6 +1502,8 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   compaction?: { tokensBefore: number };
   /** 用户消息附带的图片块（本地附件在前、节点画面在后），面板据「已附带画面」备注挑出本地附件做缩略图。 */
   images?: Array<{ mimeType: string; data: string }>;
+  /** 助手消息的 token 用量（provider 报了才有）：会话卡 / Drawer 的 Budget 只读这里，不另记一份。 */
+  usage?: { input: number; output: number; reasoning?: number };
 } {
   const message = entry.message;
   if (message && message.role === 'toolResult') {
@@ -1471,7 +1518,12 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
     };
   }
   const thinking = message?.role === 'assistant' ? thinkingBlocks(message) : '';
+  const usage = message?.role === 'assistant' ? (message as { usage?: { input?: number; output?: number; reasoning?: number } }).usage : undefined;
+  const tokens = usage && (Number(usage.input) > 0 || Number(usage.output) > 0)
+    ? { input: Number(usage.input) || 0, output: Number(usage.output) || 0, ...(typeof usage.reasoning === 'number' ? { reasoning: usage.reasoning } : {}) }
+    : undefined;
   return {
+    ...(tokens ? { usage: tokens } : {}),
     id: entry.id,
     role: message?.role ?? 'message',
     text: message ? textBlocks(message) : '',
@@ -1483,6 +1535,12 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
       ? { aborted: true, error: AGENT_ABORTED_MESSAGE }
       : { error: (message as { errorMessage?: string } | undefined)?.errorMessage }),
   };
+}
+
+/** 用户消息带上发送时的结构化来源记录（P0）；没有记录的旧消息由面板按文本兼容解析。 */
+function withTurnContext<T extends { id: string; role: string }>(message: T, contexts: Map<string, TurnContextRecord>): T & { turnContext?: TurnContextRecord } {
+  const record = message.role === 'user' ? contexts.get(message.id) : undefined;
+  return record ? { ...message, turnContext: record } : message;
 }
 
 /**
@@ -1588,6 +1646,11 @@ export class BrowserAgentKernel {
    * 才交给 pi 的 steering 队列，所以送达前都能撤回。交出去之后按消息对象等 message_start，届时发 steer_delivered。
    */
   private steerBuffer: Array<{ id: string; message: AgentMessage }> = [];
+  /**
+   * Spatial Context P0：等待落盘的本轮来源。用户消息 message_end 写进会话、拿到真实 entry id 后，
+   * 紧跟着写一条 iris.turn_context custom entry（只追加，不进模型上下文）。按消息对象匹配；对象被复制时按文本兜底。
+   */
+  private pendingTurnContexts = new Map<AgentMessage, TurnContextDraft>();
   private steerInFlight = new Map<AgentMessage, string>();
   /** send() 进行中（含压缩、组装提示词、两次模型调用之间这些 isStreaming 为 false 的空档）：插话照收。 */
   private turnActive = false;
@@ -1793,7 +1856,9 @@ export class BrowserAgentKernel {
           guard.hit = true;
           return;
         }
-        await this.session?.appendMessage(message);
+        const turnContext = this.takeTurnContext(message);
+        const entryId = await this.session?.appendMessage(message);
+        if (entryId && turnContext) await this.recordTurnContext(turnContext, entryId);
         if (this.session) await this.repo?.persist(this.session);
       }
       this.emit(event as { type: string; [key: string]: unknown });
@@ -1805,6 +1870,34 @@ export class BrowserAgentKernel {
         }
       }
     });
+  }
+
+  private takeTurnContext(message: AgentMessage): TurnContextDraft | undefined {
+    if ((message as { role?: string }).role !== 'user' || !this.pendingTurnContexts.size) return undefined;
+    let draft = this.pendingTurnContexts.get(message);
+    let key: AgentMessage | undefined = draft ? message : undefined;
+    if (!draft) {
+      const text = textBlocks(message);
+      for (const [candidate, value] of this.pendingTurnContexts) {
+        if (textBlocks(candidate) === text) { draft = value; key = candidate; break; }
+      }
+    }
+    if (key) this.pendingTurnContexts.delete(key);
+    return draft;
+  }
+
+  /** 用户消息已落盘：用真实 session id / entry id 写本轮来源记录。 */
+  private async recordTurnContext(draft: TurnContextDraft, messageId: string): Promise<void> {
+    if (!this.session) return;
+    const metadata = await this.session.getMetadata();
+    const record: TurnContextRecord = {
+      schemaVersion: TURN_CONTEXT_SCHEMA_VERSION,
+      sessionId: String(metadata.id),
+      messageId,
+      sentAt: new Date().toISOString(),
+      ...draft,
+    };
+    await this.session.appendCustomEntry(TURN_CONTEXT_ENTRY, record);
   }
 
   /** 步骤边界：把缓冲里的插话交给 pi，紧接着的 steering 轮询会把它们作为 user 消息注入。 */
@@ -1846,9 +1939,10 @@ export class BrowserAgentKernel {
   }
 
   /** 开启一个全新会话并切换过去；旧会话保留在历史列表里。 */
-  async newSession(): Promise<unknown> {
+  async newSession(options: { fresh?: boolean } = {}): Promise<unknown> {
     if (!this.repo || !this.agent) await this.openSession();
-    if (this.session) {
+    // fresh：画布后台运行时要一个独占的新会话，不能复用「最近的空会话」（那可能正是面板当前打开的会话）。
+    if (this.session && !options.fresh) {
       const entries = await this.session.getBranch();
       // 空会话（没有任何消息）不重复进历史，直接复用
       if (!entries.some(entry => entry.type === 'message')) return this.snapshot();
@@ -1897,9 +1991,15 @@ export class BrowserAgentKernel {
     const branch = await this.repo.create({
       metadata: { projectId: this.projectId, role: 'branch', branchedFrom: fromSessionId, branchPointId },
     });
+    const branchMetadata = await branch.getMetadata();
+    const messageIds = new Map<string, string>();
     for (const entry of kept) {
-      if (entry.type === 'message' && 'message' in entry && entry.message) await branch.appendMessage(entry.message);
-      else if (entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY && entry.data) {
+      if (entry.type === 'message' && 'message' in entry && entry.message) messageIds.set(entry.id, await branch.appendMessage(entry.message));
+      else if (entry.type === 'custom' && entry.customType === TURN_CONTEXT_ENTRY && isTurnContextRecord(entry.data)) {
+        // 来源记录跟着消息走：换成分支里的真实 session / message id，内容原样（发送那一刻的冻结记录）。
+        const newMessageId = messageIds.get(entry.data.messageId);
+        if (newMessageId) await branch.appendCustomEntry(TURN_CONTEXT_ENTRY, { ...entry.data, sessionId: String(branchMetadata.id), messageId: newMessageId });
+      } else if (entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY && entry.data) {
         await branch.appendCustomEntry(entry.customType, entry.data);
       } else if (entry.type === 'custom' && entry.customType === SKILL_READ_ENTRY && entry.data) {
         // 分支复制的是完整原始消息（不含压缩），技能原文都在：压缩轮次归零。
@@ -1950,6 +2050,7 @@ export class BrowserAgentKernel {
     this.agent?.clearAllQueues();
     this.steerBuffer = [];
     this.steerInFlight.clear();
+    this.pendingTurnContexts.clear();
     this.agent?.abort();
     this.compactionController?.abort();
     this.cancelEpoch += 1;
@@ -1964,24 +2065,24 @@ export class BrowserAgentKernel {
    * 运行中插话（steering）：不打断当前这一轮，消息在下一个步骤边界（工具执行完、下一次调用模型前）
    * 注入对话；送达时发 `steer_delivered { steerId }`。没有在跑时返回 false，调用方改走 send。
    */
-  steer(text: string, images: ImageContent[] = [], id: string = crypto.randomUUID()): boolean {
+  steer(text: string, images: ImageContent[] = [], id: string = crypto.randomUUID(), turnContext?: TurnContextDraft | null): boolean {
     if (!this.agent || !this.session || !(this.agent.state.isStreaming || this.turnActive)) return false;
     const prompt = String(text || '').trim();
     if (!prompt && images.length === 0) return false;
-    this.steerBuffer.push({
-      id,
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: prompt }, ...images],
-        timestamp: Date.now(),
-      } as AgentMessage,
-    });
+    const message = {
+      role: 'user',
+      content: [{ type: 'text', text: prompt }, ...images],
+      timestamp: Date.now(),
+    } as AgentMessage;
+    if (turnContext) this.pendingTurnContexts.set(message, { ...turnContext, origin: 'steer' });
+    this.steerBuffer.push({ id, message });
     return true;
   }
 
   /** 撤回一条还没到步骤边界的插话；已经交给模型循环的撤不回，返回 false。 */
   withdrawSteer(id: string): boolean {
     const before = this.steerBuffer.length;
+    this.steerBuffer.filter(item => item.id === id).forEach(item => this.pendingTurnContexts.delete(item.message));
     this.steerBuffer = this.steerBuffer.filter(item => item.id !== id);
     return this.steerBuffer.length !== before;
   }
@@ -2210,7 +2311,7 @@ export class BrowserAgentKernel {
     return true;
   }
 
-  async send(text: string, images: ImageContent[] = [], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
+  async send(text: string, images: ImageContent[] = [], skillAttachment?: ProductionSkillAttachment | null, turnContext?: TurnContextDraft | null): Promise<unknown> {
     if (!this.agent || !this.session) throw new Error('Iris Agent session is not open');
     const prompt = String(text || '').trim();
     if (!prompt && images.length === 0) throw new Error('Iris Agent message is empty');
@@ -2240,13 +2341,14 @@ export class BrowserAgentKernel {
 
     this.turnActive = true;
     try {
-      return await this.runTurn(prompt, images);
+      return await this.runTurn(prompt, images, turnContext ?? null);
     } finally {
       this.turnActive = false;
+      this.pendingTurnContexts.clear();
     }
   }
 
-  private async runTurn(prompt: string, images: ImageContent[]): Promise<unknown> {
+  private async runTurn(prompt: string, images: ImageContent[], turnContext: TurnContextDraft | null = null): Promise<unknown> {
     if (!this.agent) throw new Error('Iris Agent session is not open');
     this.syncThinkingLevel();
     this.midTurnExhausted = false;
@@ -2275,6 +2377,7 @@ export class BrowserAgentKernel {
       content: [{ type: 'text', text: prompt }, ...images],
       timestamp: Date.now(),
     } as AgentMessage;
+    if (turnContext) this.pendingTurnContexts.set(userMessage, turnContext);
     this.overflowGuard = { armed: true, hit: false };
     try {
       // 强制技能的完整读取紧跟在用户消息之后：模型这一轮就能看到原文，面板显示一条「已读取 xxx 技能」。
@@ -2305,12 +2408,13 @@ export class BrowserAgentKernel {
     projectId: string;
     boundProductionSkill: ProductionSkillAttachment | null;
     productionSkillBindingError: string | null;
-    messages: Array<ReturnType<typeof snapshotMessage> & { compaction?: CompactionNoticeInfo }>;
+    messages: Array<ReturnType<typeof snapshotMessage> & { compaction?: CompactionNoticeInfo; turnContext?: TurnContextRecord }>;
     running: boolean;
   }> {
     if (!this.session) throw new Error('Iris Agent session is not open');
     const metadata = await this.session.getMetadata();
     const entries = await allEntries(this.session);
+    const turnContexts = turnContextsByMessage(entries as ReadonlyArray<{ type: string; customType?: string; data?: unknown }>);
     return {
       sessionId: metadata.id,
       projectId: this.projectId,
@@ -2318,8 +2422,8 @@ export class BrowserAgentKernel {
       productionSkillBindingError: this.productionSkillBindingError,
       messages: entries
         .filter(entry => entry.type === 'message' || entry.type === 'compaction')
-        .map(entry => (entry.type === 'compaction' ? compactionNotice(entry as { id: string; tokensBefore?: number; timestamp?: string; details?: unknown }) : snapshotMessage(entry)))
-        .filter(message => message.role !== 'assistant' || message.text || message.thinking || message.error),
+        .map(entry => (entry.type === 'compaction' ? compactionNotice(entry as { id: string; tokensBefore?: number; timestamp?: string; details?: unknown }) : withTurnContext(snapshotMessage(entry), turnContexts)))
+        .filter(keepSnapshotMessage()),
       running: Boolean(this.agent?.state.isStreaming),
     };
   }

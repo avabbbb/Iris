@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Iris | 第二套业务实现 |
 | **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向 Canvas / Cut 的 Agent 工作流供应模型与连接 | 对话、run 编辑、Tasks / Artifacts 工作区 |
-| **Canvas Assistant Drawer（内置 Agent）** | 实际对话、创作上下文、调用受控工具与审核的当前入口；未来 Spatial Context v1 在此落地（[11](11-iris.md)） | 独立的 Personal Agent 顶栏、第二份 Workflow、跨 Harness 会话库 |
+| **画布会话卡 + Canvas Assistant Drawer（内置 Agent）** | 画布上的会话卡是入口与摘要（双击空白「问 Agent」、选中素材「与 Agent 讨论」），Drawer 是同一会话的详情视图：完整对话、工具日志、审批与创作上下文；Agent 页是放大视图（[11](11-iris.md)） | 独立的 Personal Agent 顶栏、第二份 Workflow、第二套会话库、把每次工具调用画成节点 |
 | **Cut（当前视频剪辑器）** | 复用 `cutStore` 的编辑时间线与 `iris_cut_*` 工具、支持 UI/Agent 撤销 | 未来独立 Agent、Resolve 工程的复制品 |
 
 三者不复制彼此的 UI、会话、Host picker 或状态。
@@ -64,7 +64,7 @@ Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Iris CLI（生成
 
 Canvas、Cut、Drawer 和外部 Agent 通过真实命令操作共享的素材和工程，并引用相同 Runtime Run/Artifact。工具已分阶段实现，真实支持等级以 `SUPPORT_MATRIX.md` 为准；视频流水线早期方案已移至 [历史归档](../archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md)。
 
-Spatial Context v1 只补结构化 Turn Context（真实消息 ID/素材版本）及独立的 Context Card；后续 Creative Proposal 在 Canvas/Cut 的现有操作边界构造可审核的目标、Diff 和执行回执。内置 Agent 不额外获得 Shell 或宿主全局写权限；具体参阅 [11](11-iris.md)。
+Spatial Context v1 补结构化 Turn Context（真实消息 ID/素材版本）、独立的 Context Card，以及嵌在画布里的 Agent 会话卡（Session 投影：只存 sessionId / entryId 与摘录，默认只把绑定素材交给模型，不交整张画布）；后续 Creative Proposal 在 Canvas/Cut 的现有操作边界构造可审核的目标、Diff 和执行回执。外部 Agent 在画布上只留引用、摘要、回执和产物关系。内置 Agent 不额外获得 Shell、任意文件读写或宿主全局写权限；具体参阅 [11](11-iris.md)。
 
 ## 7. 不采用
 

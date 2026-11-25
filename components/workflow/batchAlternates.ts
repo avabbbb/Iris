@@ -287,10 +287,10 @@ export function foldResultBatches(nodes: WorkflowNode[], connections: readonly W
   return { nodes: next, changed: true };
 }
 
-interface Rect { x: number; y: number; width: number; height: number }
+export interface Rect { x: number; y: number; width: number; height: number }
 const FOLD_GAP = 40;
 /** 节点占的画布区域；有备选的节点把叠放卡片斜出的边角 / 下方网格也算进去（网格按节点宽 0.6 粗估，宁大勿小）。 */
-function footprint(node: WorkflowNode): Rect {
+export function footprint(node: WorkflowNode): Rect {
   const alternates = nodeAlternates(node).length;
   const dock = alternates ? (usesAlternateStack(node) ? 24 : Math.round(node.width * 0.6)) : 0;
   return { x: node.position.x, y: node.position.y, width: node.width, height: node.height + dock };

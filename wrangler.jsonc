@@ -2,6 +2,8 @@
 // 只有 /api/* 先进 Worker（worker/index.ts → /api/llm-proxy/* 交给 server/llmProxy.ts）；
 // 其余请求由资源层直接返回、不计 Worker 调用，未命中的路径回落 index.html（SPA）。
 // COOP/COEP 响应头由 public/_headers（构建后 dist/_headers）提供。
+// /api/link/* 是 Iris Link 中继（worker/linkRelay.ts）：每个 CLI 配对一个 Durable Object 房间，WebSocket Hibernation。
+// 首次部署带上 migrations v1（new_sqlite_classes）；之后新增 / 改名 DO 类要追加新的 tag，不能改已发布的。
 {
   "name": "iris",
   "main": "./worker/index.ts",
@@ -12,5 +14,9 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
-  }
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "IRIS_LINK", "class_name": "IrisLinkRelay" }]
+  },
+  "migrations": [{ "tag": "v1-iris-link", "new_sqlite_classes": ["IrisLinkRelay"] }]
 }

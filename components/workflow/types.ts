@@ -301,6 +301,10 @@ export interface SeedanceReferences {
 }
 
 export interface WorkflowNodeMetadata {
+  /** Spatial Context Card（plugin:context-card）：用户 Commit 的创作结论；标题 / 正文就是节点 title / content。 */
+  contextCard?: WorkflowContextCardMeta;
+  /** 画布 Agent 会话卡（plugin:agent-session）：Session 的投影，只存 sessionId / entryId、绑定素材与一段摘录。 */
+  agentSession?: WorkflowAgentSessionMeta;
   content?: string;
   prompt?: string;
   /** 旧文本提示词节点迁移后保留的下游目标；仅用于一次性“并入下游提示词”。 */
@@ -441,6 +445,60 @@ export interface WorkflowHostSendRequest {
   requestedAt: string;
   updatedAt?: string;
   message?: string;
+}
+
+export interface WorkflowContextCardSource {
+  kind: 'node' | 'asset';
+  id: string;
+  label: string;
+  /** Commit 那一刻的内容指纹（services/turnContext）；空字符串 = 当时无法计算。 */
+  fingerprintAtCommit: string;
+}
+
+export interface WorkflowContextCardVersion {
+  title: string;
+  content: string;
+  sources: WorkflowContextCardSource[];
+  committedAt: string;
+}
+
+export interface WorkflowAgentSessionReference {
+  kind: 'node' | 'asset';
+  id: string;
+  label: string;
+}
+
+export interface WorkflowAgentSessionTurn {
+  /** 最新一轮助手回复的持久化 entry id（内置会话）；外部 Agent 没有时省略。 */
+  entryId?: string;
+  /** 这一轮用户问题的前一小段（不含引用上下文）。 */
+  prompt: string;
+  /** 回复摘录（≤ 280 字，纯文本）；完整正文从会话读。 */
+  excerpt: string;
+  status: 'done' | 'error';
+  at: string;
+}
+
+export interface WorkflowAgentSessionMeta {
+  schemaVersion: 1;
+  host: 'iris' | 'external';
+  /** 绑定的内置会话 id；还没发出第一轮时为空。 */
+  sessionId?: string;
+  /** 'ask' = 双击空白就地问；'discuss' = 选中素材讨论。 */
+  origin: 'ask' | 'discuss';
+  /** 绑定素材：每一轮都作为显式引用（iris.turn_context）发送。 */
+  references: WorkflowAgentSessionReference[];
+  lastTurn?: WorkflowAgentSessionTurn;
+  createdAt: string;
+}
+
+export interface WorkflowContextCardMeta {
+  schemaVersion: 1;
+  sourceMessage: { host: 'iris' | 'external'; sessionId?: string; messageId?: string };
+  sources: WorkflowContextCardSource[];
+  committedAt: string;
+  /** 用户显式重新保存时保留的旧版本（新在后）。 */
+  history?: WorkflowContextCardVersion[];
 }
 
 export interface WorkflowNode {

@@ -12,6 +12,11 @@ import { buildCssFilter } from '../ImageFilterPanel';
 import { isGeneratedWorkflowMedia, useWorkflowMediaUrl } from './media';
 import { parseLocalFolderHref, requestLocalFolderPermission } from '../../services/localFolderSource';
 import { getWorkflowNodePlugin, type WorkflowNodePluginContext, type WorkflowNodePluginDefinition } from './nodePluginSdk';
+import './ContextCardNode';
+import './AgentSessionCardNode';
+import { isContextCardNode } from './contextCard';
+import { isAgentSessionNode } from './agentSessionCard';
+import { setContextCardHighlight, useIsContextCardSource } from './contextCardHighlight';
 import type { WorkflowNode as WorkflowNodeData } from './types';
 import { listWorkflowOperationVersions } from './operations';
 import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
@@ -332,6 +337,19 @@ export function WorkflowNode({
   const [isEditingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(node.title);
   const plugin = getWorkflowNodePlugin(node.type);
+  // Context Card：选中时高亮它的来源节点（Context 关系默认不画连线）；这个节点是某张卡片的来源时自己亮起。
+  const contextSource = useIsContextCardSource(node.id);
+  // Context Card 是结论，不是 Workflow 步骤：不显示连线手柄（「+」/ 输出端口），标题画在卡片内部。
+  // Agent 会话卡同理：它是 Session 的投影，不是 Workflow 步骤；选中时高亮它绑定的素材。
+  const isAgentSession = isAgentSessionNode(node);
+  const isContextCard = isContextCardNode(node) || isAgentSession;
+  const cardSourceKey = isContextCard && selected ? ((isAgentSession ? node.metadata.agentSession?.references : node.metadata.contextCard?.sources) || []).filter(source => source.kind === 'node').map(source => source.id).join('\u0000') : '';
+  useEffect(() => {
+    if (!cardSourceKey) return;
+    const key = node.id + ':selected';
+    setContextCardHighlight(key, cardSourceKey.split('\u0000'));
+    return () => setContextCardHighlight(key, null);
+  }, [cardSourceKey, node.id]);
   useEffect(() => {
     if (isEditingTitle) setTitleDraft(node.title);
   }, [isEditingTitle, node.title]);
@@ -409,7 +427,7 @@ export function WorkflowNode({
     <motion.div
       data-workflow-node-id={node.id}
       data-lifted={lifted ? 'true' : undefined}
-      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${lifted ? ' is-lifted' : ''}`}
+      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${lifted ? ' is-lifted' : ''}${contextSource ? ' is-context-source' : ''}${isContextCard ? ' is-context-card' : ''}${isAgentSession ? ' is-agent-session' : ''}`}
       role="group"
       aria-label={language === 'en' ? `${node.title} workflow node` : `${node.title} 工作流节点`}
       tabIndex={0}
@@ -458,6 +476,7 @@ export function WorkflowNode({
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
       onDrop={event => { if (!isMedia) return; setDropTarget(false); if ((event.dataTransfer.files?.length || 0) > 1) return; event.preventDefault(); event.stopPropagation(); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
+      {!isContextCard && <>
       <div className="workflow-handle-zone workflow-handle-zone--target" data-workflow-target={node.id} onPointerMove={event => trackWorkflowHandle(event, 'in')} onPointerLeave={resetWorkflowHandle} onPointerDown={event => { if (event.target === event.currentTarget) onConnectStartTarget?.(event as unknown as ReactPointerEvent<HTMLButtonElement>); }}>
       <button type="button" className="workflow-handle workflow-handle--target" aria-label={language === 'en' ? `Connect to ${node.title}` : `连接到${node.title}`} title={language === 'en' ? 'Activate to complete a keyboard connection' : '激活以完成键盘连接'} data-workflow-target={node.id} onPointerDown={onConnectStartTarget} onClick={event => { if (event.detail === 0) onKeyboardConnectTarget?.(); }}>
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
@@ -468,6 +487,7 @@ export function WorkflowNode({
         <span className="workflow-handle__plus" aria-hidden="true"><Plus size={12} strokeWidth={2.5} /></span>
       </button>
       </div>
+      </>}
       {status === 'error' && <span className="workflow-node__error-badge" title={node.metadata.error}>!</span>}
       {runState?.state === 'stale' && <WorkflowStaleBadge reason={runState.reason} language={language} />}
       {presence && <WorkflowPresenceChip presence={presence} language={language} />}
@@ -478,7 +498,7 @@ export function WorkflowNode({
           {isBatchPrimary ? <span><Check size={12} />{(language === 'en' ? 'Primary' : '主图')}</span> : onSetBatchPrimary && <button type="button" title={(language === 'en' ? 'Set as primary' : '设为主图')} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSetBatchPrimary(); }}><Star size={12} />{(language === 'en' ? 'Set as primary' : '设为主图')}</button>}
         </div>
       )}
-      {isEditingTitle && onChangeTitle ? (
+      {isContextCard ? null : isEditingTitle && onChangeTitle ? (
         <div className="workflow-node__title is-editing" data-workflow-overlay>
           <TitleIcon size={12} />
           <input

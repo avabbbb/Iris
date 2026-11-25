@@ -304,9 +304,30 @@ textarea.agent-ask__control { min-height: 64px; padding: 8px 10px; resize: verti
 .agent-media-tile__label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-media-tile[data-missing] .agent-media-tile__thumb { border-style: dashed; }
 .agent-media-tile[data-missing] .agent-media-tile__label { color: var(--isl-ink-ghost); text-decoration: line-through; }
+/* 历史来源状态：缩略图左上的小图标角标（不可用 = 珊瑚 ImageOff，来源已更新 = 阳光 RefreshCw）；文字在 tooltip 与读屏标签里。 */
+.agent-media-tile__state { position: absolute; top: 3px; left: 3px; display: grid; width: 16px; height: 16px; place-items: center; border: 1px solid var(--isl-card); border-radius: 999px; box-sizing: border-box; color: var(--isl-ink); background: var(--isl-sun); }
+.agent-media-tile__state[data-state='missing'] { color: var(--isl-card); background: var(--isl-coral-deep); }
+.agent-media-tile__state-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.agent-media-tile[data-missing] .agent-media-tile__thumb { color: var(--isl-ink-ghost); background: var(--isl-surface-sunk); }
+.agent-media-tile[data-missing] .agent-media-tile__thumb > img { opacity: .45; }
+/* 紧凑来源条（画布 Context Card）：28px 方块；缺失 = 虚线 + 淡化 + ImageOff；已更新 = 右上阳光小圆点。 */
+.agent-media-tiles.is-compact { flex-wrap: nowrap; gap: 4px; }
+.agent-media-tiles.is-compact .agent-media-tile { width: 28px; }
+.agent-media-tiles.is-compact .agent-media-tile__thumb { width: 28px; height: 28px; box-sizing: border-box; font-size: 10px; }
+.agent-media-tiles.is-compact .agent-media-tile[data-missing] .agent-media-tile__thumb { border-color: var(--isl-border-strong); opacity: .7; }
+.agent-media-tiles.is-compact .agent-media-tile__state { top: 2px; right: 2px; left: auto; width: 8px; height: 8px; border-width: 1px; }
+.agent-media-tiles.is-compact .agent-media-tile__state > svg { display: none; }
+.agent-media-tiles.is-compact .agent-media-tile__state[data-state='missing'] { width: 0; height: 0; border: 0; }
 .agent-media-tile.is-overflow .agent-media-tile__thumb { border-style: dashed; color: var(--isl-ink-soft); }
-.agent-media-tile__remove { position: absolute; top: -4px; right: -4px; display: grid; width: 16px; height: 16px; place-items: center; border: 1px solid var(--isl-border); border-radius: 999px; padding: 0; color: var(--isl-ink-soft); background: var(--isl-card); cursor: pointer; }
-.agent-media-tile__remove:hover { color: var(--isl-ink); }
+.agent-media-tile__remove { position: absolute; top: -5px; right: -5px; display: grid; width: 18px; height: 18px; place-items: center; border: 1px solid var(--isl-border); border-radius: 999px; padding: 0; color: var(--isl-ink-soft); background: var(--isl-card); cursor: pointer; transition: opacity var(--motion-fast, 140ms) var(--ease-standard, ease), background var(--motion-fast, 140ms) var(--ease-standard, ease); }
+.agent-media-tile__remove:hover { color: var(--isl-ink); background: var(--isl-surface-2); }
+.agent-media-tile__remove:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; }
+/* 移除 × 只在悬停 / 键盘聚焦时出现；触屏（无 hover）常显。 */
+@media (hover: hover) {
+  .agent-media-tile__remove { opacity: 0; }
+  .agent-media-tile:hover .agent-media-tile__remove,
+  .agent-media-tile:focus-within .agent-media-tile__remove { opacity: 1; }
+}
 .agent-mention-pill { display: inline-flex; max-width: 100%; align-items: center; gap: 3px; margin: 0 1px; border: 0; border-radius: var(--isl-r-sm); padding: 0 5px 0 2px; color: inherit; background: color-mix(in srgb, var(--isl-ink) 8%, transparent); font: inherit; font-weight: 600; line-height: 1.5; vertical-align: baseline; cursor: pointer; }
 .agent-mention-pill:disabled { cursor: default; }
 .agent-mention-pill > img, .agent-mention-pill > svg { flex: none; width: 1.1em; height: 1.1em; border-radius: 3px; object-fit: cover; }
@@ -320,3 +341,29 @@ textarea.agent-ask__control { min-height: 64px; padding: 8px 10px; resize: verti
 /* 输入区引用 chip：视频封面上加播放角标 */
 .agent-reference-thumb-wrap { position: relative; display: inline-grid; flex: none; place-items: center; }
 .agent-reference-thumb-wrap > svg { position: absolute; color: var(--isl-card); filter: drop-shadow(0 0 1px color-mix(in srgb, var(--isl-ink) 80%, transparent)); }
+
+/* 「钉到画布」审查卡（Spatial Context P1）：头 / 可滚动正文 / 常驻尾栏。抽屉 600–900px 高时尾栏始终可见。
+   只用 --isl-* token：标题 13/20 600 行内可编辑、正文 12/18 surface 底自动长高（最多约 8 行）、说明 10/14。 */
+.flv-card.agent-context-card-review { flex: 0 1 auto; min-height: 0; max-height: min(64%, 480px); margin: 0 0 8px; border-color: var(--isl-border); border-radius: var(--isl-r-lg); box-shadow: var(--isl-shadow); overflow: hidden; }
+.agent-context-card-review > .flv-card__head { flex: none; padding: 8px 8px 4px 12px; }
+.agent-context-card-review__body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
+.agent-context-card-review__title { box-sizing: border-box; flex: none; height: 28px; margin: 0 -6px; width: calc(100% + 12px); border: 1px solid transparent; border-radius: var(--isl-r-sm); padding: 0 6px; color: var(--isl-ink); background: transparent; font: inherit; font-size: 13px; font-weight: 600; line-height: 20px; outline: none; transition: background var(--motion-fast, 140ms) var(--ease-standard, ease), border-color var(--motion-fast, 140ms) var(--ease-standard, ease); }
+.agent-context-card-review__title:hover { background: var(--isl-surface-2); }
+.agent-context-card-review__title:focus { border-color: var(--isl-mint); background: var(--isl-surface); }
+.agent-context-card-review__text { box-sizing: border-box; flex: none; width: 100%; min-height: 58px; max-height: 158px; border: 1px solid var(--isl-border); border-radius: var(--isl-r-sm); padding: 6px 8px; color: var(--isl-ink); background: var(--isl-surface); font: inherit; font-size: 12px; line-height: 18px; resize: none; overflow-y: auto; outline: none; transition: border-color var(--motion-fast, 140ms) var(--ease-standard, ease); }
+.agent-context-card-review__text:focus { border-color: var(--isl-mint); }
+.agent-context-card-review__title::placeholder,.agent-context-card-review__text::placeholder { color: var(--isl-ink-ghost); }
+.agent-context-card-review__sources { display: grid; flex: none; gap: 6px; }
+.agent-context-card-review__label { color: var(--isl-ink-soft); font-size: 10px; font-weight: 600; line-height: 14px; font-variant-numeric: tabular-nums; }
+.agent-context-card-review__sources .agent-media-tiles { padding-top: 4px; }
+.agent-context-card-review__error { margin: 0; color: var(--isl-coral-deep); font-size: 11px; line-height: 16px; }
+.agent-context-card-review__foot { display: flex; flex: none; min-width: 0; align-items: center; gap: 6px; border-top: 1px solid var(--isl-border); padding: 8px 8px 8px 12px; background: var(--isl-card); }
+.agent-context-card-review__hint { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--isl-ink-soft); font-size: 10px; font-weight: 500; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-context-card-review__cancel { flex: none; height: 28px; border: 1px solid var(--isl-border); border-radius: var(--isl-r-sm); padding: 0 10px; color: var(--isl-ink); background: var(--isl-surface); font: inherit; font-size: 11px; font-weight: 600; line-height: 16px; cursor: pointer; transition: background var(--motion-fast, 140ms) var(--ease-standard, ease); }
+.agent-context-card-review__cancel:hover { background: var(--isl-surface-2); }
+.agent-context-card-review__commit.isl-go { flex: none; height: 28px; padding: 0 12px; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.agent-context-card-review__cancel:focus-visible,.agent-context-card-review__commit:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 2px; }
+.workflow-agent__message[data-jump-target] { outline: 2px solid color-mix(in srgb, var(--isl-mint) 60%, transparent); outline-offset: 2px; border-radius: var(--isl-r-sm); }
+/* DESIGN §6：暗色主按钮用深色字（亮薄荷底上白字对比不足）。 */
+:root[data-theme='dark'] .agent-context-card-review__commit.isl-go:not(:disabled),
+:root[data-theme='dark'] .workflow-node__plugin-card .context-card__save:not(:disabled) { color: var(--app-bg); }

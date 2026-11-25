@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Maximize2, Music, PanelLeftClose, Pencil, SlidersHorizontal, Type, Video, X } from 'lucide-react';
+import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Maximize2, Music, PanelLeftClose, Pencil, SlidersHorizontal, Sparkles, Type, Video, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
 import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
@@ -49,6 +49,7 @@ const nodeIcon = (node: WorkflowNode) => {
   if (node.type === 'video') return <Video size={14} />;
   if (node.type === 'audio') return <Music size={14} />;
   if (node.type === 'config') return <SlidersHorizontal size={14} />;
+  if (node.type === 'plugin:agent-session') return <Sparkles size={14} />;
   return <Type size={14} />;
 };
 

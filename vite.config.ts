@@ -29,6 +29,9 @@ export default defineConfig(() => {
           'Cross-Origin-Embedder-Policy': 'require-corp',
           'Cache-Control': 'no-store',
         },
+        // Iris Link 本地联调：IRIS_LINK_DEV_RELAY=http://127.0.0.1:8787（wrangler dev）时把 /api/link（含 WebSocket）转给中继，
+        // 页面和 CLI 都用 vite 的地址，与线上同源部署一致。不设时没有这个代理。
+        ...(process.env.IRIS_LINK_DEV_RELAY ? { proxy: { '/api/link': { target: process.env.IRIS_LINK_DEV_RELAY, ws: true, changeOrigin: false } } } : {}),
         // 冷启动时浏览器首次请求才触发整张模块图编译（实测 26–48s），启动即预热入口，
         // 避免 iris start --open 打开的页面在绑定等待内挂载不完。
         warmup: { clientFiles: ['./index.tsx', './appMain.tsx', './RouterHost.tsx'] },
