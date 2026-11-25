@@ -3,6 +3,7 @@
   "default_locale": "en",
   "name": "__MSG_extension_name__",
   "version": "1.8.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5u+uZhkhvi22XFb5uHCPBYF92mGsKw9PGcPstz7iJbxD+lSTfRMaHMZj4oYXwmONvZ80/um1VJtORg9DcRd79S72yWwphp6GYjCQlnFYvGbKDUJEgC3goChD+Ab+cnnRRWcSO5wtQ6EsFFT1sHxMIRY/wG6obgBTpmXRuOzjLGFXAU4PxFss62H/84dwbwS9D+mu+zCtx7tfNz5HoFsth2QRy95T42JxHNPIFflrhRQYUXbeNpi3d1+d4MPc4gZyYb9OzRDBKHhBQ7Us76KrsKvkPeDZTD9i/2mm02L+yZpY/VG6CB1tr0asMec0BP8Nx0Y2szRysoyoqL8w5d47UwIDAQAB",
   "description": "__MSG_extension_description__",
   "icons": {
     "16": "icons/icon16.png",

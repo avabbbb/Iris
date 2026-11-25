@@ -13,7 +13,7 @@ popup（1.6 起）视觉按 docs/design/DESIGN.md：`--isl-*` token、奶蛙 log
 
 ## 网页画布通道
 
-允许连接的网页 origin 由 background/web-origins.js 生成并写入 manifest：正式站 iris.avabbbb.com（更名过渡期另放行旧站 flovart.avabbbb.com），以及本地 127.0.0.1:37522 与 localhost:37522。网页侧用环境变量 VITE_IRIS_EXTENSION_IDS 配置扩展 ID（32 位 a-p，逗号分隔，可同时写商店 ID 与旁加载 ID）。
+允许连接的网页 origin 由 background/web-origins.js 生成并写入 manifest：正式站 iris.avabbbb.com（更名过渡期另放行旧站 flovart.avabbbb.com），以及本地 127.0.0.1:37522 与 localhost:37522。manifest 带固定 key，旁加载 ID 恒为 gjfggdmfhdlklpimckjgeolgfoanfaka，网页端已内置该 ID；商店 ID 另用环境变量 VITE_IRIS_EXTENSION_IDS 追加（32 位 a-p，逗号分隔）。上架商店时提交包需去掉 key 字段。
 
 1. 配对：在画布「设置 → 安全」的浏览器插件区申请配对，再在扩展 popup 的「网页画布」区点击允许。未批准前不收发任何业务消息；拒绝或断开会删除配对条目，网页可以重新申请。
 2. 发送媒体：右键「发送图片到网页画布」或「发送视频到网页画布」。单个媒体上限 64 MiB，分块传输并校验大小与 SHA-256，落到画布当前 Workflow；画布没有打开的项目时只保存媒体。

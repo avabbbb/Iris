@@ -78,6 +78,10 @@ const HELLO_STATUSES: Record<string, ExtensionBridgeStatus> = {
 };
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
 
+// 旁加载（加载解压缩的扩展）固定 ID：由 extension/manifest.json 的 key 字段决定，
+// 任何机器、任何目录加载 dist-extension 都是这个 ID。商店 ID 另经 VITE_IRIS_EXTENSION_IDS 追加。
+export const IRIS_SIDELOAD_EXTENSION_ID = 'gjfggdmfhdlklpimckjgeolgfoanfaka';
+
 function helloStatus(value: unknown): ExtensionBridgeStatus {
   return typeof value === 'string' && Object.hasOwn(HELLO_STATUSES, value) ? HELLO_STATUSES[value] : 'unsupported';
 }
@@ -309,7 +313,10 @@ export function getExtensionBridge(): ExtensionBridge {
   if (!sharedBridge) {
     sharedBridge = createExtensionBridge({
       runtime: browserRuntime(),
-      extensionIds: parseExtensionIds(import.meta.env.VITE_IRIS_EXTENSION_IDS || import.meta.env.VITE_FLOVART_EXTENSION_IDS),
+      extensionIds: parseExtensionIds([
+        import.meta.env.VITE_IRIS_EXTENSION_IDS || import.meta.env.VITE_FLOVART_EXTENSION_IDS,
+        IRIS_SIDELOAD_EXTENSION_ID,
+      ].filter(Boolean).join(',')),
     });
   }
   return sharedBridge;
