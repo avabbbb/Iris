@@ -24,6 +24,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
 import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
+import { useCanvasAgentStore } from './stores/useCanvasAgentStore';
 import type {  } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration, stopOrphanedWorkflowNode, terminalGenerationPatch } from './services/workflowGeneration';
@@ -180,6 +181,11 @@ const App: React.FC = () => {
         return subscribeWorkflowAgentDrawer(openAgentDrawer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // 画布会话卡的「已读」：对话页可见（抽屉打开在对话页，或 Cut 里常驻的对话栏）时，正显示的会话算已看过。
+    useEffect(() => {
+        useCanvasAgentStore.getState().setDrawerOpen((canvasView === 'spatial' && rightOpen && rightTab === 'agent') || canvasView === 'reverse');
+    }, [canvasView, rightOpen, rightTab]);
 
     useEffect(() => {
         try { localStorage.setItem('workflowRightPanelWidth', String(rightWidth)); } catch { /* storage may be unavailable */ }
@@ -879,6 +885,8 @@ const App: React.FC = () => {
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
             <StudioHub language={language} historyItems={workflowSharedMedia} onRemoveHistory={id => setGenerationHistory(prev => prev.filter(item => item.id !== id))} />
             <ConfirmHost />
+            {/* 开发环境 + mock 模型（VITE_IRIS_MOCK=1）：右上角红色 MOCK 角标，截图 / 录屏一眼区分 mock 与真实模型。生产构建里整段被裁掉。 */}
+            {import.meta.env.DEV && import.meta.env.VITE_IRIS_MOCK === '1' && <div className="iris-mock-badge" data-testid="iris-mock-badge" aria-hidden="true">MOCK</div>}
         </>}
     />;
 };

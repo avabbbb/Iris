@@ -1,5 +1,5 @@
 import { ImageFan } from '../ui/ImageFan';
-import { Copy, GitBranch, Quote } from 'lucide-react';
+import { Copy, GitBranch, Pin, Quote } from 'lucide-react';
 import { AgentMarkdown } from './AgentMarkdown';
 import { AgentWorkingOrb } from '../agent/AgentWorkingOrb';
 import { AgentToolSteps } from '../agent/AgentToolSteps';
@@ -47,6 +47,8 @@ export interface WorkflowAgentDisplayMessage {
   endedAt?: number;
   /** 上下文压缩分隔条（system 消息）：压缩前的 token 估算。 */
   compaction?: { tokensBefore: number };
+  /** 助手消息的 token 用量（来自内核快照，provider 报了才有）。 */
+  usage?: { input: number; output: number; reasoning?: number };
 }
 
 type MessageSegment =
@@ -96,7 +98,7 @@ export function segmentTurnIndexes(segments: readonly MessageSegment[]): number[
   });
 }
 
-export function WorkflowAgentMessages({ messages, running, working, turnStartedAt, nodes, onOpenReference, language = 'zho', onCopyMessage, onBranchMessage, branchDisabled, onQuoteMessage, renderTurnFooter, compaction }: {
+export function WorkflowAgentMessages({ messages, running, working, turnStartedAt, nodes, onOpenReference, language = 'zho', onCopyMessage, onBranchMessage, branchDisabled, onQuoteMessage, onPinMessage, pinDisabled, renderTurnFooter, compaction }: {
   messages: WorkflowAgentDisplayMessage[];
   running?: boolean;
   /** 运行中胶囊的状态；不给就按消息推一个（只看本轮工具 / 正文）。 */
@@ -115,6 +117,9 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
   branchDisabled?: boolean;
   /** 引用这条助手消息回复（输入框上方出现引用条）。 */
   onQuoteMessage?: (message: WorkflowAgentDisplayMessage) => void;
+  /** 「钉到画布」：打开审查步骤，用户确认后 Commit 成 Context Card。 */
+  onPinMessage?: (message: WorkflowAgentDisplayMessage) => void;
+  pinDisabled?: boolean;
   /** 每轮对话末尾附加的内容（例如这一轮的生成计划卡）；参数是 0 起的轮次序号。 */
   renderTurnFooter?: (turnIndex: number) => ReactNode;
   /** 正在进行 / 刚结束的上下文压缩：末尾显示实时压缩卡。 */
@@ -161,10 +166,11 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
             {message.role === 'user' && message.references?.length ? <AgentMediaTiles refs={message.references} nodes={nodes} language={language} onOpen={onOpenReference} testId="agent-message-refs" /> : null}
             {message.attachments?.length === 1 ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
             {message.attachments && message.attachments.length > 1 ? <ImageFan className="workflow-agent__message-fan" items={message.attachments.map(item => ({ id: item.id, src: item.previewUrl, alt: item.name }))} /> : null}
-            {(onCopyMessage || ((onBranchMessage || onQuoteMessage) && message.role === 'assistant')) && (message.role !== 'assistant' || message.text) && (
+            {(onCopyMessage || ((onBranchMessage || onQuoteMessage || onPinMessage) && message.role === 'assistant')) && (message.role !== 'assistant' || message.text) && (
               <div className="workflow-agent__message-actions">
                 {onCopyMessage && <button type="button" onClick={() => onCopyMessage(message)} aria-label={`${en ? 'Copy message' : '复制这条消息'}`} title={en ? 'Copy message' : '复制这条消息'}><Copy size={11} />{en ? 'Copy' : '复制'}</button>}
                 {onQuoteMessage && message.role === 'assistant' && <button type="button" onClick={() => onQuoteMessage(message)} aria-label={copy.quoteReply} title={copy.quoteReply}><Quote size={11} />{copy.quoteMessage}</button>}
+                {onPinMessage && message.role === 'assistant' && <button type="button" disabled={pinDisabled} onClick={() => onPinMessage(message)} aria-label={en ? 'Pin to canvas' : '钉到画布'} title={en ? 'Review and commit this reply as a Context Card' : '审查后把这条回复定稿为画布上的 Context Card'}><Pin size={11} />{en ? 'Pin' : '钉到画布'}</button>}
                 {onBranchMessage && message.role === 'assistant' && <button type="button" disabled={branchDisabled} onClick={() => onBranchMessage(message)} aria-label={en ? 'Branch from here' : '从这里分支'} title={en ? 'Branch from here' : '从这里新建一个分支会话'}><GitBranch size={11} />{en ? 'Branch' : '分支'}</button>}
               </div>
             )}

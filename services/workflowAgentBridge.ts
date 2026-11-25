@@ -1,5 +1,6 @@
 import { requestUiConfirm } from './uiConfirm';
 import { executeIrisCommand } from '../tools/iris/core.js';
+import { isLinkCommand } from '../tools/iris/link/protocol.js';
 import { canonicalize } from 'json-canonicalize';
 import { useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
@@ -368,6 +369,15 @@ export class WorkflowAgentBridge {
       const leaseFailure = validateBrowserWorkspaceLease(envelope, this.clientId);
       if (leaseFailure) {
         result = leaseFailure;
+      } else if (isLinkCommand(envelope.command)) {
+        // Iris Link 命令（本机 CLI 经 loopback 进来）：与线上中继同一个处理器；本机可信 CLI 有全部非付费范围，付费仍只能在页面批准。
+        const { handleAgentLinkCommand, LOCAL_LINK_SCOPES } = await import('./link/agentLinkCommands');
+        result = await handleAgentLinkCommand(envelope.command, envelope.args, {
+          scopes: LOCAL_LINK_SCOPES,
+          ...(envelope.idempotencyKey ? { idempotencyKey: envelope.idempotencyKey } : {}),
+          source: 'local',
+          clientName: envelope.caller?.agentIdentity || 'iris-cli (local)',
+        });
       } else if (envelope.command === 'agent.turn') {
         result = await this.runDelegatedAgentTurn(envelope);
       } else if (RUNTIME_COMMANDS.has(envelope.command)) {

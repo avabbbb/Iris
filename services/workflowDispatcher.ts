@@ -1,4 +1,6 @@
 import { estimateRunCost, planRunApproval } from './runApproval';
+import { CONTEXT_CARD_READ_ONLY_MESSAGE, CONTEXT_CARD_TYPE, contextCardWriteViolation } from '../components/workflow/contextCard';
+import { AGENT_SESSION_READ_ONLY_MESSAGE, AGENT_SESSION_TYPE, agentSessionWriteViolation } from '../components/workflow/agentSessionCard';
 import { terminalFromFailure, terminalFromRunResult, type WorkflowRunTerminal } from './workflowRunTerminal';
 import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
 import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/iris/workflow-operation-schema.js';
@@ -245,6 +247,10 @@ const inspectSummary = (project: WorkflowProject) => ({
     locked: node.isLocked === true,
     status: node.metadata.status || 'idle',
     ...(node.type === 'video' && typeof node.metadata.durationMs === 'number' && node.metadata.durationMs > 0 ? { durationSec: Math.round(node.metadata.durationMs / 100) / 10 } : {}),
+    // Context Card：用户定稿的结论，只读；正文用 inspect nodeId 读 metadata.content。
+    ...(node.type === CONTEXT_CARD_TYPE ? { contextCard: { readOnly: true, sourceCount: node.metadata.contextCard?.sources.length || 0 } } : {}),
+    // Agent 会话卡：会话的投影，只读；不带摘录正文（会话内容不回流进画布摘要）。
+    ...(node.type === AGENT_SESSION_TYPE ? { agentSession: { readOnly: true, referenceCount: node.metadata.agentSession?.references.length || 0 } } : {}),
     // 多结果的备选挂在节点上（不是画布节点）；详情用 inspect nodeId 读 metadata.alternates。
     ...(node.metadata.alternates?.length ? { alternateCount: node.metadata.alternates.length, alternateIds: node.metadata.alternates.map(item => item.id) } : {}),
   })),
@@ -1473,6 +1479,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           return error(envelope.id, 'UNKNOWN_COMMAND', `未知 Workflow 命令：${command}`);
         }
         if (agentTextNodeViolation(envelope.source, operations || [operation!])) return error(envelope.id, 'NOTE_IS_ANNOTATION', NOTE_IS_ANNOTATION_MESSAGE);
+        if (contextCardWriteViolation(envelope.source, operations || [operation!], project.nodes)) return error(envelope.id, 'CONTEXT_CARD_READ_ONLY', CONTEXT_CARD_READ_ONLY_MESSAGE);
+        if (agentSessionWriteViolation(envelope.source, operations || [operation!], project.nodes)) return error(envelope.id, 'AGENT_SESSION_READ_ONLY', AGENT_SESSION_READ_ONLY_MESSAGE);
         operations = tagWorkflowNodeOrigin(operations || [operation!], envelope.source);
         // modelId 只能是真实产品模型：别名归一成规范 id，编造的 id 直接报错并列出可用 id（整批不落写）。
         operations = normalizeOperationModelIds(operations, project.nodes);

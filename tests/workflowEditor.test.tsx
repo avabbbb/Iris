@@ -591,7 +591,11 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.doubleClick(editor(), { clientX: 360, clientY: 260 });
     const menu = screen.getByRole('menu', { name: '新建节点' });
     const items = screen.getAllByRole('menuitem');
-    await waitFor(() => expect(items[0]).toHaveFocus());
+    // 第一项是「问 Agent」输入框（打开即聚焦）；↓ 进入节点类型列表。
+    const ask = screen.getByRole('textbox', { name: '问 Agent' });
+    await waitFor(() => expect(ask).toHaveFocus());
+    fireEvent.keyDown(ask, { key: 'ArrowDown' });
+    expect(items[0]).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'End' });
     expect(items[items.length - 1]).toHaveFocus();
     fireEvent.keyDown(menu, { key: 'Home' });

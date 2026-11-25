@@ -111,6 +111,8 @@ Your agent learns Iris through the **Agent Integration Skill** at `.agents/skill
 
 The normal agent loop is `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply` and `workflow.node.run`. Connection setup and diagnostics use `ensure` and `doctor`; development-only browser checks are covered in the [Getting Started guide](docs/overview/quick-start.en.md).
 
+**Drive the hosted Iris from any machine (Iris Link).** `iris login web --open` pairs the CLI with Iris already open in your browser at https://iris.avabbbb.com (use `--device` in a sandbox without a browser: it prints a code you enter on `/link`). The tab runs everything — `iris agent send --follow`, `agent trace`, `agent approve|deny|cancel`, `agent tools list|invoke`, `agent e2e` — so a CLI without model keys can still drive the built-in Agent; your keys never leave the browser, and paid or destructive steps still need your click on the page. The same commands work over local loopback (`--target local|web|auto`). `iris logout` revokes the link on the relay. Protocol and threat model: [docs/dev/iris-link-protocol.md](docs/dev/iris-link-protocol.md), [docs/dev/iris-link-threat-model.md](docs/dev/iris-link-threat-model.md).
+
 ## Why Iris?
 
 Most AI creative tools ask you to move your work into another canvas. **Iris goes the other way.**

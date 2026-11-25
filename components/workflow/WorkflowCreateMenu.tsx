@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Image, Music2, StickyNote, Video, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, FileText, Image, Music2, Sparkles, StickyNote, Video, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { handleMenuKeyDown } from '../../hooks/useListboxKeyboard';
@@ -101,17 +101,39 @@ function NodeSchematic({ type }: { type: WorkflowNodeType }) {
   }
 }
 
-export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' }: {
+/** 「问 Agent」预览：一张会话卡（标题行、两行回复、素材 Chip、输入框）。 */
+function AgentSessionSchematic() {
+  return (
+    <svg viewBox="0 0 280 140" aria-hidden="true">
+      <rect className="wcm-card" x={62} y={16} width={156} height={108} rx={12} />
+      <circle className="wcm-accent" cx={80} cy={34} r={4.5} />
+      <rect className="wcm-line" x={92} y={31} width={70} height={6} rx={3} />
+      <rect className="wcm-line" x={76} y={50} width={124} height={5} rx={2.5} />
+      <rect className="wcm-line" x={76} y={62} width={100} height={5} rx={2.5} />
+      <rect className="wcm-fill-soft" x={76} y={76} width={40} height={12} rx={6} />
+      <rect className="wcm-fill-soft" x={122} y={76} width={34} height={12} rx={6} />
+      <rect className="wcm-fill-soft" x={76} y={96} width={128} height={18} rx={8} />
+      <circle className="wcm-accent" cx={196} cy={105} r={6} />
+    </svg>
+  );
+}
+
+export function WorkflowCreateMenu({ state, onCreate, onClose, onAskAgent, language = 'zho' }: {
   state: WorkflowCreateMenuState;
   onCreate: (type: WorkflowNodeType) => void;
   onClose: () => void;
+  /** 「问 Agent」：菜单第一项，打开时光标就在输入框；回车 = 在双击位置建会话卡并发送。 */
+  onAskAgent?: (text: string) => void;
   language?: 'en' | 'zho';
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const en = language === 'en';
   const reduceMotion = useReducedMotion();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const askRef = useRef<HTMLTextAreaElement>(null);
+  const [askText, setAskText] = useState('');
+  // -1 = 「问 Agent」输入框（有 onAskAgent 时打开即落在这里）。
+  const [activeIndex, setActiveIndex] = useState(onAskAgent ? -1 : 0);
   const [box, setBox] = useState<{ left: number; top: number; width: number }>({ left: state.anchor.x, top: state.anchor.y, width: MENU_WIDTH });
 
   // Fit inside the positioned canvas: width shrinks with the container (which collapses the layout via
@@ -139,9 +161,26 @@ export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' 
   }, [state.anchor.x, state.anchor.y]);
 
   useEffect(() => {
+    if (askRef.current) { askRef.current.focus({ preventScroll: true }); return; }
     const first = listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     first?.focus();
   }, []);
+
+  // 输入框自己处理按键：不触发菜单的首字母跳转；↓ 进入节点列表，Esc 关闭，Enter 发送（Shift+Enter 换行）。
+  const handleAskKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    event.stopPropagation();
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+    if (event.key === 'ArrowDown' && !askText.includes('\n')) {
+      event.preventDefault();
+      listRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (askText.trim()) onAskAgent?.(askText.trim());
+    }
+  };
 
   // ↑/↓ / Home / End 回绕、首字母跳转、Esc 关闭（hooks/useListboxKeyboard 的菜单规则）；Enter / 空格建节点。
   const typeahead = useRef({ text: '', at: 0 });
@@ -155,8 +194,9 @@ export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' 
     }
   };
 
+  const asking = Boolean(onAskAgent) && activeIndex < 0;
   const active = OPTIONS[activeIndex] ?? OPTIONS[0];
-  const ActiveIcon = active.icon;
+  const ActiveIcon = asking ? Sparkles : active.icon;
   const pillSpring = reduceMotion ? { duration: 0 } : { type: 'spring' as const, stiffness: 520, damping: 40, mass: 0.6 };
   const previewVariants = {
     hidden: { opacity: 0 },
@@ -191,6 +231,23 @@ export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' 
             <span>{state.sourceId ? (en ? 'Generate from this node' : '引用该节点生成') : state.targetId ? (en ? 'Create upstream for this node' : '为此节点创建上游') : (en ? 'New node' : '新建节点')}</span>
             <button type="button" aria-label={en ? 'Close new node menu' : '关闭新建节点'} onClick={onClose}><X size={15} /></button>
           </div>
+          {onAskAgent && (
+            <div className="workflow-create-menu__ask" data-active={asking || undefined} data-testid="workflow-create-menu-ask">
+              <span className="workflow-create-menu__item-icon"><Sparkles size={16} /></span>
+              <textarea
+                ref={askRef}
+                rows={1}
+                className="workflow-create-menu__ask-input"
+                aria-label={en ? 'Ask Agent' : '问 Agent'}
+                placeholder={en ? 'Ask Agent…' : '问 Agent…'}
+                value={askText}
+                onChange={event => setAskText(event.target.value)}
+                onFocus={() => setActiveIndex(-1)}
+                onKeyDown={handleAskKeyDown}
+              />
+              <button type="button" className="isl-go workflow-create-menu__ask-send" aria-label={en ? 'Send to Agent' : '发送给 Agent'} disabled={!askText.trim()} onClick={() => { if (askText.trim()) onAskAgent(askText.trim()); }}><ArrowUp size={14} /></button>
+            </div>
+          )}
           <div ref={listRef} className="workflow-create-menu__list">
             {OPTIONS.map((option, index) => {
               const Icon = option.icon;
@@ -231,17 +288,21 @@ export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' 
         </div>
         <div className="workflow-create-menu__preview" aria-live="polite">
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={active.type} className="workflow-create-menu__preview-inner" variants={previewVariants} initial="hidden" animate="show" exit="exit">
+            <motion.div key={asking ? 'ask-agent' : active.type} className="workflow-create-menu__preview-inner" variants={previewVariants} initial="hidden" animate="show" exit="exit">
               <motion.div className="workflow-create-menu__visual" variants={rise}>
-                <NodeSchematic type={active.type} />
+                {asking ? <AgentSessionSchematic /> : <NodeSchematic type={active.type} />}
               </motion.div>
               <motion.div className="workflow-create-menu__preview-title" variants={rise}>
                 <span className="workflow-create-menu__preview-icon"><ActiveIcon size={14} /></span>
-                {en ? active.titleEn : active.title}
+                {asking ? (en ? 'Ask Agent' : '问 Agent') : en ? active.titleEn : active.title}
               </motion.div>
-              <motion.p className="workflow-create-menu__preview-desc" variants={rise}>{en ? active.descriptionEn : active.description}</motion.p>
+              <motion.p className="workflow-create-menu__preview-desc" variants={rise}>{asking
+                ? (en ? 'Creates a session card here and sends. Only what you type is sent; the full conversation is in the side panel.' : '在这里放一张会话卡并发送。只发送你写的内容，完整对话在右侧面板。')
+                : en ? active.descriptionEn : active.description}</motion.p>
               <motion.div className="workflow-create-menu__preview-hint" variants={rise}>
-                <kbd>↵</kbd>{en ? 'Create' : '创建'}<kbd>↑↓</kbd>{en ? 'Move' : '切换'}<kbd>Esc</kbd>{en ? 'Close' : '关闭'}
+                {asking
+                  ? <><kbd>↵</kbd>{en ? 'Send' : '发送'}<kbd>↓</kbd>{en ? 'Nodes' : '节点'}<kbd>Esc</kbd>{en ? 'Close' : '关闭'}</>
+                  : <><kbd>↵</kbd>{en ? 'Create' : '创建'}<kbd>↑↓</kbd>{en ? 'Move' : '切换'}<kbd>Esc</kbd>{en ? 'Close' : '关闭'}</>}
               </motion.div>
             </motion.div>
           </AnimatePresence>

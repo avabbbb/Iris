@@ -23,14 +23,16 @@
 当前顶栏严格为 **Canvas｜Cut｜Agent**：
 - **Canvas**：现有无限画布、GenAI 生成、Workflow、素材与候选版本；未来承载 Spatial Context Card 与可视化评审。
 - **Cut**：**已实现的视频剪辑器**（时间线、素材、字幕、编辑、预览与导出），不是旧文档中“尚未上线的个人 Agent tab”。UI 和 Agent 复用 `services/cut/cutStore.ts`；不另存一份 Cut 工程。
-- **Agent**：Runtime、Provider/模型、外部 Harness、Skill、连接状态与诊断，不新建聊天工作区。
-- **Canvas Assistant Drawer**：当前内置 Agent 的对话、选中素材上下文与操作入口；不是第四个顶栏。Canvas、Cut、Drawer 与 CLI/MCP 使用对应领域的同一业务实现、权限边界、Run 和 Artifact 引用。
+- **Agent**：Runtime、Provider/模型、外部 Harness、Skill、连接状态与诊断；同时是画布会话的**放大视图**（同一 Session，不另建会话库）。
+- **Canvas Assistant Drawer**：画布会话的**详情视图**：完整 markdown、工具日志、审批与选中素材上下文；不是第四个顶栏。Canvas、Cut、Drawer 与 CLI/MCP 使用对应领域的同一业务实现、权限边界、Run 和 Artifact 引用。
+
+**Agent 嵌在画布里（2026-11-24 用户确认）**：定位语「An infinite canvas for human and agent creation」。以画布为主，参考 Eden 的「卡片即内容」：**Canvas 管空间，Agent 管执行，Cut 管时间**。画布上可以有 Agent 会话卡（`plugin:agent-session`）和轮次卡，它们是 Session 的**投影**：只存 sessionId / entryId 和一段摘录，正文从会话读；不建第二套会话库，工具调用不单独成卡。流式时卡片只显示进度和前几行，完整 markdown、工具日志和审批在 Drawer。Agent 产物放在来源旁边的空位，**绝不移动用户已摆放的节点**。默认不把整张画布交给模型，只给绑定的素材和最少的信息。外部 Agent 只存引用、摘要、回执和产物关系。
 
 **Spatial Context v1 只做 P0+P1**：P0 在消息持久化边界保存真实 session/message ID、显式来源及内容指纹、实际送达媒体，不再靠解析文本恢复结构化关系；P1 由用户明确“钉到画布/Commit”创建独立 `plugin:context-card`，**不复用普通 text 节点**。卡片定稿不被自动重写，Context 关系默认不画 Workflow 实线；讨论使用最新授权素材，Run 自动冻结输入。外部 Agent 保留自己的会话；继续讨论可用卡片结论与素材开启新会话，不假定外部 Session Fork。
 
 **专业宿主是可选连接器**：Resolve 优先只读能力发现与受限上下文，产物在 Iris 审查后先导入 Media Pool；新轨道/替换必须有真机验证、目标版本检查与明确审批。既不静默修改原时间线，也不通过未经验证的私有项目数据库解析/写入来宣称完整 Color/Fusion/Magic Mask 上下文。
 
-**不要构建**：所有聊天消息铺满画布、通用第二大脑、第二套 Workflow/Provider/Session Store、无证据的“万能 Resolve API”、默认上传整张画布、未经用户许可的昂贵生成/破坏性写入。细节见当前设计与 Support Matrix。
+**不要构建**：把每条消息 / 每次工具调用都铺成节点（画布只放会话卡、轮次卡这类 Session 投影）、通用第二大脑、第二套 Workflow/Provider/Session Store、无证据的“万能 Resolve API”、默认上传整张画布、未经用户许可的昂贵生成/破坏性写入。细节见当前设计与 Support Matrix。
 
 ## 3. 工程原则：短路径、单一权威
 
@@ -59,7 +61,7 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 当前实现状态以 `SUPPORT_MATRIX.md` 与实际 Runtime/pipeline 代码为准，历史阶段方案见 `docs/archive/2026-11-24-agentos-alignment/16-agent-video-pipeline.md`。相关施工遵守：
 
 - **trace 唯一权威**：run（durable `runId`）由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话与画布节点只存引用。
-- **Run 不另建主场**：Canvas、Cut、Drawer 和外部 Agent 引用同一持久 runId/trace；以实际执行结果为准，不新建旧方案中的独立 Personal Agent Tab。
+- **Run 不另建主场**：Canvas（会话卡）、Cut、Drawer（详情）、Agent 页（放大视图）和外部 Agent 引用同一持久 runId/trace 与同一 Session；以实际执行结果为准，不新建旧方案中的独立 Personal Agent Tab 或第二套会话 / Run 存储。
 - **工具只投影已有业务函数**：`pipeline.run.*`、`asset.import`、`audio.tts`、`audio.transcribe`、`timeline.align`、`composition.patch`、`composition.render`、`media.probe`、`media.frames`、`review.submit`、`run.archive`、`capture.ui` 先有业务实现再登记 canonical registry；内置 Agent、CLI、MCP、DSH 同一 schema 与权限；只在 run 激活时加载，认证后才按 Support Matrix 升级。
 - **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据交给外部 Coding Agent，以 `asset.import` 带回同一 run；网页截图录屏只走 `capture.ui`（仅 localhost / 授权文件夹页面，需用户确认）；桌面级真实操作录制将来走 Recordly 连接器或自研伴生工具，产物同样以 artifact 进入同一 run（计划，未实现）。
 - **评审可审计**：findings 写明时间点 / 片段、层、问题、修法、结论；修补基于版本号，不改 locked 片段（除非显式解锁并留痕）；轮数受 run 预算约束。

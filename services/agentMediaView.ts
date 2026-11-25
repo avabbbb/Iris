@@ -43,6 +43,16 @@ export interface AgentMediaView {
   images: ImageContent[];
   // 每个节点一行：附带了什么、或为什么没有附带，按顺序对应 images。
   notes: string[];
+  /** 逐节点的结构化送达记录（按 nodes 顺序；images 里该节点占 imageCount 张）。Spatial Context P0 据此记录实际送进模型的画面。 */
+  sources?: AgentNodeMediaSource[];
+}
+
+export interface AgentNodeMediaSource {
+  nodeId: string;
+  imageCount: number;
+  kind?: 'image' | 'video-grid' | 'video-frames';
+  frames?: Array<number | string>;
+  note?: string;
 }
 
 export async function loadAgentNodeMedia(
@@ -66,13 +76,16 @@ export async function loadAgentNodeMedia(
   const times = (options.times || []).filter(time => Number.isFinite(time) && time >= 0);
   const images: ImageContent[] = [];
   const notes: string[] = [];
+  const sources: AgentNodeMediaSource[] = [];
   for (const node of nodes) {
     if (images.length >= maxImages) {
       notes.push(node.id + '：已达 ' + maxImages + ' 张上限，未附带');
+      sources.push({ nodeId: node.id, imageCount: 0, note: '已达 ' + maxImages + ' 张上限，未附带' });
       continue;
     }
     if (node.type !== 'image' && node.type !== 'video') {
       notes.push(node.id + '：' + node.type + ' 节点没有可查看的画面');
+      sources.push({ nodeId: node.id, imageCount: 0, note: node.type + ' 节点没有可查看的画面' });
       continue;
     }
     try {
@@ -81,6 +94,7 @@ export async function loadAgentNodeMedia(
       if (node.type === 'image') {
         const sized = await toSizedImageContent(blob);
         images.push(sized.image);
+        sources.push({ nodeId: node.id, imageCount: 1, kind: 'image' });
         const size = describeMediaSize(sized.width, sized.height);
         notes.push(node.id + '：图片「' + node.title + '」' + (size ? '（' + size + '）' : ''));
         continue;
@@ -88,6 +102,7 @@ export async function loadAgentNodeMedia(
       if (layout === 'grid') {
         const grid = await loadVideoFrameGrid(blob, { times, grid: options.grid });
         images.push(grid.image);
+        sources.push({ nodeId: node.id, imageCount: 1, kind: 'video-grid', frames: [...grid.times] });
         notes.push(describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, page: grid.page, totalPages: grid.totalPages, width: grid.width, height: grid.height })
           + '\n  ' + describeSceneCuts(grid.duration, grid.times, grid.cuts));
         continue;
@@ -100,6 +115,7 @@ export async function loadAgentNodeMedia(
           images.push(await toImageContent(extracted.blob));
           taken.push(time + 's');
         }
+        sources.push({ nodeId: node.id, imageCount: taken.length, kind: 'video-frames', frames: times.slice(0, taken.length) });
         notes.push(node.id + '：视频「' + node.title + '」帧 ' + taken.join('/'));
         continue;
       }
@@ -110,12 +126,14 @@ export async function loadAgentNodeMedia(
         images.push(await toImageContent(extracted.blob));
         taken.push(FRAME_LABEL[frame]);
       }
+      sources.push({ nodeId: node.id, imageCount: taken.length, kind: 'video-frames', frames: [...taken] });
       notes.push(node.id + '：视频「' + node.title + '」' + taken.join('/') + '帧');
     } catch (error) {
       notes.push(node.id + '：读取失败（' + (error instanceof Error ? error.message : String(error)) + '）');
+      sources.push({ nodeId: node.id, imageCount: 0, note: '读取失败' });
     }
   }
-  return { images, notes };
+  return { images, notes, sources };
 }
 
 export async function toImageContent(blob: Blob): Promise<ImageContent> {

@@ -57,6 +57,9 @@ import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
 import { workflowNodePluginContextFromProject } from './nodePluginSdk';
+import { isContextCardNode, saveContextCardEdit } from './contextCard';
+import { agentSessionReferencesFromNodes, createAgentSessionCard, isAgentSessionNode, selectionBounds } from './agentSessionCard';
+import { canvasAgentRequestId, pushCanvasAgentSend, useCanvasAgentStore } from '../../stores/useCanvasAgentStore';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { WorkflowAlternatesDock, workflowAlternatesExtent } from './WorkflowAlternatesDock';
 import { WorkflowAlternatesStack } from './WorkflowAlternatesStack';
@@ -2277,6 +2280,8 @@ export function InfiniteWorkflow({
     if (legacy.length) ops.push({ type: 'ungroup_nodes', ids: legacy });
     if (ops.length) applyOps(ops);
   }, [applyOps]);
+  // 快捷键 A：有选区 = 与 Agent 讨论；没有 = 在视口中心打开「问 Agent」。在 keydown effect 里经 ref 调用（定义在后面）。
+  const agentShortcutRef = useRef<() => void>(() => undefined);
   const groupSelectionRef = useRef(groupSelection);
   groupSelectionRef.current = groupSelection;
   const ungroupSelectionRef = useRef(ungroupSelection);
@@ -2446,6 +2451,7 @@ export function InfiniteWorkflow({
       // Alt+Shift+F — 自动整理（快捷键卡片已公布）；用 event.code 兼容 macOS Option 组合字符。
       if (!modifier && event.altKey && event.shiftKey && event.code === 'KeyF') { event.preventDefault(); autoLayout(); return; }
       if (!modifier && !event.altKey && key === 'f') { event.preventDefault(); frameSelection(); return; }
+      if (!modifier && !event.altKey && !event.shiftKey && key === 'a' && !event.repeat) { event.preventDefault(); agentShortcutRef.current(); return; }
       if (event.key === '/' && !modifier && !slashMenuRef.current) {
         event.preventDefault();
         const rect = rootRef.current?.getBoundingClientRect();
@@ -2627,6 +2633,35 @@ export function InfiniteWorkflow({
     }
     if (success) closeCreateMenu();
   }, [applyOps, closeCreateMenu, createMenu]);
+
+  /**
+   * 「问 Agent」：在双击位置（或快捷键时的视口中心）放一张会话卡；有文字就直接交给面板在新会话里发送。
+   * 卡片只放进空位（不挪任何节点）；附近放不下时放到内容右侧并把视角移过去。
+   */
+  const askAgentAt = useCallback(async (world: WorkflowPoint, text: string) => {
+    const projectId = projectRef.current.id;
+    const result = await createAgentSessionCard({ projectId, requestId: canvasAgentRequestId(), origin: 'ask', anchor: { x: world.x - 20, y: world.y - 16, width: 0, height: 0 }, prompt: text });
+    if (result.ok === false) { setNotice(result.error); return; }
+    closeCreateMenu();
+    // 不选中新卡片：选区工具条会盖住画布顶部；光标 / 进度已经在卡片上。
+    selectNodes([]);
+    if (text.trim()) pushCanvasAgentSend({ projectId, cardNodeId: result.nodeId, text, references: [] });
+    else useCanvasAgentStore.getState().requestFocus(result.nodeId);
+    if (result.ok && 'fallback' in result && result.fallback) { setNotice('附近没有空位，会话卡放在了画布右侧'); focusNode(result.nodeId); }
+  }, [closeCreateMenu, focusNode, selectNodes]);
+
+  /** 「与 Agent 讨论」：选区旁的空位放一张会话卡，选中素材绑定为引用；同一选区还没发出的卡片只定位不新建。 */
+  const discussWithAgent = useCallback(async (ids: string[]) => {
+    const members = projectRef.current.nodes.filter(node => ids.includes(node.id) && !isAgentSessionNode(node) && node.isVisible !== false);
+    const bounds = selectionBounds(members);
+    if (!members.length || !bounds) { setNotice('先选中要讨论的素材'); return; }
+    const references = agentSessionReferencesFromNodes(arrangementOrder(members, ids));
+    const result = await createAgentSessionCard({ projectId: projectRef.current.id, requestId: canvasAgentRequestId(), origin: 'discuss', anchor: bounds, references });
+    if (result.ok === false) { setNotice(result.error); return; }
+    selectNodes([]);
+    useCanvasAgentStore.getState().requestFocus(result.nodeId);
+    if ('fallback' in result && result.fallback) { setNotice('选区附近没有空位，会话卡放在了画布右侧'); focusNode(result.nodeId); }
+  }, [focusNode, selectNodes]);
 
   // 按钮触发的视角变化（适配 / 放大缩小 / 重置）走一个欠阻尼弹簧，带一点点回弹；滚轮和捏合仍然即时跟手。
   // 和 focusBounds 一样逐帧 patchProject，叠加层（工具条、提示栏、网格）按 viewport 计算，所以始终对齐。
@@ -2848,6 +2883,13 @@ export function InfiniteWorkflow({
     return eligibility.ok ? { nodeId: node.id, host: eligibility.source.host, status: undefined } : undefined;
   }, [project.nodes, project.connections, selectedNodeIds]);
   const selectedNodeData = displayNodes.filter(node => node.isVisible !== false && selectedNodes.has(node.id));
+  agentShortcutRef.current = () => {
+    const ids = selectedIdsRef.current.filter(id => !isAgentSessionNode(projectRef.current.nodes.find(node => node.id === id)));
+    if (ids.length) { void discussWithAgent(ids); return; }
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    openCreateMenu(rect.left + rect.width / 2 - 160, rect.top + rect.height / 2 - 140);
+  };
   // 节点 PromptBar 放大编辑：记住放大的是哪个节点；切换或取消选中即复位。
   const singleSelectedId = selectedNodeData.length === 1 ? selectedNodeData[0].id : null;
   const [expandedPromptNodeId, setExpandedPromptNodeId] = useState<string | null>(null);
@@ -3570,7 +3612,12 @@ export function InfiniteWorkflow({
               />
             )) : undefined}
             onNeedPoster={() => requestVideoPoster(node.id)}
-            onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
+            onChangeTitle={title => {
+              if (node.isLocked) return;
+              // Context Card 的标题是定稿的一部分：改名也作为显式的新版本保存（旧版本进 history）。
+              if (isContextCardNode(node)) { void saveContextCardEdit({ projectId: projectRef.current.id, nodeId: node.id, title, body: node.metadata.content || '' }); return; }
+              applyOps([{ type: 'update_node', id: node.id, patch: { title } }]);
+            }}
             anchorCode={anchorCodes.get(node.id)}
             trimEditing={inlineTrim?.projectId === project.id && inlineTrim.nodeId === node.id}
             trimBusy={inlineTrimBusy}
@@ -3615,6 +3662,7 @@ export function InfiniteWorkflow({
               applyOps(Object.entries(next).map(([id, position]) => ({ type: 'update_node' as const, id, patch: { position } })));
             }}
             onSequencedExport={(ids, prefix) => { void exportSelectedMedia(projectRef.current.nodes.filter(item => ids.includes(item.id)), prefix); }}
+            onDiscussWithAgent={ids => { void discussWithAgent(ids); }}
             onAddToAgent={ids => {
               const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
               const batchId = members.find(item => item.batchId)?.batchId;
@@ -3805,7 +3853,7 @@ export function InfiniteWorkflow({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} language={language} />}
+        {createMenu && <WorkflowCreateMenu state={createMenu} onCreate={createFromMenu} onClose={closeCreateMenu} onAskAgent={createMenu.sourceId || createMenu.targetId ? undefined : text => { void askAgentAt(createMenu.world, text); }} language={language} />}
       </AnimatePresence>
       {contextMenu && (() => {
           const ctxNode = contextMenu.type === 'node' ? projectRef.current.nodes.find(n => n.id === contextMenu.id) : null;

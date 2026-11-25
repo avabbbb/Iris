@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:critical": "node scripts/run-critical-suite.mjs",
     "e2e:pipeline": "node scripts/e2e-pipeline-trace.mjs",
+    "e2e:cli-link": "node scripts/e2e-cli-link.mjs",
     "e2e:pipeline:parity": "node scripts/e2e-pipeline-parity.mjs",
     "e2e:pipeline:remotion": "node scripts/e2e-pipeline-remotion.mjs",
     "e2e:pipeline:capture": "node scripts/e2e-pipeline-capture.mjs",
@@ -126,13 +127,15 @@
     "esbuild": "^0.25.12",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.0.1",
+    "miniflare": "^4.20260730.0",
     "playwright": "^1.60.0",
     "postject": "^1.0.0-alpha.6",
     "tailwindcss": "^4.2.2",
     "tar": "^7.5.20",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "wrangler": "^4.168.0"
   },
   "description": "Iris — an open-source, local-first AI creative layer for professional editing tools."
 }

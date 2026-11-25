@@ -10,9 +10,28 @@
 let requestNonce = 0;
 const listeners = new Set<() => void>();
 
-export function requestWorkflowAgentDrawer() {
+/**
+ * Where the drawer should land once open: a persisted message entry or a tool
+ * call (canvas session cards ask for this when a trace row is clicked). The
+ * chat panel consumes it and scrolls to the matching message / tool step.
+ */
+export interface WorkflowAgentDrawerTarget {
+  entryId?: string;
+  toolCallId?: string;
+}
+let pendingTarget: WorkflowAgentDrawerTarget | null = null;
+
+export function requestWorkflowAgentDrawer(target?: WorkflowAgentDrawerTarget) {
+  if (target && (target.entryId || target.toolCallId)) pendingTarget = { ...(target.entryId ? { entryId: target.entryId } : {}), ...(target.toolCallId ? { toolCallId: target.toolCallId } : {}) };
   requestNonce += 1;
   listeners.forEach(listener => listener());
+}
+
+/** Take the pending scroll target (if any); only the chat panel calls this. */
+export function consumeWorkflowAgentDrawerTarget(): WorkflowAgentDrawerTarget | null {
+  const target = pendingTarget;
+  pendingTarget = null;
+  return target;
 }
 
 /**

@@ -1,3 +1,5 @@
+import type { TurnSourceMedia } from '../../services/turnContext';
+
 // 用户消息里的画布引用：从发给模型的「引用上下文」块里还原带 nodeId 的引用，
 // 把显示文本里的「引用：@…」行换成可视化的素材卡，并把正文里的 @名称 拆成小缩略图胶囊。纯函数，面板与测试共用。
 
@@ -6,6 +8,10 @@ export interface AgentMessageReference {
   id?: string;
   kind: 'node' | 'asset';
   label: string;
+  /** 发送时的内容指纹（结构化来源记录才有）；与当前节点比较得出「来源已更新」。 */
+  fingerprint?: string;
+  /** 这个来源实际送进模型的画面（结构化来源记录才有）。 */
+  media?: TurnSourceMedia;
 }
 
 const CONTEXT_LINE = /^- @(.+?)（(?:工作流节点 nodeId=([^）\s]+)|我的素材 assetId=([^）\s]+))）\s*$/;

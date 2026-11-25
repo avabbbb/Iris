@@ -6,9 +6,10 @@
 
 ## 0. Agent-native Production OS 的视觉重心（2026-11-24）
 
-Iris 的界面首先服务于**看懂素材、审查 Agent 的改动、比较版本、决定是否应用**。Canvas 是素材/Workflow/审片空间；Cut 是已经可用的视频剪辑器；Agent 是连接/Runtime 管理；对话与上下文在现有 Canvas Assistant Drawer。不要按旧设计里的独立 Iris Personal Agent tab 实现 UI。
+Iris 的界面首先服务于**看懂素材、审查 Agent 的改动、比较版本、决定是否应用**。定位语「An infinite canvas for human and agent creation」：**Canvas 管空间，Agent 管执行，Cut 管时间**。Agent 直接嵌在画布里（参考 Eden 的「卡片即内容」）：画布会话卡是入口与摘要，Assistant Drawer 是这个会话的详情视图（完整 markdown、工具日志、审批），Agent 页是放大视图并管理连接 / Runtime。三者是同一个 Session，不另建会话库；不要按旧设计里的独立 Iris Personal Agent tab 实现 UI。
 
-- **Spatial Context**：只把用户明确 Commit 的结论显示成独立 Context Card；卡片短标题、正文、来源 Chip 和「继续讨论」。不把所有消息平铺为节点，来源绑定默认隐藏，选中/悬停才高亮；Workflow 执行连线保持原意。
+- **Spatial Context**：用户明确 Commit 的结论显示成独立 Context Card；卡片短标题、正文、来源 Chip 和「继续讨论」。来源绑定默认隐藏，选中/悬停才高亮；Workflow 执行连线保持原意。
+- **Agent 会话卡 / 轮次卡**：Session 的投影，只存 sessionId / entryId 和一段摘录。卡片 = 标题行、最新一轮摘要（流式时进度点 + 前几行）、绑定素材 Chip、可折叠输入框；完整内容、工具日志和审批留在 Drawer。不把每条消息或工具调用平铺为节点。卡片用 `--isl-*` token，薄荷只给主操作（发送），操作只在悬停 / 选中时出现，不加阴影或光晕装饰；新卡片与产物只放进来源旁的空位，不挪动已有节点。
 - **审片与提案**（目标）：用户看得见原版/候选、变更范围、Diff、费用和批准/拒绝；失败有定位、查询或恢复动作。工具日志按需展开，不抢素材画面的空间。
 - **按任务出现的 UI**（目标）：镜头并排、帧段定位、字幕波形、审核卡只在需要时出现，结束后收拢为产物与回执；不加第四个导航入口。
 - **视觉约束**：沿用本文 `--isl-*`、暖纸面/薄荷色、现有 `motion` 与弹性布局。素材优先、浅底高信息密度、避免装饰性图、重复标题和泛化营销文案。

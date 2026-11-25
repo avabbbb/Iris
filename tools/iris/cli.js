@@ -120,6 +120,20 @@ if (rawCommand === 'tui' || rawCommand === 'ui' || rawCommand === 'interactive' 
   process.exit(0);
 }
 
+// Iris Link 与 Agent harness 命令（iris login web / logout / link status / agent sessions|send|trace|…）：
+// 在 `agent`（启动本机 Agent 服务）分支之前分流，`iris agent` 不带子命令时行为不变。
+const linkRoute = await (async () => {
+  const { linkCommandFromArgv } = await import('./link/agent-commands.js');
+  return linkCommandFromArgv(argv);
+})();
+if (linkRoute) {
+  const { runLinkCli } = await import('./link/cli-link.js');
+  process.exitCode = await runLinkCli(linkRoute.command, linkRoute.rest);
+  // 等 stdout 刷完再退出（follow 会打很多行）。
+  await new Promise(resolve => process.stdout.write('', resolve));
+  process.exit(process.exitCode);
+}
+
 if (rawCommand === 'mcp' || rawCommand === 'mcp-server') {
   const mod = await import('./mcp-server.js');
   await mod.runMcpServer();
