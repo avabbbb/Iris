@@ -133,3 +133,38 @@ describe('proxy transport hooks', () => {
     expect(await (await fetcher('https://opencode.ai/zen/v1/models')).text()).toBe('ok');
   });
 });
+
+describe('prompt rate limiting', () => {
+  it('"later" snoozes for 3 days across sessions; quota breaks it once, and a quota "later" holds for 24h', async () => {
+    const { PROMPT_SNOOZE_KEY, PROMPT_SNOOZE_MS, PROMPT_QUOTA_SNOOZE_MS } = await import('../services/extensionInstallPrompt');
+    const storage = memoryStorage();
+    let now = 1_000_000;
+    const clock = () => now;
+    const first = createExtensionPromptStore(storage, clock);
+    first.note('proxy');
+    first.dismiss(false);
+    expect(JSON.parse(storage.data[PROMPT_SNOOZE_KEY]).until).toBe(now + PROMPT_SNOOZE_MS);
+
+    // 下一个会话（1 天后）：仍在静默期，普通原因不弹。
+    now += PROMPT_QUOTA_SNOOZE_MS;
+    const second = createExtensionPromptStore(storage, clock);
+    second.note('proxy');
+    const input = (store: ReturnType<typeof createExtensionPromptStore>) => ({ ...base, ...store.getState() });
+    expect(decideExtensionPrompt(input(second)).show).toBe(false);
+    // 429 打破静默……
+    second.note('quota');
+    expect(decideExtensionPrompt(input(second)).show).toBe(true);
+    // ……在 429 提示上点「稍后」后 24 小时内即使再 429 也不弹。
+    second.dismiss(false);
+    expect(decideExtensionPrompt(input(second)).show).toBe(false);
+    const third = createExtensionPromptStore(storage, clock);
+    third.note('quota');
+    expect(decideExtensionPrompt(input(third)).show).toBe(false);
+
+    // 静默期过后恢复。
+    now += PROMPT_SNOOZE_MS + 1;
+    const later = createExtensionPromptStore(storage, clock);
+    later.note('proxy');
+    expect(decideExtensionPrompt(input(later)).show).toBe(true);
+  });
+});

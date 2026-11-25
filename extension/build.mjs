@@ -11,7 +11,7 @@ console.log('Building thin Iris Browser Import extension…');
 if (existsSync(output)) rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 
-for (const entry of ['manifest.json', '_locales', 'background', 'popup', 'icons']) {
+for (const entry of ['manifest.json', '_locales', 'background', 'popup', 'options', 'icons']) {
   cpSync(resolve(extensionRoot, entry), resolve(output, entry), { recursive: true });
 }
 

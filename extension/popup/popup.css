@@ -89,6 +89,15 @@ button:disabled { cursor: wait; opacity: .5; }
 .isl-chip--mint { border-color: var(--isl-mint); background: var(--isl-mint-bg); color: var(--isl-mint-deep); }
 .isl-chip--danger:hover { border-color: var(--isl-coral); color: var(--isl-coral-deep); }
 
+/* 图标按钮：设置入口、关闭 */
+.icon-btn {
+  display: grid; flex: 0 0 auto; place-items: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: var(--isl-r); background: transparent; color: var(--isl-ink-soft);
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.icon-btn:hover { background: var(--isl-surface-2); color: var(--isl-ink); }
+.icon-btn--sm { width: 24px; height: 24px; border-radius: var(--isl-r-sm); }
+
 .link-btn { border: 0; border-radius: var(--isl-r-sm); padding: 2px 6px; background: transparent; color: var(--isl-ink-soft); font-size: 11px; font-weight: 500; }
 .link-btn:hover { background: var(--isl-surface-2); color: var(--isl-ink); }
 
@@ -121,8 +130,13 @@ button:disabled { cursor: wait; opacity: .5; }
 .conn__text { display: flex; flex: 1; min-width: 0; flex-direction: column; }
 .conn__text strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .conn__text small { overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
-.conn__row.is-pending .conn__text small { white-space: normal; }
+.conn__row.is-pending .conn__text small, .conn__row.is-wrap .conn__text small { white-space: normal; }
 .conn__actions { display: flex; flex: 0 0 auto; gap: 4px; }
+
+/* Star 邀请：一次性、可关闭，阳光色图标（DESIGN §4 强调 · 非警示） */
+.star__row { display: flex; align-items: center; gap: 10px; }
+.conn__glyph.is-star { background: var(--isl-sun-bg); color: #9a7406; }
+.star__body { white-space: normal !important; }
 
 .reverse__text {
   margin: 0; max-height: 132px; overflow: auto; padding: 8px 10px;
@@ -199,14 +213,14 @@ button:disabled { cursor: wait; opacity: .5; }
       }
       .empty { border-color: color-mix(in srgb, var(--isl-border-strong) 80%, transparent); background: color-mix(in srgb, var(--amb-card) 60%, transparent); }
       .reverse__text { background: var(--amb-sunk); }
-      .conn__glyph:not(.is-on):not(.is-done):not(.is-small) { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }
+      .conn__glyph:not(.is-on):not(.is-done):not(.is-small):not(.is-star) { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }
       .conn__row.is-pending { background: color-mix(in srgb, var(--isl-sun-bg) 70%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--isl-sun) 35%, transparent); }
       .history li { border-top-color: color-mix(in srgb, var(--isl-border) 60%, transparent); }
       .isl-chip { border-color: var(--amb-stroke); background: var(--amb-chip); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 0 .5px rgba(31, 29, 26, .08); }
       .isl-chip:hover { border-color: var(--amb-stroke); background: var(--amb-card-strong); }
       .isl-chip--mint { background: color-mix(in srgb, var(--isl-mint) 16%, transparent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 0 0 .5px color-mix(in srgb, var(--isl-mint) 45%, transparent); }
       .isl-go { border-radius: 999px; box-shadow: var(--amb-go-shadow); }
-      .link-btn:hover { background: var(--amb-card-strong); }
+      .link-btn:hover, .icon-btn:hover { background: var(--amb-card-strong); }
       .pop__logo { box-shadow: 0 0 0 .5px rgba(31, 29, 26, .08), 0 4px 10px -4px rgba(31, 29, 26, .25); }
     }
   }

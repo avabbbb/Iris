@@ -1,0 +1,56 @@
+/* 插件设置页：复用 popup.css 的 --isl-* token 与玻璃（DESIGN §9.2 / §9.4），只补宽度与表单。 */
+body.opt-body { width: auto; min-height: 100vh; }
+.opt { display: flex; flex-direction: column; gap: 10px; max-width: 640px; margin: 0 auto; padding: 20px 16px 28px; }
+.opt__origins { display: flex; flex-direction: column; gap: 10px; }
+.opt__card { gap: 10px; }
+.opt__origin { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.opt__origin strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.opt__summary { margin: 0; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; }
+.opt__summary.is-warn { padding: 6px 8px; border-radius: var(--isl-r); background: var(--isl-sun-bg); color: var(--isl-ink); }
+
+.klist { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.krow { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; border-top: 1px solid var(--isl-border); }
+.krow:first-child { border-top: 0; }
+.krow--editing { display: block; }
+.krow__text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.krow__text strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.krow__meta { overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.krow__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { padding: 0 6px; border-radius: var(--isl-r-sm); background: var(--isl-surface-2); color: var(--isl-ink-soft); font-size: 10px; line-height: 16px; font-weight: 600; }
+.tag--sun { background: var(--isl-sun-bg); color: var(--isl-ink); }
+
+.editor { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-surface); }
+.editor__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.field { display: flex; min-width: 0; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; }
+.field > span, .field > legend { padding: 0; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; font-weight: 600; }
+.field--wide { grid-column: 1 / -1; }
+.input {
+  width: 100%; height: 30px; padding: 0 8px;
+  border: 1px solid var(--isl-border-strong); border-radius: var(--isl-r-sm);
+  background: var(--isl-card); color: var(--isl-ink); font: inherit;
+}
+.input:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; border-color: var(--isl-mint); }
+.caps__list { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.cap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.cap input { accent-color: var(--isl-mint-deep); }
+.editor__error { margin: 0; padding: 6px 8px; border-radius: var(--isl-r-sm); background: var(--isl-coral-bg); color: var(--isl-coral-deep); font-size: 11px; }
+.editor__error[hidden] { display: none; }
+.editor__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+
+/* 窄窗口（嵌入式 options 或小屏）：表单单列 */
+@media (max-width: 460px) {
+  .editor__grid { grid-template-columns: 1fr; }
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media not all and (prefers-reduced-transparency: reduce) {
+    @media not all and (prefers-contrast: more) {
+      body.opt-body { min-height: 100vh; }
+      .editor { border-color: var(--amb-stroke); background: var(--amb-sunk); }
+      .input { border-color: color-mix(in srgb, var(--isl-border-strong) 80%, transparent); background: var(--amb-card-strong); }
+      .krow { border-top-color: color-mix(in srgb, var(--isl-border) 60%, transparent); }
+      .tag { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }
+      .tag--sun { background: color-mix(in srgb, var(--isl-sun-bg) 80%, transparent); }
+    }
+  }
+}

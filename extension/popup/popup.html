@@ -16,6 +16,7 @@
         <strong>Iris</strong>
         <span id="extensionVersion" class="pop__version"></span>
       </div>
+      <button id="openSettings" type="button" class="icon-btn" data-icon="settings" data-i18n-title="settings"></button>
       <button id="openIris" type="button" class="isl-go" data-i18n="open_iris">打开 Iris</button>
     </header>
 
@@ -57,6 +58,20 @@
         <small id="reverseMeta" class="reverse__meta"></small>
         <button id="copyReverse" type="button" class="isl-chip" data-i18n="copy">复制</button>
         <button id="sendReverse" type="button" class="isl-chip isl-chip--mint" data-i18n="send_to_canvas">送进画布</button>
+      </div>
+    </section>
+
+    <section id="star" class="card star" hidden>
+      <div class="star__row">
+        <span class="conn__glyph is-star" data-icon="star" aria-hidden="true"></span>
+        <div class="conn__text">
+          <strong data-i18n="star_title">喜欢 Iris？</strong>
+          <small class="star__body" data-i18n="star_body">去 GitHub 点个 Star，帮更多人发现它。</small>
+        </div>
+        <div class="conn__actions">
+          <button id="starOpen" type="button" class="isl-chip isl-chip--mint" data-i18n="star_action">点 Star</button>
+          <button id="starClose" type="button" class="icon-btn icon-btn--sm" data-icon="close" data-i18n-title="star_close"></button>
+        </div>
       </div>
     </section>
 

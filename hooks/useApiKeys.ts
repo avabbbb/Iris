@@ -28,7 +28,12 @@ import { mergeSuggestedProductRouteMappings } from '../services/aiServiceSetup';
 import { loadStoredUserScriptProviders } from '../services/userScriptAuthoring';
 import { getExtensionBridge } from '../services/extensionBridge';
 import { getExtensionPromptStore, hasProxiedProvider } from '../services/extensionInstallPrompt';
-import { createExtensionKeySync, type ExtensionKeySync } from '../services/extensionKeySync';
+import {
+    EXTENSION_KEY_SYNC_DISABLED,
+    createExtensionKeySync,
+    mergeExtensionKeyChanges,
+    type ExtensionKeySync,
+} from '../services/extensionKeySync';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -233,20 +238,38 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         try { localStorage.setItem('security.clearKeysOnExit', clearKeysOnExit.toString()); } catch { /* non-critical */ }
     }, [clearKeysOnExit]);
 
-    // 已配对的浏览器插件：经 Port 同步 Key（全量 snapshot + 增量 delta），插件本地加密保存，撤销配对即清空。
-    // “退出时清除”开启时发送空列表，避免 Key 经插件落盘。
+    // 已配对的浏览器插件：经 Port 双向同步 Key（全量 snapshot + 增量 delta；插件内编辑经 keys.ext.changes 回写），
+    // 插件本地加密保存，撤销配对即清空。“退出时清除”开启时发 syncDisabled：插件清空，且拒绝插件回写。
     const extensionKeySyncRef = useRef<ExtensionKeySync | null>(null);
+    const latestKeysRef = useRef({ keys: userApiKeys, loaded: apiKeysLoaded, clearOnExit: clearKeysOnExit });
+    latestKeysRef.current = { keys: userApiKeys, loaded: apiKeysLoaded, clearOnExit: clearKeysOnExit };
     useEffect(() => {
-        const sync = createExtensionKeySync(getExtensionBridge());
+        const bridge = getExtensionBridge();
+        const sync = createExtensionKeySync(bridge);
         extensionKeySyncRef.current = sync;
+        // 插件 → 画布：校验字段白名单与 Provider，按 updatedAt 后写者胜合并；之后改发全量让插件对齐。
+        const offChanges = bridge.onRequest('keys.ext.changes', message => {
+            const latest = latestKeysRef.current;
+            if (!latest.loaded) throw new Error('keys.not-ready');
+            if (latest.clearOnExit) throw new Error(EXTENSION_KEY_SYNC_DISABLED);
+            const result = mergeExtensionKeyChanges(latest.keys, message, normalizeApiKeyEntry as (item: Record<string, unknown>) => UserApiKey | null);
+            sync.noteRemoteRevision(message.revision);
+            if (result.changed) {
+                latestKeysRef.current = { ...latest, keys: result.next };
+                setUserApiKeys(result.next);
+            }
+            void sync.update(result.next);
+            return { applied: result.applied, ignored: result.ignored };
+        });
         return () => {
+            offChanges();
             sync.dispose();
             extensionKeySyncRef.current = null;
         };
     }, []);
     useEffect(() => {
         if (!apiKeysLoaded) return;
-        void extensionKeySyncRef.current?.update(clearKeysOnExit ? [] : userApiKeys);
+        void extensionKeySyncRef.current?.update(clearKeysOnExit ? [] : userApiKeys, { syncDisabled: clearKeysOnExit });
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
 
     // 配置了只能经代理访问的网关（OpenCode 等）：记下原因，未装/未配对插件时提示安装（不阻塞）。

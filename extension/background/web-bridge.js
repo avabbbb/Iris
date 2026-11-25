@@ -6,7 +6,8 @@ import { DIRECT_FETCH_CAPABILITY, DIRECT_FETCH_PORT_NAME, createDirectFetchHandl
 
 export const WEB_PORT_NAME = 'iris-web';
 export const WEB_PROTOCOL_VERSION = '1';
-const WEB_CAPABILITIES = ['browser.import.image', 'browser.import.video', 'keys.sync', DIRECT_FETCH_CAPABILITY];
+// keys.sync.edit（1.7 起）：插件内编辑的 Key 会经 keys.ext.changes 回写到画布 Vault。
+const WEB_CAPABILITIES = ['browser.import.image', 'browser.import.video', 'keys.sync', 'keys.sync.edit', DIRECT_FETCH_CAPABILITY];
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 // origin → 该 origin 下所有打开的 Port
@@ -180,6 +181,13 @@ export function approvedWebPort() {
     if (ports?.size) return [...ports].at(-1);
   }
   return null;
+}
+
+// 指定 origin 的已批准在线 Port（插件内编辑的 Key 只回写到它所属的那个画布）。
+export function approvedWebPortFor(origin) {
+  if (!approvedOrigins.has(origin)) return null;
+  const ports = portsByOrigin.get(origin);
+  return ports?.size ? [...ports].at(-1) : null;
 }
 
 // 向网页画布发请求并等待 { replyTo } 响应。

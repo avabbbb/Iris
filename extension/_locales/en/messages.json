@@ -133,5 +133,128 @@
   },
   "empty_body": {
     "message": "Right-click an image: send it to the canvas or Desktop, or reverse its prompt."
+  },
+  "settings": {
+    "message": "AI services & keys"
+  },
+  "star_title": {
+    "message": "Enjoying Iris?"
+  },
+  "star_body": {
+    "message": "A star on GitHub helps more people find it."
+  },
+  "star_action": {
+    "message": "Star"
+  },
+  "star_close": {
+    "message": "Don't show again"
+  },
+  "canvas_sync_disabled": {
+    "message": "Connected · clear-on-exit, not syncing"
+  },
+  "canvas_synced": {
+    "message": "Connected · $1 synced"
+  },
+  "canvas_pending_push": {
+    "message": "$1 pending"
+  },
+  "opt_title": {
+    "message": "AI services & keys"
+  },
+  "opt_sync_title": {
+    "message": "Two-way sync with paired canvases"
+  },
+  "opt_sync_body": {
+    "message": "Keys you add, edit or delete here are written back to that canvas's Settings → AI services. If the canvas isn't open, changes wait and sync the next time it opens. If the same key changed on both sides, the later change wins."
+  },
+  "opt_none_title": {
+    "message": "No paired canvas yet"
+  },
+  "opt_none_body": {
+    "message": "Request pairing in the canvas under Settings → Security → Browser extension, then click Allow in the extension popup."
+  },
+  "opt_field_provider": {
+    "message": "Service type"
+  },
+  "opt_field_name": {
+    "message": "Name (optional)"
+  },
+  "opt_field_key": {
+    "message": "API key"
+  },
+  "opt_field_base": {
+    "message": "Request URL (Base URL)"
+  },
+  "opt_field_model": {
+    "message": "Default model (optional)"
+  },
+  "opt_field_caps": {
+    "message": "Capabilities"
+  },
+  "opt_cap_text": {
+    "message": "Text"
+  },
+  "opt_cap_image": {
+    "message": "Image"
+  },
+  "opt_cap_video": {
+    "message": "Video"
+  },
+  "opt_cap_agent": {
+    "message": "Agent tools"
+  },
+  "opt_cancel": {
+    "message": "Cancel"
+  },
+  "opt_save": {
+    "message": "Save & sync"
+  },
+  "opt_add": {
+    "message": "Add key"
+  },
+  "opt_edit": {
+    "message": "Edit"
+  },
+  "opt_delete": {
+    "message": "Delete"
+  },
+  "opt_delete_confirm": {
+    "message": "Delete this key? The same key will also be removed from the canvas."
+  },
+  "opt_key_keep": {
+    "message": "Leave empty to keep the current key ($1)"
+  },
+  "opt_key_placeholder": {
+    "message": "Paste key"
+  },
+  "opt_err_key": {
+    "message": "Enter a key"
+  },
+  "opt_err_url": {
+    "message": "The request URL must start with http:// or https://"
+  },
+  "opt_failed": {
+    "message": "Something went wrong"
+  },
+  "opt_pending_one": {
+    "message": "Not synced yet"
+  },
+  "opt_pending": {
+    "message": "$1 change(s) will sync back when the canvas opens."
+  },
+  "opt_synced": {
+    "message": "$1 key(s) synced: $2."
+  },
+  "opt_synced_none": {
+    "message": "No keys synced from this canvas yet."
+  },
+  "opt_list_sep": {
+    "message": ", "
+  },
+  "opt_disabled": {
+    "message": "This canvas clears API keys when the app closes, so keys are not synced in either direction."
+  },
+  "opt_privacy": {
+    "message": "Keys are encrypted with a non-exportable key on this device; only the last 4 characters are shown. Revoking pairing clears that canvas's keys."
   }
 }

@@ -2,7 +2,7 @@ import { exactOptionalOrigin } from './import-protocol.js';
 import { transferMedia } from './media-transfer.js';
 import { NativeSession, nativeResult } from './native-client.js';
 import { ensureRenamedExtensionStorage, purgeLegacyExtensionStorage } from './storage-migration.js';
-import { approvedWebPort, onWebMessage, requestWeb, startWebBridge } from './web-bridge.js';
+import { approvedWebPort, approvedWebPortFor, onWebMessage, requestWeb, startWebBridge } from './web-bridge.js';
 import { createWebKeyStore, registerWebKeyHandlers } from './web-keys.js';
 import { reversePromptFromMedia } from './reverse-prompt.js';
 
@@ -21,9 +21,12 @@ const BRIDGE_CAPABILITIES = ['browser.import.image', 'browser.import.video'];
 
 void ensureRenamedExtensionStorage(globalThis.chrome?.storage?.local);
 startWebBridge();
-// 网页画布同步来的 BYOK 密钥；反推等插件内能力从这里读取。
+// 网页画布 ⇄ 插件双向同步的 BYOK 密钥；反推等插件内能力从这里读取，插件设置页的编辑经同一 Port 回写画布。
 const webKeyStore = createWebKeyStore();
-void registerWebKeyHandlers(onWebMessage, webKeyStore);
+void registerWebKeyHandlers(onWebMessage, webKeyStore, globalThis.chrome, {
+  portFor: approvedWebPortFor,
+  request: (port, message) => requestWeb(port, message),
+});
 
 // 右键菜单文案跟随浏览器语言（_locales），取不到时回落中文。
 function menuTitle(name, fallback) {

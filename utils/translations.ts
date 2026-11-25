@@ -474,9 +474,9 @@ export const translations = {
             },
             prompt: {
                 title: 'Connect gateways directly with the Iris extension',
-                configured: 'Your OpenCode-style gateway does not allow direct browser calls, so requests go through Iris\'s shared proxy. With the extension installed and paired, requests leave your browser directly: faster, and no shared proxy quota.',
-                proxy: 'This request went through Iris\'s shared proxy. With the extension installed and paired, gateway requests go out directly from your browser: faster, and no shared proxy quota.',
-                quota: 'The shared proxy is rate-limited right now (429). With the extension installed and paired, gateway requests go out directly and are not limited by the shared quota.',
+                configured: 'Your OpenCode-style gateway does not allow direct browser calls, so requests go through Iris\'s shared proxy. With the extension installed and paired, requests leave your browser directly: faster, no shared-proxy cost, and no daily request limit.',
+                proxy: 'This request went through Iris\'s shared proxy, which has a daily request limit. With the extension installed and paired, gateway requests go out directly from your browser: faster, cheaper to run, and never blocked by the shared limit.',
+                quota: 'The shared proxy hit its request limit (429). With the extension installed and paired, gateway requests go out directly from your browser and are not affected by the shared limit or its cost.',
                 install: 'Install extension',
                 pair: 'Request pairing',
                 approve: 'Click “Allow” in the extension popup to finish pairing.',
@@ -485,6 +485,12 @@ export const translations = {
                 later: 'Later',
                 never: 'Don\'t remind again',
                 fallback: 'Requests keep working through the proxy meanwhile.',
+            },
+            star: {
+                title: 'Extension connected',
+                body: 'Gateway requests now go out directly from your browser. If Iris helps you, a GitHub star helps more people find it.',
+                action: 'Star on GitHub',
+                close: 'Close',
             },
             status: {
                 unconfigured: 'This build has no extension ID configured (VITE_IRIS_EXTENSION_IDS)',
@@ -1196,9 +1202,9 @@ export const translations = {
             },
             prompt: {
                 title: '用 Iris 浏览器插件直连模型网关',
-                configured: '你配置的 OpenCode 等网关不支持浏览器直接调用，目前经 Iris 共享代理转发。安装并配对插件后，请求从你的浏览器直接发出：更快，也不占共享代理额度。',
-                proxy: '这次请求经 Iris 共享代理转发。安装并配对插件后，网关请求从你的浏览器直接发出：更快，也不占共享代理额度。',
-                quota: '共享代理当前被限流（429）。安装并配对插件后可直连网关，不受共享代理额度限制。',
+                configured: '你配置的 OpenCode 等网关不支持浏览器直接调用，目前经 Iris 共享代理转发。安装并配对插件后，请求从你的浏览器直接发出：更快，不产生共享代理成本，也不受每日额度限制。',
+                proxy: '这次请求经 Iris 共享代理转发，共享代理有每日请求额度。安装并配对插件后，网关请求从你的浏览器直接发出：更快、更省，也不会被额度卡住。',
+                quota: '共享代理的请求额度用完了（429）。安装并配对插件后，网关请求从你的浏览器直接发出，不受共享额度和代理成本影响。',
                 install: '安装插件',
                 pair: '申请配对',
                 approve: '请在插件弹窗中点击「允许」完成配对。',
@@ -1207,6 +1213,12 @@ export const translations = {
                 later: '稍后',
                 never: '不再提醒',
                 fallback: '在此之前请求仍会经代理正常发出。',
+            },
+            star: {
+                title: '插件已连接',
+                body: '网关请求现在从你的浏览器直接发出。如果 Iris 对你有帮助，去 GitHub 点个 Star，能让更多人发现它。',
+                action: '去 GitHub 点 Star',
+                close: '关闭',
             },
             status: {
                 unconfigured: '当前构建未配置插件 ID（VITE_IRIS_EXTENSION_IDS）',

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
+  <title>Iris</title>
+  <link rel="stylesheet" href="../popup/popup.css" />
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body class="opt-body">
+  <!-- 插件设置页：与画布「设置 → AI 服务」同一组字段；Key 只显示后 4 位，明文不出 service worker。 -->
+  <main class="opt">
+    <header class="pop__head">
+      <img class="pop__logo" src="../icons/icon48.png" alt="" width="28" height="28" />
+      <div class="pop__brand">
+        <strong data-i18n="opt_title">AI 服务与 Key</strong>
+        <span id="extensionVersion" class="pop__version"></span>
+      </div>
+    </header>
+
+    <section class="status">
+      <span class="status__icon" data-icon="sync" aria-hidden="true"></span>
+      <div class="status__text">
+        <strong data-i18n="opt_sync_title">与已配对画布双向同步</strong>
+        <span data-i18n="opt_sync_body">在这里新增、修改或删除的 Key 会写回对应画布的「设置 → AI 服务」；画布没打开时先排队，下次打开自动回写。同一个 Key 两边都改过时，以后改的为准。</span>
+      </div>
+    </section>
+
+    <div id="origins" class="opt__origins"></div>
+
+    <section id="noPairing" class="empty" hidden>
+      <strong data-i18n="opt_none_title">还没有已配对的画布</strong>
+      <span data-i18n="opt_none_body">在画布「设置 → 安全 → 浏览器插件」申请配对，再在插件弹窗里点「允许」。</span>
+    </section>
+
+    <template id="editorTemplate">
+      <form class="editor" novalidate>
+        <div class="editor__grid">
+          <label class="field">
+            <span data-i18n="opt_field_provider">服务类型</span>
+            <select name="provider" class="input"></select>
+          </label>
+          <label class="field">
+            <span data-i18n="opt_field_name">名称（可选）</span>
+            <input name="name" class="input" maxlength="128" autocomplete="off" />
+          </label>
+          <label class="field field--wide">
+            <span data-i18n="opt_field_key">API Key</span>
+            <input name="key" class="input" type="password" maxlength="4096" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field field--wide">
+            <span data-i18n="opt_field_base">请求地址（Base URL）</span>
+            <input name="baseUrl" class="input" inputmode="url" maxlength="2048" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field field--wide">
+            <span data-i18n="opt_field_model">默认模型（可选）</span>
+            <input name="defaultModel" class="input" maxlength="256" autocomplete="off" spellcheck="false" />
+          </label>
+          <fieldset class="field field--wide caps">
+            <legend data-i18n="opt_field_caps">能力</legend>
+            <div class="caps__list"></div>
+          </fieldset>
+        </div>
+        <p class="editor__error" role="alert" hidden></p>
+        <div class="editor__foot">
+          <button type="button" class="isl-chip" data-act="cancel" data-i18n="opt_cancel">取消</button>
+          <button type="submit" class="isl-go" data-i18n="opt_save">保存并同步</button>
+        </div>
+      </form>
+    </template>
+
+    <footer class="pop__foot">
+      <span class="conn__glyph is-small" data-icon="lock" aria-hidden="true"></span>
+      <span data-i18n="opt_privacy">Key 用插件本机不可导出的密钥加密保存；这里只显示后 4 位。撤销配对即清空该画布的 Key。</span>
+    </footer>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

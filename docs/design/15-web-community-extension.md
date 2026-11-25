@@ -26,6 +26,7 @@
 - Native Messaging Host 只接受官方扩展 ID；首次连接需在 Desktop 确认可撤销的配对授权。
 - 传输：版本化控制信封 + 有界分块 + 稳定请求 ID + 内容哈希；来源 URL / 标题 / 时间只作 provenance。
 - 回程能力白名单（如 `prompt.reverse`）由 Desktop Runtime 用本机 Key 执行；预览不修改项目。
+- 网页画布通道的 BYOK Key 双向同步（扩展 1.7 起）：画布 Vault ⇄ 扩展按 origin 加密分区，revision + 加密 outbox，按 Key id 以 updatedAt 后写者胜；「退出时清除」开启时双向停止。扩展设置页（options_ui）镜像画布「设置 → AI 服务」的字段，只看掩码。细则见 `extension/README.md`。
 - 代码：`extension/`；Runtime 侧 `src-tauri/src/runtime/browser_import.rs`。
 
 ## 5. 安装与发行

@@ -135,5 +135,128 @@
   },
   "empty_body": {
     "message": "右键网页上的图片：送进画布、送进 Desktop，或反推提示词。"
+  },
+  "settings": {
+    "message": "AI 服务与 Key 设置"
+  },
+  "star_title": {
+    "message": "喜欢 Iris？"
+  },
+  "star_body": {
+    "message": "去 GitHub 点个 Star，帮更多人发现它。"
+  },
+  "star_action": {
+    "message": "点 Star"
+  },
+  "star_close": {
+    "message": "不再显示"
+  },
+  "canvas_sync_disabled": {
+    "message": "已连接 · 退出时清除，不同步"
+  },
+  "canvas_synced": {
+    "message": "已连接 · 已同步 $1 项"
+  },
+  "canvas_pending_push": {
+    "message": "$1 处待回写"
+  },
+  "opt_title": {
+    "message": "AI 服务与 Key"
+  },
+  "opt_sync_title": {
+    "message": "与已配对画布双向同步"
+  },
+  "opt_sync_body": {
+    "message": "在这里新增、修改或删除的 Key 会写回对应画布的「设置 → AI 服务」；画布没打开时先排队，下次打开自动回写。同一个 Key 两边都改过时，以后改的为准。"
+  },
+  "opt_none_title": {
+    "message": "还没有已配对的画布"
+  },
+  "opt_none_body": {
+    "message": "在画布「设置 → 安全 → 浏览器插件」申请配对，再在插件弹窗里点「允许」。"
+  },
+  "opt_field_provider": {
+    "message": "服务类型"
+  },
+  "opt_field_name": {
+    "message": "名称（可选）"
+  },
+  "opt_field_key": {
+    "message": "API Key"
+  },
+  "opt_field_base": {
+    "message": "请求地址（Base URL）"
+  },
+  "opt_field_model": {
+    "message": "默认模型（可选）"
+  },
+  "opt_field_caps": {
+    "message": "能力"
+  },
+  "opt_cap_text": {
+    "message": "文本"
+  },
+  "opt_cap_image": {
+    "message": "图片"
+  },
+  "opt_cap_video": {
+    "message": "视频"
+  },
+  "opt_cap_agent": {
+    "message": "Agent 工具"
+  },
+  "opt_cancel": {
+    "message": "取消"
+  },
+  "opt_save": {
+    "message": "保存并同步"
+  },
+  "opt_add": {
+    "message": "添加 Key"
+  },
+  "opt_edit": {
+    "message": "编辑"
+  },
+  "opt_delete": {
+    "message": "删除"
+  },
+  "opt_delete_confirm": {
+    "message": "删除这个 Key？画布里的同一个 Key 也会被删除。"
+  },
+  "opt_key_keep": {
+    "message": "留空则保持不变（当前 $1）"
+  },
+  "opt_key_placeholder": {
+    "message": "粘贴 Key"
+  },
+  "opt_err_key": {
+    "message": "请填写 Key"
+  },
+  "opt_err_url": {
+    "message": "请求地址需以 http:// 或 https:// 开头"
+  },
+  "opt_failed": {
+    "message": "操作失败"
+  },
+  "opt_pending_one": {
+    "message": "待回写"
+  },
+  "opt_pending": {
+    "message": "$1 处改动等画布打开后回写。"
+  },
+  "opt_synced": {
+    "message": "已同步 $1 个 Key：$2。"
+  },
+  "opt_synced_none": {
+    "message": "这个画布还没有同步过 Key。"
+  },
+  "opt_list_sep": {
+    "message": "、"
+  },
+  "opt_disabled": {
+    "message": "这个画布开启了「关闭应用时清除 API Key」，两边都不同步 Key。"
+  },
+  "opt_privacy": {
+    "message": "Key 用插件本机不可导出的密钥加密保存，这里只显示后 4 位。撤销配对即清空该画布的 Key。"
   }
 }

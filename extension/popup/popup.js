@@ -2,6 +2,11 @@ import { PAIRINGS_KEY, readPairings, removePairing, setPairingStatus } from '../
 
 // 在线版 Iris 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
 export const IRIS_WEB_URL = 'https://iris.avabbbb.com/';
+export const IRIS_GITHUB_URL = 'https://github.com/avabbbb/Iris';
+// 「点个 Star」卡片：第一次成功导入 / 反推之后出现，关闭或点过即永久不再出现。
+const STAR_DISMISSED_KEY = 'irisStarDismissed';
+// 只拿每个画布的同步数量（不解密、不碰明文）；管理入口在插件设置页。
+const VAULT_SUMMARY = 'IRIS_VAULT_SUMMARY';
 const HISTORY_KEY = 'irisImportHistory';
 // 插件内反推结果：只在 chrome.storage.session（浏览器关闭即清空）。
 const REVERSE_RESULT_KEY = 'irisReversePrompt';
@@ -12,6 +17,11 @@ const uiLocale = (chrome.i18n?.getUILanguage?.() || 'zh-CN');
 document.documentElement.lang = uiLocale;
 for (const node of document.querySelectorAll('[data-i18n]')) {
   node.textContent = t(node.dataset.i18n, node.textContent);
+}
+for (const node of document.querySelectorAll('[data-i18n-title]')) {
+  const label = t(node.dataset.i18nTitle, node.dataset.i18nTitle);
+  node.title = label;
+  node.setAttribute('aria-label', label);
 }
 
 // lucide 线性图标（与主应用同一套，DESIGN §7），内联以免引入依赖。
@@ -25,6 +35,9 @@ const ICON_PATHS = {
   pending: '<path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   video: '<path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
 };
 
@@ -68,6 +81,27 @@ document.getElementById('openIris').addEventListener('click', () => {
   void chrome.tabs.create({ url: IRIS_WEB_URL });
   window.close();
 });
+document.getElementById('openSettings').addEventListener('click', () => {
+  void chrome.runtime.openOptionsPage();
+  window.close();
+});
+
+const starCard = document.getElementById('star');
+let starDismissed = true;
+let hadSuccess = false;
+function updateStar() {
+  starCard.hidden = starDismissed || !hadSuccess;
+}
+async function dismissStar() {
+  starDismissed = true;
+  updateStar();
+  await chrome.storage.local.set({ [STAR_DISMISSED_KEY]: true });
+}
+document.getElementById('starOpen').addEventListener('click', () => {
+  void chrome.tabs.create({ url: IRIS_GITHUB_URL });
+  void dismissStar();
+});
+document.getElementById('starClose').addEventListener('click', () => void dismissStar());
 
 const STATE_ICON = { connected: 'check', imported: 'check', connecting: 'loader', importing: 'loader', error: 'error' };
 
@@ -85,6 +119,10 @@ function render(status) {
 
   const lastReceipt = status?.receipt;
   receipt.hidden = !lastReceipt;
+  if (state === 'imported') {
+    hadSuccess = true;
+    updateStar();
+  }
   if (lastReceipt) {
     receiptName.textContent = lastReceipt.name || t('untitled', '未命名媒体');
     receiptDestination.textContent = lastReceipt.destinationProjectId ? t('dest_workflow') : t('dest_inbox');
@@ -103,6 +141,10 @@ function formatTime(at) {
 function renderHistory(entries) {
   const list = Array.isArray(entries) ? entries : [];
   history.hidden = list.length === 0;
+  if (list.length) {
+    hadSuccess = true;
+    updateStar();
+  }
   historyList.textContent = '';
   for (const entry of list) {
     const item = document.createElement('li');
@@ -147,8 +189,32 @@ function originLabel(origin) {
   }
 }
 
+let lastPairings = {};
+let syncSummary = {};
+
+// 已配对画布的同步摘要：数量 / 待回写 / 「退出时清除」。
+function syncDetail(origin) {
+  const info = syncSummary[origin];
+  if (!info) return t('canvas_connected');
+  if (info.syncDisabled) return t('canvas_sync_disabled', '已连接 · 退出时清除，不同步');
+  const parts = [info.count ? t('canvas_synced', '已同步 $1 项', [String(info.count)]).replace('$1', String(info.count)) : t('canvas_connected')];
+  if (info.pending) parts.push(t('canvas_pending_push', '$1 处待回写', [String(info.pending)]).replace('$1', String(info.pending)));
+  return parts.join(' · ');
+}
+
+async function refreshSyncSummary() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: VAULT_SUMMARY });
+    syncSummary = response?.ok && response.result && typeof response.result === 'object' ? response.result : {};
+  } catch {
+    syncSummary = {};
+  }
+  renderPairings(lastPairings);
+}
+
 // 网页画布配对：pending 显示允许/拒绝，approved 显示断开。拒绝与断开都会删除条目，网页可再次发起。
 function renderPairings(pairings) {
+  lastPairings = pairings && typeof pairings === 'object' ? pairings : {};
   const entries = Object.entries(pairings && typeof pairings === 'object' ? pairings : {});
   webPairingList.textContent = '';
   if (entries.length === 0) {
@@ -159,8 +225,9 @@ function renderPairings(pairings) {
   entries.sort(([, a], [, b]) => Number(a?.status === 'approved') - Number(b?.status === 'approved'));
   for (const [origin, entry] of entries) {
     const approved = entry?.status === 'approved';
-    const row = connRow(approved ? 'canvas' : 'pending', originLabel(origin), approved ? t('canvas_connected') : t('canvas_pending'), approved);
+    const row = connRow(approved ? 'canvas' : 'pending', originLabel(origin), approved ? syncDetail(origin) : t('canvas_pending'), approved);
     row.title = origin;
+    if (approved) row.classList.add('is-wrap');
     const actions = document.createElement('div');
     actions.className = 'conn__actions';
     if (approved) {
@@ -197,6 +264,8 @@ function connRow(iconName, title, detail, on) {
 function renderReverse(result) {
   reverseSection.hidden = !result?.prompt;
   if (result?.prompt) {
+    hadSuccess = true;
+    updateStar();
     reversePrompt.textContent = result.prompt;
     reverseMeta.textContent = [result.provider, result.model].filter(Boolean).join(' · ');
     copyReverseButton.textContent = t('copy', '复制');
@@ -205,11 +274,13 @@ function renderReverse(result) {
   updateEmpty();
 }
 
-chrome.storage.local.get(['irisBridgeStatus', HISTORY_KEY]).then(result => {
+chrome.storage.local.get(['irisBridgeStatus', HISTORY_KEY, STAR_DISMISSED_KEY]).then(result => {
+  starDismissed = result[STAR_DISMISSED_KEY] === true;
   render(result.irisBridgeStatus);
   renderHistory(result[HISTORY_KEY]);
+  updateStar();
 });
-readPairings().then(renderPairings);
+readPairings().then(renderPairings).then(refreshSyncSummary);
 chrome.storage.session.get(REVERSE_RESULT_KEY).then(stored => renderReverse(stored[REVERSE_RESULT_KEY]));
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -217,6 +288,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.irisBridgeStatus) render(changes.irisBridgeStatus.newValue);
     if (changes[HISTORY_KEY]) renderHistory(changes[HISTORY_KEY].newValue);
     if (changes[PAIRINGS_KEY]) renderPairings(changes[PAIRINGS_KEY].newValue);
+    if (changes.irisWebKeys || changes[PAIRINGS_KEY]) void refreshSyncSummary();
   }
   if (area === 'session' && changes[REVERSE_RESULT_KEY]) renderReverse(changes[REVERSE_RESULT_KEY].newValue);
 });
