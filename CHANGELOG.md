@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 护栏：`npm run guard:portability`（`scripts/check-portability.mjs`，CI 在 Docs contract 之后运行）拦截只在 Windows / macOS 才暴露的写法——测试里不带 win32 守卫的 POSIX 权限位断言（77ba337 `linkCli`）、只给 `scriptPath` 不给 `modulesRoot` 的 Miniflare（77ba337 `linkRelay`）、索引里的 CRLF 与签出时不是 LF 的文本文件（4c2c321 的 `*.sql` / `*.rs`）；错误信息直接给出修法。`.gitattributes` 改为 `* text=auto eol=lf`，所有文本文件签出都是 LF（索引内容不变）。
 - CI：`tests/linkRelay` 的配对来源测试显式带 `cf-connecting-ip`，并精确断言脱敏后的 `203.0.x.x`（Windows runner 上 workerd 不为本机连接补该头，得到 `unknown`）。
 - CI 回绿（77ba337 在 Windows / Security 上失败）：`tests/linkCli` / `tests/linkRelay` 的凭据文件权限断言改为共享的 `tests/helpers/fileMode.ts`——POSIX 仍严格要求 0600，Windows（chmod 只能切只读位）改为断言文件存在且当前用户可读写；Miniflare 设 `modulesRoot`，模块名不再因临时目录与仓库不同盘而带 `..`；`package.json` overrides 把 miniflare 的 undici 升到 ^7.30.2、sharp 升到 ^0.35.5，`npm audit --audit-level=high` 归零。
 - Extension: fixed sideload ID. `extension/manifest.json` now carries a public `key`, so loading `dist-extension` unpacked always yields ID `gjfggdmfhdlklpimckjgeolgfoanfaka`; the web canvas recognises it by default (store IDs still come from `VITE_IRIS_EXTENSION_IDS`). Previously builds without that env var showed the extension as unconfigured and could not pair.

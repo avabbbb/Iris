@@ -44,6 +44,9 @@ jobs:
       - name: Docs contract
         run: npm run docs:check
 
+      - name: Portability guard (paths, CRLF, POSIX file modes)
+        run: npm run guard:portability
+
       - name: Verify release versions
         if: github.event_name != 'pull_request'
         run: npm run version:check
