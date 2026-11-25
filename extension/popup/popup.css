@@ -26,7 +26,29 @@
   --isl-r-lg: 10px;
   --isl-shadow-sm: 0 1px 2px rgba(31, 29, 26, .06);
   --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-medium: 320ms;
+  --motion-slow: 420ms;
   --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-soft-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-emphasis: cubic-bezier(.16, 1, .3, 1);
+  /* 弹簧与 styles/motion.css、components/studio/motionTokens.ts 同值（DESIGN §14.3）；不认 linear() 的内核退回 --ease-emphasis。 */
+  --spring-smooth: var(--ease-emphasis);
+  --spring-smooth-duration: 520ms;
+  --spring-expressive: var(--ease-emphasis);
+  --spring-expressive-duration: 565ms;
+  /* 正文对比度 ≥ 4.5:1：弹窗里的弱文字用 --pop-ink-faint（--isl-ink-ghost 只留给图标与装饰）；薄荷文字用 --pop-mint-ink。 */
+  --pop-ink-faint: #706c65;
+  --pop-mint-ink: #0b7a70;
+  --pop-capsule: var(--isl-surface);
+  --pop-capsule-shadow: inset 0 0 0 1px var(--isl-border);
+  --pop-capsule-ring: var(--isl-card);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring-smooth: linear(0, 0.119, 0.328, 0.522, 0.676, 0.787, 0.863, 0.914, 0.946, 0.966, 0.979, 0.987, 0.992, 0.995, 0.997, 0.998, 1);
+    --spring-expressive: linear(0, 0.108, 0.317, 0.534, 0.713, 0.841, 0.926, 0.976, 1.002, 1.012, 1.015, 1.013, 1.01, 1.007, 1.004, 1.002, 1);
+  }
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -50,6 +72,8 @@
     --isl-coral-bg: rgba(240, 122, 114, .14);
     --isl-on-mint: #131210;
     --isl-shadow-sm: 0 1px 2px rgba(0, 0, 0, .30);
+    --pop-ink-faint: #a29d95;
+    --pop-mint-ink: #5fe3d5;
   }
 }
 
@@ -68,7 +92,7 @@ button:disabled { cursor: wait; opacity: .5; }
 .pop__logo { flex: 0 0 auto; border-radius: var(--isl-r); }
 .pop__brand { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 6px; }
 .pop__brand strong { font-size: 15px; line-height: 22px; font-weight: 600; }
-.pop__version { color: var(--isl-ink-ghost); font-size: 10px; line-height: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.pop__version { color: var(--pop-ink-faint); font-size: 10px; line-height: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .isl-go {
   height: 28px; padding: 0 12px; border: 0; border-radius: var(--isl-r);
@@ -85,8 +109,8 @@ button:disabled { cursor: wait; opacity: .5; }
   font-size: 11px; font-weight: 600;
   transition: color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
-.isl-chip:hover { border-color: var(--isl-mint); color: var(--isl-mint-deep); }
-.isl-chip--mint { border-color: var(--isl-mint); background: var(--isl-mint-bg); color: var(--isl-mint-deep); }
+.isl-chip:hover { border-color: var(--isl-mint); color: var(--pop-mint-ink); }
+.isl-chip--mint { border-color: var(--isl-mint); background: var(--isl-mint-bg); color: var(--pop-mint-ink); }
 .isl-chip--danger:hover { border-color: var(--isl-coral); color: var(--isl-coral-deep); }
 
 /* 图标按钮：设置入口、关闭 */
@@ -115,6 +139,95 @@ button:disabled { cursor: wait; opacity: .5; }
 .status__text strong { font-size: 13px; line-height: 20px; font-weight: 600; }
 .status__text span { color: var(--isl-ink-soft); word-break: break-word; }
 
+/* ── 状态岛（灵感：Inspora「dynamic release island」，只借形态，不用其素材）──
+   空闲 / 已连接 / 收起的完成态是单行胶囊；导入、反推进行中、刚完成与出错时展开：宽度与高度（grid 0fr → 1fr）
+   用 smooth 弹簧过渡，成功时薄荷扫光 + 对勾弹出，约 2.5s 后收回。岛自身是一张玻璃卡，里面的步骤与进度都是实色，不嵌套玻璃。 */
+.island {
+  position: relative; display: grid; grid-template-rows: auto 0fr; width: 86%; min-height: 42px; margin-inline: auto; overflow: hidden;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--isl-border); border-radius: 21px; background: var(--isl-card);
+  transition:
+    width var(--spring-smooth-duration) var(--spring-smooth),
+    grid-template-rows var(--spring-smooth-duration) var(--spring-smooth),
+    padding var(--spring-smooth-duration) var(--spring-smooth),
+    border-radius var(--spring-smooth-duration) var(--spring-smooth),
+    border-color var(--motion-base) var(--ease-standard),
+    background-color var(--motion-base) var(--ease-standard);
+}
+.island:not([data-mode="pill"]) { grid-template-rows: auto 1fr; width: 100%; padding: 8px 10px 10px 8px; border-radius: 18px; }
+.island__head, .island__body { position: relative; z-index: 1; min-width: 0; }
+.island__head { display: flex; align-items: center; gap: 8px; }
+.island .status__icon { width: 28px; height: 28px; transition: background-color var(--motion-base) var(--ease-standard), color var(--motion-base) var(--ease-standard); }
+.island__text { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 6px; overflow: hidden; white-space: nowrap; }
+.island__text strong { flex: 0 0 auto; font-size: 12px; line-height: 18px; font-weight: 600; }
+.island__text span { min-width: 0; overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; text-overflow: ellipsis; }
+.island:not([data-mode="pill"]) .island__text strong { font-size: 13px; line-height: 20px; }
+.island__percent { flex: 0 0 auto; color: var(--isl-ink-soft); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.island__percent[hidden], .island__close[hidden], .island__error[hidden], .steps[hidden], .film[hidden], .status__text span[hidden], .island__text span[hidden] { display: none; }
+.island__close { margin: -2px -4px -2px 0; }
+
+.island__body { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s linear var(--spring-smooth-duration); }
+.island:not([data-mode="pill"]) .island__body { visibility: visible; transition-delay: 0s; }
+.island__inner {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 2px 0 4px;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-medium) var(--ease-soft-out);
+}
+.island:not([data-mode="pill"]) .island__inner { opacity: 1; transform: none; transition-delay: 90ms; }
+
+/* 两段胶片进度（灵感：Inspora「Cinematic film import」）：导入中 / 处理中；不知道百分比时是不定态的流光。 */
+.film { display: flex; gap: 6px; }
+.film__seg { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.film__track { position: relative; height: 3px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--isl-ink) 11%, transparent); }
+.film__fill {
+  position: absolute; inset: 0; border-radius: inherit; background: var(--isl-mint);
+  transform: scaleX(var(--fill, 0)); transform-origin: left center;
+  transition: transform var(--motion-medium) var(--ease-soft-out), background-color var(--motion-base) var(--ease-standard);
+}
+.film__seg[data-indeterminate="true"] .film__track { background: color-mix(in srgb, var(--isl-mint) 18%, transparent); }
+.film__seg[data-indeterminate="true"] .film__track::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 42%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--isl-mint), transparent);
+  animation: film-shimmer 1.25s var(--ease-standard) infinite;
+}
+.film__seg[data-state="failed"] .film__fill { background: var(--isl-coral); }
+.film__seg[data-state="failed"] .film__track { background: color-mix(in srgb, var(--isl-coral) 22%, transparent); }
+.film__label { overflow: hidden; color: var(--isl-ink-soft); font-size: 10px; line-height: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.film__seg[data-state="active"] .film__label { color: var(--isl-ink); }
+.film__seg[data-state="failed"] .film__label { color: var(--isl-coral-deep); }
+
+/* 步骤行：完成 = 薄荷实心对勾，进行中 = 阳光色转圈，未开始 = 空心圈，失败 = 珊瑚叉。图标 + 文字 + 颜色一起表达（DESIGN §13）。 */
+.steps { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.step { display: flex; align-items: center; gap: 8px; min-height: 22px; color: var(--isl-ink-soft); font-size: 12px; line-height: 18px; }
+.step[data-state="active"] { color: var(--isl-ink); font-weight: 600; }
+.step[data-state="done"] { color: var(--isl-ink); }
+.step__glyph { display: grid; flex: 0 0 auto; place-items: center; width: 16px; height: 16px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--isl-border-strong); color: var(--isl-ink-soft); }
+.step[data-state="done"] .step__glyph { background: var(--isl-mint); box-shadow: none; color: var(--isl-on-mint); }
+.step[data-state="active"] .step__glyph { background: var(--isl-sun-bg); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--isl-sun) 55%, transparent); color: #9a7406; }
+.step[data-state="active"] .step__glyph svg { animation: spin 1.1s linear infinite; }
+.step[data-state="failed"] { color: var(--isl-ink); }
+.step[data-state="failed"] .step__glyph { background: var(--isl-coral); box-shadow: none; color: #fff; }
+.step.is-fresh .step__glyph { animation: island-pop var(--spring-expressive-duration) var(--spring-expressive) both; }
+.step__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step__detail { flex: 0 0 auto; color: var(--isl-ink-soft); font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.island__error { margin: 0; padding: 6px 8px; border-radius: 10px; background: var(--isl-coral-bg); color: var(--isl-ink); font-size: 11px; line-height: 16px; word-break: break-word; }
+.island[data-tone="coral"] { border-color: color-mix(in srgb, var(--isl-coral) 45%, var(--isl-border)); }
+
+/* 成功：薄荷从左扫满整座岛，对勾弹出；收回胶囊时扫光淡出。 */
+.island__sweep {
+  position: absolute; z-index: 0; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--isl-mint) 16%, transparent), color-mix(in srgb, var(--isl-mint) 28%, transparent));
+  transform-origin: left center;
+  transition: opacity var(--motion-slow) var(--ease-standard);
+}
+.island[data-mode="success"] .island__sweep { opacity: 1; animation: island-sweep 760ms var(--ease-emphasis) both; }
+.island[data-mode="success"] .status__icon { background: var(--isl-mint); color: var(--isl-on-mint); animation: island-pop var(--spring-expressive-duration) var(--spring-expressive) 280ms both; }
+
+/* 最新回执滑入；最新一条历史短暂薄荷高亮。 */
+#receipt.is-entering { animation: receipt-in var(--motion-medium) var(--ease-soft-out) both; }
+.history li.is-new { animation: row-new 1.8s var(--ease-standard) both; }
+
 /* 卡片：实底 + 发丝线，无阴影 */
 .card { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--isl-border); border-radius: var(--isl-r-lg); background: var(--isl-card); }
 .card[hidden], .empty[hidden], .status[hidden] { display: none; }
@@ -127,6 +240,14 @@ button:disabled { cursor: wait; opacity: .5; }
 .conn__glyph { display: grid; flex: 0 0 auto; place-items: center; width: 24px; height: 24px; border-radius: var(--isl-r-sm); background: var(--isl-surface-2); color: var(--isl-ink-soft); }
 .conn__glyph.is-on, .conn__glyph.is-done { background: var(--isl-mint-bg); color: var(--isl-mint-deep); }
 .conn__glyph.is-small { width: 14px; height: 14px; background: transparent; }
+/* 选中 / 已连接的行：浮起的白色胶囊 + 图标角上的小对勾（灵感：Inspora「Soft glass workspace picker」）。胶囊是实色，不是第二层玻璃。 */
+.conn__row.is-active { margin: 0 -6px; padding: 6px 8px 6px 6px; border-radius: 999px; background: var(--pop-capsule); box-shadow: var(--pop-capsule-shadow); }
+.conn__glyph { position: relative; }
+.conn__check {
+  position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 12px; height: 12px;
+  border-radius: 999px; background: var(--isl-mint); color: var(--isl-on-mint); box-shadow: 0 0 0 1.5px var(--pop-capsule-ring);
+}
+.conn__check svg { stroke-width: 3.2; }
 .conn__text { display: flex; flex: 1; min-width: 0; flex-direction: column; }
 .conn__text strong { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .conn__text small { overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
@@ -144,29 +265,33 @@ button:disabled { cursor: wait; opacity: .5; }
   font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-word;
 }
 .reverse__foot { display: flex; align-items: center; gap: 6px; }
-.reverse__meta { flex: 1; min-width: 0; overflow: hidden; color: var(--isl-ink-ghost); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.reverse__meta { flex: 1; min-width: 0; overflow: hidden; color: var(--pop-ink-faint); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 
 .history { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .history li { display: flex; align-items: center; gap: 8px; min-height: 28px; border-top: 1px solid var(--isl-border); }
 .history li:first-child { border-top: 0; }
 .history li > span:not(.conn__glyph) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history li small { flex: 0 0 auto; color: var(--isl-ink-ghost); font-size: 10px; font-variant-numeric: tabular-nums; }
+.history li small { flex: 0 0 auto; color: var(--pop-ink-faint); font-size: 10px; font-variant-numeric: tabular-nums; }
 
 .empty { display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; border: 1px dashed var(--isl-border-strong); border-radius: var(--isl-r-lg); text-align: center; }
 .empty strong { font-size: 12px; font-weight: 600; }
 .empty span { color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; }
 
-.pop__foot { display: flex; align-items: center; gap: 4px; padding: 0 2px; color: var(--isl-ink-ghost); font-size: 10px; line-height: 14px; }
+.pop__foot { display: flex; align-items: center; gap: 4px; padding: 0 2px; color: var(--pop-ink-faint); font-size: 10px; line-height: 14px; }
 
 /* ── 玻璃 · DESIGN.md §9.2 + §9.4 ──
    弹窗本身是浮在网页之上的 chrome：底层是环境光（顶部薄荷、右中淡紫、底部蜜桃），
    卡片是磨砂卡（半透明 + blur + 顶部内高光 + 柔和远投影），主按钮带内高光与薄荷光晕。
    卡片互为兄弟、不嵌套玻璃；减弱透明度 / 高对比 / 不支持 backdrop-filter 时回退实底。 */
 :root {
-  --amb-p1: rgba(25, 200, 185, .30);
-  --amb-p2: rgba(150, 140, 235, .22);
-  --amb-p3: rgba(245, 160, 110, .24);
-  --amb-card: rgba(255, 255, 255, .56);
+  --amb-p1: rgba(25, 200, 185, .36);
+  --amb-p2: rgba(150, 140, 235, .28);
+  --amb-p3: rgba(245, 160, 110, .30);
+  --amb-card: rgba(255, 255, 255, .50);
+  /* 卡片顶部一层很淡的高光（柔和玻璃），让环境光从下半部透得更清楚。 */
+  --amb-sheen: linear-gradient(180deg, rgba(255, 255, 255, .46) 0%, rgba(255, 255, 255, .10) 34%, rgba(255, 255, 255, 0) 62%);
+  --amb-capsule: rgba(255, 255, 255, .9);
+  --amb-capsule-shadow: inset 0 1px 0 #fff, 0 0 0 .5px rgba(31, 29, 26, .08), 0 6px 16px -10px rgba(31, 29, 26, .35);
   --amb-card-strong: rgba(255, 255, 255, .72);
   --amb-card-filter: blur(20px) saturate(160%);
   --amb-stroke: rgba(255, 255, 255, .75);
@@ -177,10 +302,13 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --amb-p1: rgba(58, 217, 201, .16);
-    --amb-p2: rgba(130, 120, 255, .16);
-    --amb-p3: rgba(240, 122, 114, .14);
+    --amb-p1: rgba(58, 217, 201, .20);
+    --amb-p2: rgba(130, 120, 255, .20);
+    --amb-p3: rgba(240, 122, 114, .17);
     --amb-card: rgba(255, 255, 255, .06);
+    --amb-sheen: linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 45%);
+    --amb-capsule: rgba(255, 255, 255, .10);
+    --amb-capsule-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 0 0 .5px rgba(0, 0, 0, .55), 0 6px 16px -10px rgba(0, 0, 0, .8);
     --amb-card-strong: rgba(255, 255, 255, .10);
     --amb-card-filter: blur(20px) saturate(140%);
     --amb-stroke: rgba(255, 255, 255, .10);
@@ -204,13 +332,16 @@ button:disabled { cursor: wait; opacity: .5; }
           radial-gradient(95% 36% at 40% 104%, var(--amb-p3), transparent 72%),
           var(--app-bg);
       }
-      .card, .status {
+      .card, .status, .island {
         border-color: var(--amb-stroke);
-        background: var(--amb-card);
+        background: var(--amb-sheen), var(--amb-card);
         -webkit-backdrop-filter: var(--amb-card-filter);
         backdrop-filter: var(--amb-card-filter);
         box-shadow: var(--amb-card-shadow);
       }
+      .island[data-tone="coral"] { border-color: color-mix(in srgb, var(--isl-coral) 40%, var(--amb-stroke)); background: var(--amb-sheen), color-mix(in srgb, var(--isl-coral-bg) 55%, var(--amb-card)); }
+      .conn__row.is-active { background: var(--amb-capsule); box-shadow: var(--amb-capsule-shadow); }
+      .conn__check { box-shadow: 0 0 0 1.5px var(--amb-capsule); }
       .empty { border-color: color-mix(in srgb, var(--isl-border-strong) 80%, transparent); background: color-mix(in srgb, var(--amb-card) 60%, transparent); }
       .reverse__text { background: var(--amb-sunk); }
       .conn__glyph:not(.is-on):not(.is-done):not(.is-small):not(.is-star) { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }
@@ -227,6 +358,26 @@ button:disabled { cursor: wait; opacity: .5; }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes film-shimmer { from { transform: translateX(-100%); } to { transform: translateX(240%); } }
+@keyframes island-sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes island-pop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes receipt-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes row-new {
+  0%, 35% { background: color-mix(in srgb, var(--isl-mint) 20%, transparent); box-shadow: -6px 0 0 color-mix(in srgb, var(--isl-mint) 20%, transparent), 6px 0 0 color-mix(in srgb, var(--isl-mint) 20%, transparent); }
+  100% { background: transparent; box-shadow: none; }
+}
+
+/* 高对比：发丝线加深，进度轨道与空心圈用实色。 */
+@media (prefers-contrast: more) {
+  .card, .status, .island, .history li { border-color: var(--isl-border-strong); }
+  .film__track, .film__seg[data-indeterminate="true"] .film__track { background: var(--isl-border-strong); }
+  .step__glyph { box-shadow: inset 0 0 0 1.5px var(--isl-ink-soft); }
+  .island__sweep { display: none; }
+}
+
+/* 减弱动效：状态直接切换（不展开 / 收起过渡、不扫光、不弹出），不定态进度不流动，改为静态的浅薄荷轨道。 */
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: .01ms !important; animation: none !important; }
+  * { transition-duration: .01ms !important; transition-delay: 0s !important; animation: none !important; }
+  .film__seg[data-indeterminate="true"] .film__track::after { display: none; }
+  .film__seg[data-indeterminate="true"] .film__track { background: color-mix(in srgb, var(--isl-mint) 45%, transparent); }
 }

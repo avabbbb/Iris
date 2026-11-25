@@ -258,5 +258,71 @@
   },
   "opt_privacy": {
     "message": "Key 用插件本机不可导出的密钥加密保存，这里只显示后 4 位。撤销配对即清空该画布的 Key。"
+  },
+  "island_idle_hint": {
+    "message": "右键图片即可送进 Iris"
+  },
+  "island_dismiss": {
+    "message": "关闭"
+  },
+  "island_title_importing": {
+    "message": "正在送进 Iris"
+  },
+  "island_title_reversing": {
+    "message": "正在反推提示词"
+  },
+  "island_title_delivered": {
+    "message": "已送达"
+  },
+  "island_title_reversed": {
+    "message": "反推完成"
+  },
+  "island_reverse_ready": {
+    "message": "提示词在下方"
+  },
+  "island_dest_web": {
+    "message": "网页画布"
+  },
+  "island_dest_workflow": {
+    "message": "当前 Workflow"
+  },
+  "island_dest_inbox": {
+    "message": "导入箱"
+  },
+  "island_step_read": {
+    "message": "读取媒体"
+  },
+  "island_step_send": {
+    "message": "发送"
+  },
+  "island_step_deliver": {
+    "message": "送达 Iris"
+  },
+  "island_step_delivered": {
+    "message": "已送进 Iris"
+  },
+  "island_step_reverse": {
+    "message": "读取图片并反推"
+  },
+  "island_step_reverse_done": {
+    "message": "提示词就绪"
+  },
+  "island_stage_import": {
+    "message": "导入中"
+  },
+  "island_stage_process": {
+    "message": "处理中"
+  },
+  "island_stage_reverse": {
+    "message": "反推中"
+  },
+  "island_stage_done": {
+    "message": "完成"
+  },
+  "island_idle_title": {
+    "message": "等待连接"
+  },
+  "dest_web": {
+    "message": "已送进网页画布"
   }
 }

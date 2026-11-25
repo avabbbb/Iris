@@ -19,7 +19,7 @@ body.opt-body { width: auto; min-height: 100vh; }
 .tag { padding: 0 6px; border-radius: var(--isl-r-sm); background: var(--isl-surface-2); color: var(--isl-ink-soft); font-size: 10px; line-height: 16px; font-weight: 600; }
 .tag--sun { background: var(--isl-sun-bg); color: var(--isl-ink); }
 
-.editor { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-surface); }
+.editor { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--isl-border); border-radius: 14px; background: var(--isl-surface); }
 .editor__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .field { display: flex; min-width: 0; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; }
 .field > span, .field > legend { padding: 0; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; font-weight: 600; }
@@ -31,8 +31,24 @@ body.opt-body { width: auto; min-height: 100vh; }
 }
 .input:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; border-color: var(--isl-mint); }
 .caps__list { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.cap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
-.cap input { accent-color: var(--isl-mint-deep); }
+.caps__list { gap: 6px; }
+/* 能力选择：胶囊 + 小对勾（灵感：Inspora「Soft glass workspace picker」）。原生复选框保留可聚焦、可读屏，只是视觉隐藏。 */
+.cap {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 8px;
+  border: 1px solid var(--isl-border-strong); border-radius: 999px; background: var(--isl-surface); color: var(--isl-ink-soft);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+.cap input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.cap::before { content: ""; flex: 0 0 auto; width: 14px; height: 14px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--isl-ink-soft) 60%, transparent); transition: background-color var(--motion-fast) var(--ease-standard); }
+.cap::after {
+  content: ""; position: absolute; top: 50%; left: 15px; width: 3px; height: 7px; opacity: 0;
+  border: solid var(--isl-on-mint); border-width: 0 1.6px 1.6px 0; transform: translate(-50%, -62%) rotate(45deg);
+}
+.cap:has(input:checked) { border-color: transparent; background: var(--pop-capsule); box-shadow: var(--pop-capsule-shadow); color: var(--isl-ink); font-weight: 600; }
+.cap:has(input:checked)::before { background: var(--isl-mint); box-shadow: none; }
+.cap:has(input:checked)::after { opacity: 1; }
+.cap:has(input:focus-visible) { outline: 2px solid var(--isl-mint); outline-offset: 2px; }
 .editor__error { margin: 0; padding: 6px 8px; border-radius: var(--isl-r-sm); background: var(--isl-coral-bg); color: var(--isl-coral-deep); font-size: 11px; }
 .editor__error[hidden] { display: none; }
 .editor__foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
@@ -46,7 +62,10 @@ body.opt-body { width: auto; min-height: 100vh; }
   @media not all and (prefers-reduced-transparency: reduce) {
     @media not all and (prefers-contrast: more) {
       body.opt-body { min-height: 100vh; }
-      .editor { border-color: var(--amb-stroke); background: var(--amb-sunk); }
+      /* 编辑中的 Key：浮起的白色面板（实色，不是第二层玻璃）。 */
+      .editor { border-color: transparent; background: var(--amb-capsule); box-shadow: var(--amb-capsule-shadow); }
+      .cap { border-color: color-mix(in srgb, var(--isl-border-strong) 75%, transparent); background: var(--amb-chip); }
+      .cap:has(input:checked) { background: var(--amb-capsule); box-shadow: var(--amb-capsule-shadow); }
       .input { border-color: color-mix(in srgb, var(--isl-border-strong) 80%, transparent); background: var(--amb-card-strong); }
       .krow { border-top-color: color-mix(in srgb, var(--isl-border) 60%, transparent); }
       .tag { background: var(--amb-card-strong); box-shadow: inset 0 0 0 .5px var(--amb-stroke); }

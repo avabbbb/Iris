@@ -9,6 +9,8 @@
 
 popup（1.6 起）视觉按 docs/design/DESIGN.md：`--isl-*` token、奶蛙 logo、「连接」卡合并网页画布配对与 Desktop；所有可见文案在 `_locales/{zh_CN,en}/messages.json`，新增文案先加 key 再在 HTML 用 `data-i18n` 引用。
 
+1.8 起顶部是「状态岛」：空闲时是胶囊，导入 / 反推时展开出步骤与两段进度，完成后收回，出错时保持展开直到关闭。它只读 service worker 写入的 `irisBridgeStatus`（state、message 中的传输百分比与目的地），映射逻辑在 popup/island-model.js（无 chrome.* 依赖，可在 node 测试）；要加更细的阶段，先在 worker 里写出新消息，再扩展这个映射。
+
 ## 网页画布通道
 
 允许连接的网页 origin 由 background/web-origins.js 生成并写入 manifest：正式站 iris.avabbbb.com（更名过渡期另放行旧站 flovart.avabbbb.com），以及本地 127.0.0.1:37522 与 localhost:37522。网页侧用环境变量 VITE_IRIS_EXTENSION_IDS 配置扩展 ID（32 位 a-p，逗号分隔，可同时写商店 ID 与旁加载 ID）。

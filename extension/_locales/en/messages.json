@@ -256,5 +256,71 @@
   },
   "opt_privacy": {
     "message": "Keys are encrypted with a non-exportable key on this device; only the last 4 characters are shown. Revoking pairing clears that canvas's keys."
+  },
+  "island_idle_hint": {
+    "message": "Right-click to send"
+  },
+  "island_dismiss": {
+    "message": "Dismiss"
+  },
+  "island_title_importing": {
+    "message": "Sending to Iris"
+  },
+  "island_title_reversing": {
+    "message": "Reversing prompt"
+  },
+  "island_title_delivered": {
+    "message": "Delivered"
+  },
+  "island_title_reversed": {
+    "message": "Prompt ready"
+  },
+  "island_reverse_ready": {
+    "message": "See it below"
+  },
+  "island_dest_web": {
+    "message": "Web canvas"
+  },
+  "island_dest_workflow": {
+    "message": "Current Workflow"
+  },
+  "island_dest_inbox": {
+    "message": "Import inbox"
+  },
+  "island_step_read": {
+    "message": "Read media"
+  },
+  "island_step_send": {
+    "message": "Send"
+  },
+  "island_step_deliver": {
+    "message": "Deliver to Iris"
+  },
+  "island_step_delivered": {
+    "message": "Delivered to Iris"
+  },
+  "island_step_reverse": {
+    "message": "Read & reverse image"
+  },
+  "island_step_reverse_done": {
+    "message": "Prompt ready"
+  },
+  "island_stage_import": {
+    "message": "Importing"
+  },
+  "island_stage_process": {
+    "message": "Processing"
+  },
+  "island_stage_reverse": {
+    "message": "Reversing"
+  },
+  "island_stage_done": {
+    "message": "Done"
+  },
+  "island_idle_title": {
+    "message": "Ready"
+  },
+  "dest_web": {
+    "message": "Sent to the web canvas"
   }
 }

@@ -20,18 +20,31 @@
       <button id="openIris" type="button" class="isl-go" data-i18n="open_iris">打开 Iris</button>
     </header>
 
-    <section class="status" aria-live="polite">
-      <span id="statusIcon" class="status__icon" data-state="idle" aria-hidden="true"></span>
-      <div class="status__text">
-        <strong id="statusTitle" data-i18n="state_idle">等待连接</strong>
-        <span id="statusMessage" data-i18n="idle_message">在网页图片或视频上点右键，就能送进 Iris。</span>
+    <!-- 状态岛（灵感：Inspora「dynamic release island」）：空闲是胶囊，导入 / 反推时展开出步骤与两段进度，完成后薄荷扫光再收回。 -->
+    <section id="island" class="island" data-mode="pill" data-tone="idle" aria-live="polite">
+      <span class="island__sweep" aria-hidden="true"></span>
+      <div class="island__head">
+        <span id="statusIcon" class="status__icon" data-state="idle" aria-hidden="true"></span>
+        <div class="island__text">
+          <strong id="statusTitle" data-i18n="island_idle_title">等待连接</strong>
+          <span id="statusMessage" data-i18n="island_idle_hint">右键图片即可送进 Iris</span>
+        </div>
+        <span id="islandPercent" class="island__percent" hidden></span>
+        <button id="islandDismiss" type="button" class="icon-btn icon-btn--sm island__close" data-icon="close" data-i18n-title="island_dismiss" hidden></button>
+      </div>
+      <div class="island__body">
+        <div class="island__inner">
+          <div id="islandFilm" class="film" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+          <ol id="islandSteps" class="steps"></ol>
+          <p id="islandError" class="island__error" hidden></p>
+        </div>
       </div>
     </section>
 
     <section class="card">
       <h2 class="card__label" data-i18n="section_connections">连接</h2>
       <ul id="webPairingList" class="conn"></ul>
-      <div class="conn__row">
+      <div class="conn__row is-wrap">
         <span class="conn__glyph" data-icon="desktop" aria-hidden="true"></span>
         <div class="conn__text">
           <strong data-i18n="desktop_label">Iris Desktop</strong>
