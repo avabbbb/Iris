@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Iris CLI 的 link 命令：argv 分流、login web / logout（假中继）、agent.* 命令在假标签页 transport 上的行为、agent.e2e 报告。
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import { runLinkCli } from '../tools/iris/link/cli-link.js';
 import { readLink, writeLink } from '../tools/iris/link/link-store.js';
 import { resolveLinkTransport } from '../tools/iris/link/transports.js';
 import { LinkClientError } from '../tools/iris/link/web-link-client.js';
+import { expectOwnerOnlyFile } from './helpers/fileMode';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'iris-link-cli-')); });
@@ -202,7 +203,7 @@ describe('login web / logout against a fake relay', () => {
     const final = JSON.parse(lines.at(-1)!);
     expect(final).toMatchObject({ ok: true, command: 'login.web', data: { linked: true, baseUrl: 'https://iris.test', scopes: ['agent.read', 'agent.run'] } });
     expect(final.data.accessToken).toMatch(/…$/);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expectOwnerOnlyFile(file);
     expect(readLink({ file })).toMatchObject({ version: 1, roomId: 'a'.repeat(32), clientName: 'box' });
     expect(log[0].body).toMatchObject({ clientName: 'box', mode: 'device', scopes: ['agent.read', 'agent.run'] });
   });

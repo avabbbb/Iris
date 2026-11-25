@@ -137,5 +137,11 @@
     "vitest": "^4.1.12",
     "wrangler": "^4.168.0"
   },
-  "description": "Iris — an open-source, local-first AI creative layer for professional editing tools."
+  "description": "Iris — an open-source, local-first AI creative layer for professional editing tools.",
+  "overrides": {
+    "miniflare": {
+      "undici": "^7.30.2",
+      "sharp": "^0.35.5"
+    }
+  }
 }

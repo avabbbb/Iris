@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Iris Link 中继（worker/linkRelay.ts）在 Miniflare（真实 workerd + Durable Object + WebSocket Hibernation）里的行为测试。
 // CLI 一侧用真实的 WebLinkClient（Node 全局 WebSocket），标签页一侧用 ws（能带 Origin 头）。
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ import WebSocket from 'ws';
 import { LINK_MAX_FRAME_BYTES, LINK_WS_BEARER_PREFIX, LINK_WS_SUBPROTOCOL } from '../tools/iris/link/protocol.js';
 import { pollPairing, saveLinkTokens, startPairing, WebLinkClient } from '../tools/iris/link/web-link-client.js';
 import { readLink } from '../tools/iris/link/link-store.js';
+import { expectOwnerOnlyFile } from './helpers/fileMode';
 
 const TAB_ORIGIN = 'http://tab.test';
 let mf: Miniflare;
@@ -72,6 +73,9 @@ beforeAll(async () => {
   await build({ entryPoints: ['worker/index.ts'], bundle: true, format: 'esm', platform: 'browser', target: 'es2022', outfile, external: ['node:*', 'cloudflare:*'], logLevel: 'silent' });
   mf = new Miniflare({
     modules: true,
+    // modulesRoot 必须包含 scriptPath：否则模块名按 cwd 求相对路径，脚本在系统临时目录时会带 `..`
+    // （Windows 上临时目录与仓库常不在同一盘符），workerd 拒绝启动（77ba337 的 Windows CI 失败）。
+    modulesRoot: dir,
     scriptPath: outfile,
     compatibilityDate: '2026-07-01',
     compatibilityFlags: ['nodejs_compat'],
@@ -143,7 +147,7 @@ describe('Iris Link relay (Durable Object)', () => {
   it('relays CLI requests to the tab and back; TAB_OFFLINE when no tab; scope checked at the relay', async () => {
     const { tabToken, tokens } = await pairAndApprove();
     const { client, file } = cliFor(tokens);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expectOwnerOnlyFile(file);
     await client.connect();
     expect(client.tabOnline).toBe(false);
     await expect(client.request('agent.sessions', {})).rejects.toMatchObject({ code: 'TAB_OFFLINE' });
