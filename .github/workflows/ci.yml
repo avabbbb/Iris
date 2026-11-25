@@ -47,6 +47,9 @@ jobs:
       - name: Portability guard (paths, CRLF, POSIX file modes)
         run: npm run guard:portability
 
+      - name: Module name case-collision guard
+        run: npm run guard:module-case
+
       - name: Verify release versions
         if: github.event_name != 'pull_request'
         run: npm run version:check

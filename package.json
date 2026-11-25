@@ -27,6 +27,7 @@
     "release:dependency-audit": "npm audit --registry=https://registry.npmjs.org --audit-level=high",
     "docs:check": "node scripts/check-docs-contract.mjs",
     "guard:portability": "node scripts/check-portability.mjs",
+    "guard:module-case": "node scripts/check-module-case.mjs",
     "test:watch": "vitest",
     "iris:cli": "node tools/iris/cli.js",
     "iris:agent": "node agent/index.js",
