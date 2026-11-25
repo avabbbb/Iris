@@ -93,14 +93,16 @@ afterAll(async () => {
 
 describe('Iris Link relay (Durable Object)', () => {
   it('pairs: start → page sees client + scopes → approve → CLI poll gets tokens once', async () => {
-    const pairing = await startPairing({ baseUrl: base, clientName: 'sandbox-cli', scopes: ['agent.read', 'agent.run', 'agent.approve'], mode: 'device' });
+    // 来源 IP 由测试显式给出：workerd 只在部分平台上替本机连接补 CF-Connecting-IP（Windows runner 上没有，得到 'unknown'）。
+    const fromIp: typeof fetch = (input, init) => fetch(input, { ...init, headers: { ...(init?.headers as Record<string, string>), 'cf-connecting-ip': '203.0.113.7' } });
+    const pairing = await startPairing({ baseUrl: base, clientName: 'sandbox-cli', scopes: ['agent.read', 'agent.run', 'agent.approve'], mode: 'device', fetchImpl: fromIp });
     expect(pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     expect(pairing.verificationUrlComplete).toBe(base + '/link?code=' + encodeURIComponent(pairing.code));
     const pending = await post('/api/link/pair/poll', { pollToken: pairing.pollToken });
     expect(pending.status).toBe(202);
     const info = await fetch(base + '/api/link/pair/info?code=' + pairing.code.replace('-', '').toLowerCase(), { headers: { origin: TAB_ORIGIN } }).then(r => r.json() as any);
     expect(info).toMatchObject({ ok: true, clientName: 'sandbox-cli', requestedScopes: ['agent.read', 'agent.run', 'agent.approve'], mode: 'device' });
-    expect(info.source.ip).toMatch(/x\.x$/);
+    expect(info.source.ip).toBe('203.0.x.x');
     // 页面只授予一部分（不给 agent.approve）。
     const decided = await post('/api/link/pair/decide', { code: pairing.code, approve: true, scopes: ['agent.run', 'tools.invoke'] }, { origin: TAB_ORIGIN });
     expect(decided.body).toMatchObject({ ok: true, approved: true, scopes: ['agent.read', 'agent.run'] });
