@@ -154,7 +154,7 @@ third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md
 | 开发（UI + 本机 Agent） | `npm run iris:cli -- start --source --web --open`；隔离端口：`--web-port=0 --agent-port=0 --no-open --json` |
 | 只起 Vite | `npm run dev`（默认 37522）；Docker：`make up`（1635） |
 | 单测 | `npm test`（`vitest run`）；单文件 `npx vitest run tests/<name>.test.ts`；关键套件重复跑 `npm run test:critical` |
-| 类型检查（本仓库没有 ESLint / Prettier，tsc 就是 lint） | `npx tsc --noEmit` |
+| 类型检查（本仓库没有 ESLint / Prettier，tsc 就是 lint） | `npx tsc --noEmit`（必须 0 错误，不依赖 dsh-plugin 依赖；CI 在装 dsh 依赖之前跑）；引用 dsh-plugin 的测试：`npx tsc --noEmit -p tsconfig.dsh-tests.json`（需先 `npm --prefix dsh-plugin ci`） |
 | 文档契约 | `npm run docs:check`（Skill 投影一致、文档里的命令都在注册表、版本号一致） |
 | 构建 | `npm run build`；扩展 `npm run ext:build`；宿主包 `npm run studio:build`；DSH `npm --prefix dsh-plugin run build` |
 | Rust Runtime | `cargo test --manifest-path src-tauri/Cargo.toml --all-targets` |

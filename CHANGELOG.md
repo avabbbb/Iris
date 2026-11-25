@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 护栏：根 `npx tsc --noEmit` 回到 0 错误且不再依赖 dsh-plugin 的安装——引用 `dsh-plugin/` 的测试（`tests/dsh*`、`tests/agentToolRegistryParity.test.ts`）移到 `tsconfig.dsh-tests.json` 单独检查。之前没装 dsh 依赖时固定有 17 条「基线错误」，Agent 只能按「没有新增」判断，真错误会被淹没（a9eeeecd）。CI 在安装 dsh 依赖之前跑根 tsc（任何错误即失败），装完再查 dsh 测试。
 - 护栏：`npm run guard:module-case`（`scripts/check-module-case.mjs`，CI 运行）拒绝只差大小写的路径，以及同一目录下去掉扩展名后只差大小写的源码模块（e933c60 之前 `agentConversationNav.ts` 与 `AgentConversationNav.tsx` 让 Windows / macOS 构建红了 5 天）；`--rev <commit>` 可直接检查历史树。
 - 护栏：`npm run guard:portability`（`scripts/check-portability.mjs`，CI 在 Docs contract 之后运行）拦截只在 Windows / macOS 才暴露的写法——测试里不带 win32 守卫的 POSIX 权限位断言（77ba337 `linkCli`）、只给 `scriptPath` 不给 `modulesRoot` 的 Miniflare（77ba337 `linkRelay`）、索引里的 CRLF 与签出时不是 LF 的文本文件（4c2c321 的 `*.sql` / `*.rs`）；错误信息直接给出修法。`.gitattributes` 改为 `* text=auto eol=lf`，所有文本文件签出都是 LF（索引内容不变）。
 - CI：`tests/linkRelay` 的配对来源测试显式带 `cf-connecting-ip`，并精确断言脱敏后的 `203.0.x.x`（Windows runner 上 workerd 不为本机连接补该头，得到 `unknown`）。

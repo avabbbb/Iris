@@ -27,5 +27,7 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["src-tauri", "dsh-plugin", "node_modules", "dist", "dist-extension", "_ref"]
+  // dsh-plugin 的源码依赖它自己的 node_modules（@deepseek-ai/cordis 等，需 `npm --prefix dsh-plugin ci`）。
+  // 引用 dsh-plugin 的测试由 tsconfig.dsh-tests.json 单独检查，根 tsc 不依赖 dsh 安装、必须 0 错误。
+  "exclude": ["src-tauri", "dsh-plugin", "node_modules", "dist", "dist-extension", "_ref", "tests/dsh*", "tests/agentToolRegistryParity.test.ts"]
 }

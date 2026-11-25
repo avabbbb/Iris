@@ -1,0 +1,7 @@
+{
+  // 引用 dsh-plugin 源码的测试：先 `npm --prefix dsh-plugin ci`，再 `npx tsc --noEmit -p tsconfig.dsh-tests.json`。
+  // 根 tsconfig.json 排除了这些文件，保证没装 dsh 依赖时根 tsc 也是 0 错误（审计 C1：17 条「基线错误」的来源）。
+  "extends": "./tsconfig.json",
+  "include": ["tests/dsh*", "tests/agentToolRegistryParity.test.ts", "*.d.ts", "types/**/*.ts", "tests/setup.ts"],
+  "exclude": ["node_modules", "dsh-plugin/node_modules"]
+}

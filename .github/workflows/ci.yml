@@ -34,6 +34,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Before installing dsh-plugin deps on purpose: the root typecheck must be
+      # 0 errors in a checkout without them (agent sandboxes), so no
+      # "baseline errors" can hide a real one again (audit C1, a9eeeecd).
+      - name: Typecheck (root, must be 0 errors)
+        run: npx tsc --noEmit
+
       - name: Install DSH plugin dependencies
         run: npm --prefix dsh-plugin ci
 
@@ -61,8 +67,8 @@ jobs:
       - name: Tracked secret audit
         run: npm run release:secret-audit
 
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - name: Typecheck DSH-coupled tests
+        run: npx tsc --noEmit -p tsconfig.dsh-tests.json
 
       - name: Unit and integration tests
         run: npm test -- --reporter=dot
