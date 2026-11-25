@@ -1,9 +1,25 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { configDefaults } from 'vitest/config';
 import { llmProxyPlugin } from './server/viteLlmProxyPlugin';
+import { checkBuildEnv, formatFindings } from './scripts/check-build-env.mjs';
+
+// 生产构建前校验 VITE_* 环境（扩展 ID 非空且有效、旁加载 ID 与 manifest key 一致、没有拼错的变量名）。
+// 06d1647 之前生产构建没有扩展 ID，线上配不上对，构建却毫无报错。
+function buildEnvCheckPlugin(): Plugin {
+  return {
+    name: 'iris-build-env-check',
+    apply: 'build',
+    configResolved(config) {
+      if (config.mode !== 'production') return;
+      const env = { ...process.env, ...loadEnv(config.mode, config.envDir || config.root, 'VITE_') };
+      const findings = checkBuildEnv({ env, root: config.root });
+      if (findings.length) throw new Error(`Build env check failed:\n${formatFindings(findings)}`);
+    },
+  };
+}
 
 // Tauri 期望固定端口；CLI source bootstrap 通过 IRIS_DYNAMIC_WEB_PORT
 // 显式启用动态端口，避免把用户带到无关的 localhost 服务。
@@ -41,7 +57,7 @@ export default defineConfig(() => {
           ignored: (p: string) => p.replaceAll(path.sep, '/').split('/').some((s) => s === 'target' || s === '.git' || s === '.tmp'),
         },
       },
-      plugins: [tailwindcss(), react(), llmProxyPlugin()],
+      plugins: [buildEnvCheckPlugin(), tailwindcss(), react(), llmProxyPlugin()],
       // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错
       optimizeDeps: {
         entries: ['index.html'],
