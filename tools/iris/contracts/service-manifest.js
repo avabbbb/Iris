@@ -95,26 +95,53 @@ const referenceVideoLimits = z.strictObject({
   maxAspectRatio: z.number().positive().optional(),
 });
 
+const pixelRange = z.strictObject({ min: z.number().int().positive(), max: z.number().int().positive() })
+  .refine(range => range.min <= range.max, { message: 'min 不能大于 max' });
+const inputFields = {
+  maxImageRefs: refCount,
+  maxVideoRefs: refCount,
+  maxAudioRefs: refCount,
+  referenceVideoLimits: referenceVideoLimits.optional(),
+  referenceVideoPixelRange: pixelRange.optional(),
+};
 const modelInputs = z.strictObject({
+  ...inputFields,
   maxImageRefs: refCount.default(0),
   maxVideoRefs: refCount.default(0),
   maxAudioRefs: refCount.default(0),
-  referenceVideoLimits: referenceVideoLimits.optional(),
-  referenceVideoPixelRange: z.strictObject({ min: z.number().int().positive(), max: z.number().int().positive() })
-    .refine(range => range.min <= range.max, { message: 'min 不能大于 max' }).optional(),
 });
 
-const modelParams = z.strictObject({
-  aspectRatios: uniqueArray(z.string().min(1).max(16), '比例').default([]),
-  resolutions: uniqueArray(z.string().min(1).max(16), '分辨率').default([]),
-  qualities: uniqueArray(z.string().min(1).max(16), '质量').default([]),
-  counts: uniqueArray(z.number().int().min(1).max(16), '数量').default([]),
+const paramFields = {
+  aspectRatios: uniqueArray(z.string().min(1).max(16), '比例'),
+  resolutions: uniqueArray(z.string().min(1).max(16), '分辨率'),
+  qualities: uniqueArray(z.string().min(1).max(16), '质量'),
+  counts: uniqueArray(z.number().int().min(1).max(16), '数量'),
   // -1 = 由模型自动决定时长（Seedance 的「自动」档）
-  durations: uniqueArray(z.number().refine(value => value === -1 || value > 0, { message: '时长必须 > 0 或为 -1（自动）' }), '时长').default([]),
-  audio: z.enum(['none', 'optional', 'always']).default('none'),
-  seed: z.boolean().default(false),
-  webSearch: z.boolean().default(false),
-  realPersonCheck: z.boolean().default(false),
+  durations: uniqueArray(z.number().refine(value => value === -1 || value > 0, { message: '时长必须 > 0 或为 -1（自动）' }), '时长'),
+  audio: z.enum(['none', 'optional', 'always']),
+  seed: z.boolean(),
+  webSearch: z.boolean(),
+  realPersonCheck: z.boolean(),
+};
+const modelParams = z.strictObject({
+  aspectRatios: paramFields.aspectRatios.default([]),
+  resolutions: paramFields.resolutions.default([]),
+  qualities: paramFields.qualities.default([]),
+  counts: paramFields.counts.default([]),
+  durations: paramFields.durations.default([]),
+  audio: paramFields.audio.default('none'),
+  seed: paramFields.seed.default(false),
+  webSearch: paramFields.webSearch.default(false),
+  realPersonCheck: paramFields.realPersonCheck.default(false),
+});
+
+/**
+ * 按模式覆盖：同一个模型的不同模式可能走不同上游线路（RunningHub 的文生 / 图生是两条线路），
+ * 参数选项与参考上限也随之不同。这里只写与模型级不同的字段，未写的沿用模型级（modelSpecForMode）。
+ */
+const modeOverride = z.strictObject({
+  params: z.strictObject(Object.fromEntries(Object.entries(paramFields).map(([key, schema]) => [key, schema.optional()]))).optional(),
+  inputs: z.strictObject(Object.fromEntries(Object.entries(inputFields).map(([key, schema]) => [key, schema.optional()]))).optional(),
 });
 
 const pricingRule = z.strictObject({
@@ -136,6 +163,7 @@ const modelDeclaration = z.strictObject({
   id: modelId,
   upstreamId: z.string().min(1).max(300),
   upstreamIdByMode: z.partialRecord(z.enum(MODEL_MODES), z.string().min(1).max(300)).optional(),
+  modeOverrides: z.partialRecord(z.enum(MODEL_MODES), modeOverride).optional(),
   displayName: z.string().trim().min(1).max(120),
   vendor: z.string().max(80).optional(),
   description: z.string().max(1000).optional(),
@@ -172,6 +200,9 @@ const modelDeclaration = z.strictObject({
   }
   for (const mode of Object.keys(model.upstreamIdByMode || {})) {
     if (!model.modes.includes(/** @type {any} */ (mode))) ctx.addIssue({ code: 'custom', path: ['upstreamIdByMode', mode], message: `upstreamIdByMode 的 ${mode} 不在 modes 里` });
+  }
+  for (const mode of Object.keys(model.modeOverrides || {})) {
+    if (!model.modes.includes(/** @type {any} */ (mode))) ctx.addIssue({ code: 'custom', path: ['modeOverrides', mode], message: `modeOverrides 的 ${mode} 不在 modes 里` });
   }
   if (model.fallbacks?.includes(model.id)) ctx.addIssue({ code: 'custom', path: ['fallbacks'], message: '备选模型不能是自己' });
 });
@@ -270,4 +301,17 @@ export function modelPriceKnown(model) {
  */
 export function upstreamIdForMode(model, mode) {
   return model.upstreamIdByMode?.[mode] || model.upstreamId;
+}
+
+/**
+ * 某个模式下实际生效的上游 id、参数与参考上限（模型级 + modeOverrides 合并）。
+ * @param {ModelDeclaration} model @param {ModelMode} mode
+ */
+export function modelSpecForMode(model, mode) {
+  const override = model.modeOverrides?.[mode];
+  return {
+    upstreamId: upstreamIdForMode(model, mode),
+    params: { ...model.params, ...(override?.params || {}) },
+    inputs: { ...model.inputs, ...(override?.inputs || {}) },
+  };
 }

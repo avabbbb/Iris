@@ -3,6 +3,7 @@ import {
   SERVICE_MANIFEST_SCHEMA,
   isModelEffective,
   modelPriceKnown,
+  modelSpecForMode,
   parseServiceManifest,
   upstreamIdForMode,
 } from '../tools/iris/contracts/service-manifest.js';
@@ -111,6 +112,11 @@ describe('iris.service/1 manifest', () => {
     expectIssue({ ...base(), models: [{ ...model, nodeTypes: ['text'] }] }, /模式 text-to-image 需要节点类型 image/);
     // 文本模型不需要模式
     expect(issuesOf({ ...base(), models: [{ id: 'm_text', upstreamId: 'gpt-5', displayName: 'GPT-5', nodeTypes: ['text'] }] })).toEqual([]);
+    expectIssue({ ...base(), models: [{ ...model, modeOverrides: { 'text-to-video': { params: { durations: [5] } } } }] }, /modeOverrides 的 text-to-video 不在 modes 里/);
+    expectIssue({ ...base(), models: [{ ...model, modeOverrides: { 'text-to-image': { params: { surprise: 1 } } } }] }, /modeOverrides/);
+    const withOverride = parseServiceManifest({ ...base(), models: [{ ...model, modeOverrides: { 'image-to-image': { params: { resolutions: ['1K'] }, inputs: { maxImageRefs: 4 } } } }] }).manifest!.models[0];
+    expect(modelSpecForMode(withOverride, 'image-to-image')).toMatchObject({ upstreamId: 'gpt-image-2', params: { resolutions: ['1K'], aspectRatios: ['1:1', '16:9'] }, inputs: { maxImageRefs: 4, maxVideoRefs: 0 } });
+    expect(modelSpecForMode(withOverride, 'text-to-image')).toMatchObject({ params: { resolutions: ['1K', '2K'] }, inputs: { maxImageRefs: 16 } });
     const routed = { ...model, upstreamIdByMode: { 'image-to-image': 'rh/edit' } };
     expect(upstreamIdForMode(routed, 'image-to-image')).toBe('rh/edit');
     expect(upstreamIdForMode(routed, 'text-to-image')).toBe('gpt-image-2');
