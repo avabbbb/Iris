@@ -32,6 +32,7 @@ import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
 import { TURN_CONTEXT_ENTRY, TURN_CONTEXT_SCHEMA_VERSION, isTurnContextRecord, turnContextsByMessage, type TurnContextDraft, type TurnContextRecord } from './turnContext';
 import { createCutAgentTools, CUT_TOOL_DOCS } from './cut/agentTools';
+import { gateCommandSurfaceTool, gateReadOnlyTool, gateTool, type GatedAgentTool } from './agentToolGate';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
@@ -967,7 +968,7 @@ export interface BrowserAgentToolDependencies {
 
 const FAIL_CLOSED_APPROVAL: ApprovalContext = { mode: 'always-ask' };
 
-export function createBrowserAgentTools(dependencies: BrowserAgentToolDependencies): AgentTool[] {
+export function createBrowserAgentTools(dependencies: BrowserAgentToolDependencies): GatedAgentTool[] {
   const workflowContract = createBrowserWorkflowContract();
   // 调用前先过审批层：deny 直接拒绝；prompt 时先问用户。命令面自己会带计划确认的（删除、付费），
   // 交给命令面问，避免同一次调用弹两张卡；无人值守回合里 prompt 已在解析时转为 deny。
@@ -1120,7 +1121,8 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
   };
   // 工具名、说明与参数 Schema 全部来自统一 Agent 工具定义（与本机 Agent / MCP / DSH 同一份）；
   // projectId 由内置 Agent 注入，不让模型填。
-  const commandTools: AgentTool[] = getAgentToolSpecs('builtin')
+  // 命令面工具：执行经 runCommand / runInBackground（startTask），两者都先过 guard。
+  const commandTools: GatedAgentTool[] = getAgentToolSpecs('builtin')
     .filter(spec => AGENT_BROWSER_COMMANDS.includes(spec.command))
     .map(spec => {
       const command = spec.command;
@@ -1128,7 +1130,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       let description = spec.description;
       const family = WORKFLOW_NODE_TOOL_FAMILY_COMMANDS[command];
       if (family) description += '先用 inspect 拿到节点 ID。可用工具：\n' + describeWorkflowNodeTools(family);
-      return {
+      return gateCommandSurfaceTool({
         name: spec.name,
         label: command,
         description,
@@ -1139,9 +1141,10 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
           if (shouldRunInBackground(command, input, projectNodes())) return runInBackground(command, input);
           return runCommand(command, input);
         },
-      };
+      });
     });
-  const taskTools: AgentTool[] = getAgentToolSpecs('builtin')
+  // 任务工具：start 经 startTask（先过 guard 与付费确认）；get / cancel 只读台账或停止任务。
+  const taskTools: GatedAgentTool[] = getAgentToolSpecs('builtin')
     .filter(spec => spec.command.startsWith('agent.task.'))
     .map(spec => {
       const command = spec.command;
@@ -1152,7 +1155,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         description = '把可能超过 1 分钟的命令放到后台执行（批量 / 整组生成、视频、导出等），用户确认费用后立即返回 taskId，不必等生成结束；之后用 iris_task_get 查进度（同一轮或下一轮都可以），完成后读 result。可包装：'
           + BROWSER_TASKABLE_COMMANDS.join('、') + '。确认、付费授权与提交前检查与直接调用相同。任务写入本地台账，刷新页面后仍可 get / cancel；刷新前已开始、无法确认是否已提交的任务状态为 unknown_submit（可能已扣费），不要自动重跑，先让用户核对画布。';
       }
-      return {
+      return gateCommandSurfaceTool({
         name: spec.name,
         label: command,
         description,
@@ -1173,26 +1176,21 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
           }
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], details: result };
         },
-      } satisfies AgentTool;
+      } satisfies AgentTool);
     });
-  const extraTools: AgentTool[] = [...taskTools];
-  extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
-  extraTools.push(createLocalGrepTool(guard));
-  if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
-  if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
+  // 其余工具只能经 agentToolGate 的入口进列表（裸 AgentTool 在这里 tsc 报错，6c63d21）。
+  const extraTools: GatedAgentTool[] = [...taskTools];
+  extraTools.push(gateTool(createWebSearchTool(dependencies.webSearch), guard));
+  extraTools.push(gateTool(createLocalGrepTool(), guard));
+  if (dependencies.ask) extraTools.push(gateReadOnlyTool(createAskTool(dependencies.ask)));
+  if (dependencies.getNodes) extraTools.push(gateReadOnlyTool(createMediaViewTool(dependencies.getNodes)));
   // Cut 视频剪辑页：读写时间线 / 字幕 / 代理 / 导出（实现懒加载，见 services/cut/agentTools.ts）。
   // 与命令面同一个审批层：读放行，写按模式，删除逐次确认，委派回合受 maxTier 限制。
-  extraTools.push(...createCutAgentTools({ projectId: dependencies.projectId }).map(tool => ({
-    ...tool,
-    execute: async (toolCallId, params, signal, onUpdate) => {
-      await guard(tool.name, (params ?? {}) as Record<string, unknown>);
-      return tool.execute(toolCallId, params, signal, onUpdate);
-    },
-  } satisfies AgentTool)));
+  extraTools.push(...createCutAgentTools({ projectId: dependencies.projectId }).map(tool => gateTool(tool, guard)));
   return [...commandTools, ...extraTools];
 }
 
-function createWebSearchTool(credential: AgentSearchCredential | undefined, guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
+function createWebSearchTool(credential: AgentSearchCredential | undefined): AgentTool {
   const recency = Type.Union([Type.Literal('day'), Type.Literal('week'), Type.Literal('month'), Type.Literal('year')]);
   return {
     name: WEB_SEARCH_TOOL_NAME,
@@ -1205,7 +1203,6 @@ function createWebSearchTool(credential: AgentSearchCredential | undefined, guar
     }),
     execute: async (_toolCallId, params, signal) => {
       const input = params as { query: string; recency?: SearchRecency; limit?: number };
-      await guard(WEB_SEARCH_TOOL_NAME, input as unknown as Record<string, unknown>);
       const result = await searchAgentWeb({ query: input.query, recency: input.recency, limit: input.limit, signal, credential });
       return {
         content: [{ type: 'text', text: formatSearchSources(result.sources) }],
@@ -1215,7 +1212,7 @@ function createWebSearchTool(credential: AgentSearchCredential | undefined, guar
   };
 }
 
-function createLocalGrepTool(guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
+function createLocalGrepTool(): AgentTool {
   return {
     name: LOCAL_GREP_TOOL_NAME,
     label: 'files.grep',
@@ -1228,7 +1225,6 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
     }),
     execute: async (_toolCallId, params, signal) => {
       const input = params as { pattern: string; path?: string; case?: boolean; limit?: number };
-      await guard(LOCAL_GREP_TOOL_NAME, input as unknown as Record<string, unknown>);
       const result = await grepLocalFolders({
         pattern: input.pattern,
         path: input.path,
@@ -1554,7 +1550,8 @@ async function allEntries(session: Session) {
 export interface BrowserAgentKernelOptions {
   projectId: string;
   route: BrowserAgentTextRoute;
-  tools: AgentTool[];
+  /** 只接受经 agentToolGate 入口的工具（审批闸）；内核自带的只读工具在内部登记。 */
+  tools: readonly GatedAgentTool[];
   confirm: (summary: string) => Promise<AgentConfirmVerdict>;
   systemPrompt?: string;
   skillAttachment?: ProductionSkillAttachment | null;
