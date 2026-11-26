@@ -615,7 +615,7 @@ describe('workflow dispatcher', () => {
     }));
     expect(result.ok).toBe(true);
     expect(result.result).toMatchObject({ nodeId: 'image-1', tool: 'upscale', committed: true });
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'upscale', { targetLongEdge: 2048, algorithm: 'high' });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'upscale', { targetLongEdge: 2048, algorithm: 'high' }, { basis: 'human-approved', tool: 'upscale' });
     const log = dependencies.getState().projects[0].draftLog || [];
     expect(log.at(-1)?.command).toBe('workflow.node.tool');
     expect(log.at(-1)?.summary).toBe('对节点「image-1」执行 upscale 工具');
@@ -634,7 +634,7 @@ describe('workflow dispatcher', () => {
     });
     expect(crop.confirmation).toBeUndefined();
     expect(crop.ok).toBe(true);
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'crop', { x: .1, y: .1, width: .8, height: .8 });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'crop', { x: .1, y: .1, width: .8, height: .8 }, { basis: 'free', tool: 'crop' });
 
     const paid = await dispatch({
       id: 'upscale-preview', command: 'workflow.node.tool',
@@ -655,7 +655,7 @@ describe('workflow dispatcher', () => {
       source: 'agent',
     });
     expect(merge.confirmation).toBeUndefined();
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'video-merge', { sourceNodeIds: ['video-2', 'video-1'] });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'image-1', 'video-merge', { sourceNodeIds: ['video-2', 'video-1'] }, { basis: 'free', tool: 'video-merge' });
 
     nodeToolRunner.mockClear();
     const invalid = await dispatch({

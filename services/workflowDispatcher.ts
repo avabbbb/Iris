@@ -64,6 +64,29 @@ function hasWorkflowHumanApproval(envelope: WorkflowCommandEnvelope): boolean {
   return (envelope as WorkflowCommandEnvelope & { [WORKFLOW_HUMAN_APPROVAL]?: true })[WORKFLOW_HUMAN_APPROVAL] === true;
 }
 
+declare const SPEND_GRANT: unique symbol;
+/**
+ * 付费授权凭证（审计 PR-8，C4）：画布工具适配器（nodeToolRunner）的最后一个参数，只能由下面的
+ * nodeToolSpendGrant 签发（品牌字段只存在于类型里、本类型的签发函数不导出）。不带凭证直接调用适配器、
+ * 或手写一个对象冒充凭证，tsc 都会报错。9b7c579b 之前 outpaint / mask 在 Agent 路径上没确认就到了付费图片服务。
+ * - free：工具说明书里不是 paid（免费 / 只调 LLM）；
+ * - user-initiated：用户在界面里自己点的（不是外部 Agent），确认就是那次点击；
+ * - human-approved：外部 Agent 的付费调用，已带一次性人工批准（withWorkflowHumanApproval）。
+ */
+export type SpendGrant = { readonly [SPEND_GRANT]: true; readonly basis: 'free' | 'user-initiated' | 'human-approved'; readonly tool: string };
+
+function isExternalAgentEnvelope(envelope: WorkflowCommandEnvelope): boolean {
+  return envelope.source === 'agent' || (envelope.source === 'cli' && Boolean(envelope.caller?.agentIdentity));
+}
+
+/** 按工具说明书的计费判定独立签发（不复用确认判定）：确认判定再出错，付费工具也拿不到凭证。null = 不能执行。 */
+function nodeToolSpendGrant(envelope: WorkflowCommandEnvelope, tool: string): SpendGrant | null {
+  const grant = (basis: SpendGrant['basis']) => ({ basis, tool }) as SpendGrant;
+  if (isWorkflowNodeTool(tool) && !workflowNodeToolIsPaid(tool)) return grant('free');
+  if (!isExternalAgentEnvelope(envelope)) return grant('user-initiated');
+  return hasWorkflowHumanApproval(envelope) ? grant('human-approved') : null;
+}
+
 export interface WorkflowCommandResult {
   ok: boolean;
   commandId: string;
@@ -80,7 +103,8 @@ export interface WorkflowDispatcherDependencies {
   updateProject: (id: string, patch: Partial<Omit<WorkflowProject, 'id' | 'createdAt'>>) => void;
   executor?: WorkflowExecutor;
   getExecutor?: () => WorkflowExecutor | undefined;
-  nodeToolRunner?: (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>) => Promise<unknown>;
+  /** grant 只能由审批层（nodeToolSpendGrant）签发；见 SpendGrant。 */
+  nodeToolRunner?: (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>, grant: SpendGrant) => Promise<unknown>;
   persistenceError?: () => unknown;
   /** 当前 BYOK Key：models.list / generate 判断哪些模型与模式真正可运行 */
   getUserApiKeys?: () => UserApiKey[];
@@ -581,8 +605,7 @@ function validateEnvelope(envelope: WorkflowCommandEnvelope): WorkflowCommandRes
 }
 
 function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
-  const isExternalAgent = envelope.source === 'agent'
-    || (envelope.source === 'cli' && Boolean(envelope.caller?.agentIdentity));
+  const isExternalAgent = isExternalAgentEnvelope(envelope);
   if (!isExternalAgent) return false;
   // 批量文档操作里夹带删除节点，与单独 workflow.node.delete 同等风险，必须确认。
   if (envelope.command === 'workflow.apply') {
@@ -1367,7 +1390,12 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const { nodeId, tool, toolArgs: normalizedArgs } = checked;
         const runner = dependencies.nodeToolRunner;
         if (!runner) return error(envelope.id, 'RUNNER_UNAVAILABLE', 'Workflow 画布工具适配器尚未连接。');
-        const outcome = await runner(project.id, nodeId, tool, normalizedArgs);
+        // 兜底：上面的确认判定若漏判付费工具，这里按计费说明书拿不到凭证，仍然先要人工确认。
+        const grant = nodeToolSpendGrant(envelope, tool);
+        if (!grant) {
+          return { ok: true, commandId: envelope.id, confirmation: { required: true, code: 'CONFIRMATION_REQUIRED', summary: workflowCommandSummary(command, args) } };
+        }
+        const outcome = await runner(project.id, nodeId, tool, normalizedArgs, grant);
         const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
         // 把新产出的节点 ID 交回调用方（Agent 据此继续连线或运行），不用再整图 inspect 一次。
         const before = new Set(project.nodes.map(node => node.id));
@@ -1646,9 +1674,9 @@ const browserDependencies: WorkflowDispatcherDependencies = {
   deleteProjects: ids => useWorkflowStore.getState().deleteProjects(ids),
   updateProject: (id, patch) => useWorkflowStore.getState().updateProject(id, patch),
   getExecutor: () => browserWorkflowExecutor,
-  nodeToolRunner: (projectId, nodeId, tool, args) => {
+  nodeToolRunner: (projectId, nodeId, tool, args, grant) => {
     if (!browserNodeToolRunner) throw new Error('Workflow 画布工具适配器尚未连接。');
-    return browserNodeToolRunner(projectId, nodeId, tool, args);
+    return browserNodeToolRunner(projectId, nodeId, tool, args, grant);
   },
   persistenceError: getWorkflowPersistenceError,
   getUserApiKeys: () => browserUserApiKeys?.() || [],

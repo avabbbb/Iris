@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 护栏：付费授权凭证 `SpendGrant`（`services/workflowDispatcher.ts`）——画布工具适配器 `nodeToolRunner` 的最后一个参数必须是 `SpendGrant`，只能由调度器里不导出的 `nodeToolSpendGrant` 签发：工具说明书里不是 paid 的（free）、用户在界面里自己点的（user-initiated）、或外部 Agent 带一次性人工批准的（human-approved）。不带凭证调用适配器、或手写对象冒充凭证，tsc 报错；凭证按计费说明书独立判定，确认判定再漏判付费工具（9b7c579b 之前 outpaint / mask 在 Agent 路径上没确认就调了付费图片服务），执行前仍返回「需要确认」。测试里对适配器调用参数的断言加上了凭证（付费工具断言 human-approved）。
 - 护栏：内置 Agent 的工具注册必须经过审批闸——新增 `services/agentToolGate.ts`，`BrowserAgentKernel` 的 `tools` 与 `createBrowserAgentTools` 只接受品牌类型 `GatedAgentTool`，只能由 `gateTool(tool, guard)`（执行前过审批层）、`gateReadOnlyTool`（名字必须在审批层的只读清单里，否则注册时抛错）或 `gateCommandSurfaceTool`（经 runCommand / startTask 的命令面工具）产生；把裸 `AgentTool` 放进工具列表在 tsc 报错（6c63d21 之前 `iris_cut_*` 就是这样绕过了删除确认与委派回合的 maxTier）。联网搜索 / 本地 grep / Cut 工具改用 `gateTool`，行为不变。
 - 护栏：会话预算的 fast-check 模型测试 `tests/sessionBudgetModel.test.js`（新增 devDependency `fast-check`）——随机交错的付费调用 / 成功 / 拒绝 / 需确认 / 超时 / 未知提交 / 发出前后异常 / 同键重试，真实走 `WorkflowAgentSession.callCommand`，断言供应商侧已扣 + 在途永不超过批准的 `maxRuns`、`used` 与实际（可能）扣费逐次相等（同键不重复计、结果未知不漏计）。在 19ea7fd^ 的 check-then-consume 上失败，最小反例：`maxRuns=1` 时两条并发调用都被放行。已知缺口记在测试文件头：同键请求在途时的重试依赖下游合并，`workflowDispatcher` 目前不合并在途请求。
 - 护栏：PR 也跑契约门禁——`ci.yml` 的 `release:red-team` 不再只在 main 上跑（公开面白名单曾两次在合并后才发现漂移，b24d6512 / 94a7f8e8）；新增 `.github/workflows/contract-gates.yml`，PR 改到 `tools/iris/contracts/**`、`tools/iris/registry.js`、`src-tauri/**` 时运行 `cargo test --test runtime_contract`（466abae3 改了注册表、Rust 里钉住的 registry hash 直到 e1ddce1 才在 main 上补）。main 的 push 仍跑完整 `cargo test`。

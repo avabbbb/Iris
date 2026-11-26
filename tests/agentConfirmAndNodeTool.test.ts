@@ -116,7 +116,7 @@ describe('built-in Agent canvas tools', () => {
     expect(tools.some(item => item.name === 'iris_workflow_node_tool')).toBe(false);
 
     const result = await tool.execute('call-1', { nodeId: 'video-1', tool: 'video-extract-frame', position: 'current', currentTimeSec: 10 } as never, undefined as never);
-    expect(runner).toHaveBeenCalledWith(project.id, 'video-1', 'video-extract-frame', { position: 'current', currentTimeSec: 10 });
+    expect(runner).toHaveBeenCalledWith(project.id, 'video-1', 'video-extract-frame', { position: 'current', currentTimeSec: 10 }, { basis: 'free', tool: 'video-extract-frame' });
     expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ committed: true, outputNodeIds: ['frame-1'] });
   });
 

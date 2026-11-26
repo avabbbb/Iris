@@ -122,7 +122,7 @@ describe('workflow.node.tool pre-checks run before the approval card', () => {
     expect(nodeToolRunner).not.toHaveBeenCalled();
     const ran = await dispatch(withWorkflowHumanApproval(envelope));
     expect(ran.ok, JSON.stringify(ran.error)).toBe(true);
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'img', 'outpaint', { direction: 'left', amount: 0.3 });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'img', 'outpaint', { direction: 'left', amount: 0.3 }, { basis: 'human-approved', tool: 'outpaint' });
   });
 
   it('runs a free tool directly and checks every video-merge source', async () => {
@@ -131,7 +131,7 @@ describe('workflow.node.tool pre-checks run before the approval card', () => {
     expect(merge.error?.code).toBe('TOOL_NOT_APPLICABLE');
     const ok = await dispatch({ id: 'b', command: 'workflow.node.tool', source: 'agent', args: { tool: 'video-merge', sourceNodeIds: ['vid', 'vid2'] } });
     expect(ok.ok, JSON.stringify(ok.error)).toBe(true);
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-merge', { sourceNodeIds: ['vid', 'vid2'] });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-merge', { sourceNodeIds: ['vid', 'vid2'] }, { basis: 'free', tool: 'video-merge' });
   });
 });
 
@@ -158,7 +158,7 @@ describe('image / video / audio tools (node_tool split by media)', () => {
     expect(toolApprovalFor('workflow.video.tool', { tool: 'video-trim' }).tier).toBe('write');
     const trim = await dispatch({ id: 'b', command: 'workflow.video.tool', source: 'agent', args: { nodeId: 'vid', tool: 'video-trim', startSec: 1, endSec: 3 } });
     expect(trim.ok, JSON.stringify(trim.error)).toBe(true);
-    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-trim', { startSec: 1, endSec: 3 });
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-trim', { startSec: 1, endSec: 3 }, { basis: 'free', tool: 'video-trim' });
   });
 
   it('points to the right family when a tool is called on the wrong one', async () => {
