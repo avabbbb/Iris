@@ -946,9 +946,23 @@
       "watchers": 0,
       "releases": 7,
       "downloads": 37
+    },
+    {
+      "date": "2026-11-26",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 8,
+      "downloads": 44
     }
   ],
   "releaseAssets": [
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 8,
+      "updatedAt": "2026-11-22T17:00:47Z"
+    },
     {
       "release": "v0.1.1",
       "name": "iris-agent-toolkit-win32-x64.tar.gz",
@@ -984,12 +998,6 @@
       "name": "Iris_0.1.1_amd64.deb.sig",
       "downloads": 2,
       "updatedAt": "2026-11-22T16:58:24Z"
-    },
-    {
-      "release": "v0.1.1",
-      "name": "Iris_0.1.1_x64-setup.exe",
-      "downloads": 2,
-      "updatedAt": "2026-11-22T17:00:47Z"
     },
     {
       "release": "v0.1.1",
@@ -1035,6 +1043,12 @@
     },
     {
       "release": "v0.1.1",
+      "name": "SHA256SUMS-x86_64-pc-windows-msvc.txt",
+      "downloads": 2,
+      "updatedAt": "2026-11-22T17:01:09Z"
+    },
+    {
+      "release": "v0.1.1",
       "name": "iris-agent-toolkit-manifest.json",
       "downloads": 1,
       "updatedAt": "2026-11-22T17:01:44Z"
@@ -1077,15 +1091,51 @@
     },
     {
       "release": "v0.1.1",
-      "name": "SHA256SUMS-x86_64-pc-windows-msvc.txt",
-      "downloads": 1,
-      "updatedAt": "2026-11-22T17:01:09Z"
-    },
-    {
-      "release": "v0.1.1",
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 1,
       "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_0.1.1_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:29:57Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:28:05Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_0.1.1_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:27:57Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:29:40Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_0.1.1_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:34:45Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:30:00Z"
+    },
+    {
+      "release": "nightly-313-107ac38",
+      "name": "Iris_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-26T03:34:48Z"
     },
     {
       "release": "nightly-312-2656cee",
@@ -1250,5 +1300,5 @@
       "updatedAt": "2026-11-20T02:10:39Z"
     }
   ],
-  "updatedAt": "2026-11-25T08:47:31.505Z"
+  "updatedAt": "2026-11-26T08:33:36.283Z"
 }
