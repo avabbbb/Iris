@@ -1,0 +1,43 @@
+name: Deploy Worker (Cloudflare)
+
+# 推 main 时把 Worker（/api/*，含 Iris Link 中继 DO）和静态资源部署到 Cloudflare。
+# 需要仓库 Secret：CLOUDFLARE_API_TOKEN（Workers Scripts:Edit）。
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 698d3643700adbbc8dcbe83c5440d458
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: |
+          export VITE_APP_VERSION="$(node -p "require('./package.json').version")"
+          export VITE_APP_COMMIT_SHA="${GITHUB_SHA}"
+          npx vite build
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy
