@@ -16,8 +16,18 @@ function frontendCandidates(env = process.env) {
   return [...new Set([...(discovered ? [discovered] : []), ...(configured.length ? configured : DEFAULT_FRONTEND_URLS)])];
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+function frontendProbeTimeoutMs(url) {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(url).hostname) ? 800 : 3000;
+  } catch {
+    return 800;
+  }
+}
+
 async function probeFrontend(url, fetchImpl = globalThis.fetch) {
-  return Boolean(await probeWebUi(url, { fetchImpl, timeoutMs: 800 }).catch(() => null));
+  return Boolean(await probeWebUi(url, { fetchImpl, timeoutMs: frontendProbeTimeoutMs(url) }).catch(() => null));
 }
 
 export async function getLocalStatus(options = {}) {
@@ -40,7 +50,7 @@ export async function getLocalStatus(options = {}) {
   const browserConnected = agent.state === 'ready' && Number(health.clients || 0) > 0 && Boolean(health.hasWorkflow);
   const desktopReady = Boolean(runtimeStatus && browserConnected);
   const status = {
-    ready: Boolean((frontendUrl && agent.state === 'ready' && browserConnected) || desktopReady),
+    ready: Boolean((agent.state === 'ready' && browserConnected) || desktopReady),
     runtime: runtimeStatus
       ? { status: 'ready', surface: 'desktop-runtime', version: runtimeStatus.runtimeVersion }
       : { status: 'offline', surface: 'desktop-runtime' },

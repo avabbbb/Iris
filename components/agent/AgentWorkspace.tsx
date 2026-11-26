@@ -29,7 +29,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         tag: 'Agent · DSH',
         title: '用 DeepSeek Harness（DSH）指挥画布',
         body: 'DSH 主会话是指挥入口，Iris 插件在 Iris 页签中读取并修改你当前可见的 Workflow。生成仍走同一条确认与提交链路。',
-        envHosted: '你正在使用线上演示页（HTTPS）。线上页无法连接你电脑上的 DSH 或本地 Agent：浏览器会阻止 HTTPS 页面访问本机 http 服务。以下步骤需要在本地工作区完成。',
+        envHosted: '你正在使用线上页面（HTTPS）。浏览器会阻止 HTTPS 页面直接访问本机 http 服务（DSH 需在本地工作区运行）；外部 CLI / 编码 Agent 可通过 Iris Link（iris login web）经同源中继安全连接当前线上画布，模型 Key 始终留在浏览器内。',
         envLocal: '当前为本地工作区，可按以下步骤连接 DSH。',
         stepsTitle: '本地连接步骤',
         steps: [
@@ -47,7 +47,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         tag: 'Agent · DSH',
         title: 'Drive the canvas from DeepSeek Harness (DSH)',
         body: 'The DSH main conversation is the command entry; the Iris plugin reads and edits your currently visible Workflow from the Iris tab. Generation still goes through the same confirm-and-submit path.',
-        envHosted: 'You are on the hosted demo (HTTPS). It cannot reach DSH or a local agent on your computer: browsers block HTTPS pages from calling local http services. The steps below run in a local workspace.',
+        envHosted: 'You are on the hosted HTTPS page. Browsers block HTTPS pages from calling a local http agent directly (DSH runs in a local workspace); external CLI or coding agents can connect to this tab through Iris Link (iris login web) over the same-origin relay while keeping model keys in your browser.',
         envLocal: 'This is a local workspace; follow the steps below to connect DSH.',
         stepsTitle: 'Local setup',
         steps: [
@@ -61,8 +61,53 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         status: 'Status: packaged and installed into a clean profile locally; npm publish and marketplace listing not done yet; conversation acceptance under a real DeepSeek login still unverified.',
         drawer: 'Without DSH you can keep working in the assistant panel beside the canvas.',
       };
-  const handoffPrompt = zh
-    ? `你是 Iris 的本地编码 Agent。请通过可见的 Iris Workflow 操作画布，不要直接改前端状态。
+  const hostedOrigin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://iris.avabbbb.com';
+  const handoffPrompt = hosted
+    ? (zh
+        ? `你是 Iris 的编码 Agent。请通过可见的线上 Iris Workflow（${hostedOrigin}/#/app）操作画布，不要直接改前端状态。
+
+仓库：https://github.com/avabbbb/Iris
+
+准备（通过 Iris Link 连接当前线上标签页，不经本机 http）：
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
+npm install
+npm run iris:cli -- login web --open --url ${hostedOrigin} --scopes agent.read,agent.run,tools.invoke
+npm run iris:cli -- link status --json
+
+连接后先读：
+npm run iris:cli -- workflow.inspect --summary --json
+
+约束：
+- 只通过 iris CLI / Iris Skill 的 Workflow 契约读写；参考 .claude/skills/iris/SKILL.md。
+- 写入只用 workflow.apply，带 projectId、expectedRevision、mutationId 和 --idempotency-key；多个修改合并为一次 apply。
+- 不直接写 React/Zustand、浏览器存储、Runtime 数据库或 Provider 私有 API。
+- 修改前后都要 inspect；付费生成或删除前先让用户在页面上确认。
+
+如果你在本地工作区（http://127.0.0.1:37522）或 DSH 中运行，改用 npm run iris:cli -- ensure --json 或 npm run dsh:profile:install。`
+        : `You are a coding agent working on Iris. Operate only through the visible hosted Iris Workflow (${hostedOrigin}/#/app); never write frontend state directly.
+
+Repository: https://github.com/avabbbb/Iris
+
+Prepare (connect to this hosted tab through Iris Link, without local http loopback):
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
+npm install
+npm run iris:cli -- login web --open --url ${hostedOrigin} --scopes agent.read,agent.run,tools.invoke
+npm run iris:cli -- link status --json
+
+Read the graph first:
+npm run iris:cli -- workflow.inspect --summary --json
+
+Constraints:
+- Read/write only through the iris CLI / Iris Skill Workflow contract; see .claude/skills/iris/SKILL.md.
+- Writes go through workflow.apply with projectId, expectedRevision, mutationId and --idempotency-key; batch related edits into one apply.
+- Never write React/Zustand, browser storage, Runtime databases or Provider private APIs directly.
+- Inspect before and after changes; paid generation or deletion always requires confirmation on the page.
+
+For a local workspace (http://127.0.0.1:37522) or DSH, use npm run iris:cli -- ensure --json or npm run dsh:profile:install instead.`)
+    : (zh
+        ? `你是 Iris 的本地编码 Agent。请通过可见的 Iris Workflow 操作画布，不要直接改前端状态。
 
 仓库：https://github.com/avabbbb/Iris
 
@@ -83,7 +128,7 @@ npm run iris:cli -- workflow.inspect --summary --json
 - 修改前后都要 inspect；付费生成前先让用户确认。
 
 如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Iris 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
-    : `You are a local coding agent working on Iris. Operate only through the visible Iris Workflow; never write frontend state directly.
+        : `You are a local coding agent working on Iris. Operate only through the visible Iris Workflow; never write frontend state directly.
 
 Repository: https://github.com/avabbbb/Iris
 
@@ -103,7 +148,7 @@ Constraints:
 - Never write React/Zustand, browser storage, Runtime databases or Provider private APIs directly.
 - Inspect before and after changes; ask the user before any paid generation.
 
-For DSH: run npm run dsh:profile:install, then switch to the Iris tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
+For DSH: run npm run dsh:profile:install, then switch to the Iris tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`);
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">

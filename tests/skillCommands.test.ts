@@ -213,11 +213,33 @@ describe('web.open', () => {
     }));
     try {
       const result = await runSkillCommand('web.open', { url: target, opener });
-      expect(result).toMatchObject({ ok: true, opened: target });
+      expect(result).toMatchObject({ ok: true, opened: target, bootstrapped: true });
+      expect(result.bootstrapReason).toBeUndefined();
       expect(JSON.stringify(result)).not.toContain('secret-token');
       expect(opener).toHaveBeenCalledWith(expect.stringContaining('bootstrapToken=one-time-browser-token'));
       expect(opener.mock.calls[0][0]).not.toContain('agentToken=secret-token');
       expect(opener.mock.calls[0][0]).toContain('activateBrowserWriter=1');
+    } finally {
+      vi.unstubAllGlobals();
+      if (previousConfig === undefined) delete process.env.IRIS_AGENT_CONFIG;
+      else process.env.IRIS_AGENT_CONFIG = previousConfig;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports bootstrapped=false with a non-secret reason when the local Agent is offline', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'iris-web-open-offline-'));
+    const configPath = join(dir, 'agent.json');
+    const opener = vi.fn();
+    writeFileSync(configPath, JSON.stringify({ url: 'http://127.0.0.1:6102', token: 'secret-token' }), 'utf8');
+    const previousConfig = process.env.IRIS_AGENT_CONFIG;
+    process.env.IRIS_AGENT_CONFIG = configPath;
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
+    try {
+      const result = await runSkillCommand('web.open', { url: 'https://iris.avabbbb.com/#/app', opener });
+      expect(result).toMatchObject({ ok: true, opened: 'https://iris.avabbbb.com/#/app', bootstrapped: false, bootstrapReason: 'agent-offline' });
+      expect(JSON.stringify(result)).not.toContain('secret-token');
+      expect(opener).toHaveBeenCalledWith('https://iris.avabbbb.com/#/app');
     } finally {
       vi.unstubAllGlobals();
       if (previousConfig === undefined) delete process.env.IRIS_AGENT_CONFIG;

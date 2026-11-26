@@ -356,8 +356,14 @@ export async function runSkillCommand(command, args = {}, deps = {}) {
     case 'web.open': {
       const explicit = String(args.url ?? '').trim();
       try {
-        const url = await openWebUi(explicit, { opener: args.opener });
-        return okResult({ command, opened: url, method: 'native-opener' });
+        const result = await openWebUiDetailed(explicit, { opener: args.opener });
+        return okResult({
+          command,
+          opened: result.opened,
+          method: 'native-opener',
+          bootstrapped: result.bootstrapped,
+          ...(result.bootstrapReason ? { bootstrapReason: result.bootstrapReason } : {}),
+        });
       } catch (cause) {
         return error(cause?.code || 'NO_WEBUI', cause instanceof Error ? cause.message : String(cause));
       }
@@ -386,25 +392,40 @@ function isLoopbackUrl(value) {
   try { return LOOPBACK_HOSTS.has(new URL(value).hostname); } catch { return false; }
 }
 
+const WEB_OPEN_AGENT_TIMEOUT_MS = 2000;
+
 async function openVerifiedWebUi(target, verified = true, opener = openUrlNative) {
   let openTarget = target;
-  if (verified) {
+  let bootstrapped = false;
+  let bootstrapReason = null;
+  if (!verified) {
+    bootstrapReason = 'unverified-origin';
+  } else {
     try {
       const connection = readLocalAgentConnection();
-      const inspected = await inspectLocalAgent(connection, { timeoutMs: 600 });
-      if (inspected.state === 'ready') {
-        const bootstrapToken = await issueBrowserBootstrapToken(connection, { timeoutMs: 600 });
-        openTarget = buildBrowserBootstrapUrl(target, { ...connection, bootstrapToken });
+      if (!connection) {
+        bootstrapReason = 'agent-not-configured';
+      } else {
+        const inspected = await inspectLocalAgent(connection, { timeoutMs: WEB_OPEN_AGENT_TIMEOUT_MS });
+        if (inspected.state !== 'ready') {
+          bootstrapReason = 'agent-' + (inspected.state || 'offline');
+        } else {
+          const bootstrapToken = await issueBrowserBootstrapToken(connection, { timeoutMs: WEB_OPEN_AGENT_TIMEOUT_MS });
+          openTarget = buildBrowserBootstrapUrl(target, { ...connection, bootstrapToken });
+          bootstrapped = true;
+        }
       }
-    } catch {
-      // A plain WebUI remains a valid fallback when the optional Browser Agent is offline.
+    } catch (cause) {
+      // A plain WebUI remains a valid fallback when the optional Browser Agent is offline,
+      // but surface the reason (without any secrets) so callers know no bootstrap link was attached.
+      bootstrapReason = cause?.code ? String(cause.code) : 'bootstrap-failed';
     }
   }
   opener(openTarget);
-  return target;
+  return { opened: target, bootstrapped, ...(bootstrapReason ? { bootstrapReason } : {}) };
 }
 
-export async function openWebUi(explicitUrl = '', options = {}) {
+export async function openWebUiDetailed(explicitUrl = '', options = {}) {
   const opener = typeof options.opener === 'function' ? options.opener : openUrlNative;
   let target = explicitUrl.trim();
   if (target) {
@@ -423,6 +444,10 @@ export async function openWebUi(explicitUrl = '', options = {}) {
     }
   }
   throw Object.assign(new Error('没有发现运行中的 Iris WebUI。请先运行 `iris start --source --web --open`；源码仓库可使用 `npm run iris:cli -- start --source --web --open`，不要单独运行 `npm run dev` 来建立 Agent 连接。'), { code: 'NO_WEBUI' });
+}
+
+export async function openWebUi(explicitUrl = '', options = {}) {
+  return (await openWebUiDetailed(explicitUrl, options)).opened;
 }
 
 /** Open a URL with the OS default browser without shell-parsing bootstrap query strings. */

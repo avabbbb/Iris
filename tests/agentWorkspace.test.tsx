@@ -36,4 +36,25 @@ describe('Agent surfaces', () => {
     fireEvent.click(screen.getByRole('button', { name: '创建项目' }));
     expect(onCreateProject).toHaveBeenCalledOnce();
   });
+
+  it('shows the Iris Link handoff prompt on hosted HTTPS origins instead of local ensure', () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, protocol: 'https:', hostname: 'iris.avabbbb.com', origin: 'https://iris.avabbbb.com' },
+    });
+    try {
+      const project = { ...createWorkflowProject('线上项目'), id: 'project-hosted' };
+      render(<AgentConnectionsPage project={project} />);
+
+      expect(screen.getByTestId('agent-env-note')).toHaveAttribute('data-env', 'hosted');
+      expect(screen.getByTestId('agent-env-note')).toHaveTextContent('Iris Link');
+      const handoff = screen.getByTestId('agent-handoff-prompt');
+      expect(handoff).toHaveTextContent('login web --open --url https://iris.avabbbb.com --scopes agent.read,agent.run,tools.invoke');
+      expect(handoff).toHaveTextContent('link status --json');
+      expect(handoff).toHaveTextContent('workflow.inspect --summary --json');
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    }
+  });
 });

@@ -360,12 +360,38 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
 
   if (WORKSPACE_COMMANDS.has(routingCommand)) {
     const idempotencyKey = args.idempotencyKey || args['idempotency-key'];
+    const target = String(args.target || 'auto').trim().toLowerCase();
+    if (!['auto', 'local', 'web'].includes(target)) {
+      printCliResponse(false, command, null, {
+        code: 'INVALID_ARGUMENT',
+        message: '--target 只能是 auto | local | web。',
+        retryable: false,
+      }, { runtime: 'workspace-adapter' });
+      return;
+    }
     if (WORKSPACE_WRITE_COMMANDS.has(routingCommand) && !idempotencyKey) {
       printCliResponse(false, command, null, {
         code: 'INVALID_ARGUMENT',
         message: `${routingCommand} requires --idempotency-key so retries cannot duplicate visible Workflow changes.`,
         retryable: false,
       }, { runtime: 'workspace-adapter' });
+      return;
+    }
+    const runViaWebLink = async () => {
+      const { executeWorkspaceCommandOverWebLink } = await import('./link/web-workspace.js');
+      const result = await executeWorkspaceCommandOverWebLink(routingCommand, args, { idempotencyKey, progress: cliProgress });
+      const ok = isResultOk(result);
+      printCliResponse(ok, command, ok ? result : null, ok ? null : result.error || null, { runtime: 'iris-link' });
+    };
+    if (target === 'web') {
+      try {
+        await runViaWebLink();
+      } catch (error) {
+        const linkError = typeof error?.toJSON === 'function'
+          ? error.toJSON()
+          : { code: error?.code || 'LINK_COMMAND_FAILED', message: error instanceof Error ? error.message : String(error), retryable: Boolean(error?.retryable) };
+        printCliResponse(false, command, null, linkError, { runtime: 'iris-link' });
+      }
       return;
     }
     try {
@@ -390,6 +416,21 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
       const workspaceError = error instanceof WorkspaceClientError
         ? error.toJSON()
         : { code: 'WORKSPACE_UNAVAILABLE', message: error instanceof Error ? error.message : String(error), retryable: true };
+      if (target === 'auto' && workspaceError.code === 'WORKSPACE_UNAVAILABLE') {
+        const { hasSavedWebLink } = await import('./link/web-workspace.js');
+        if (hasSavedWebLink()) {
+          try {
+            await runViaWebLink();
+            return;
+          } catch (linkCause) {
+            const linkError = typeof linkCause?.toJSON === 'function'
+              ? linkCause.toJSON()
+              : { code: linkCause?.code || 'LINK_COMMAND_FAILED', message: linkCause instanceof Error ? linkCause.message : String(linkCause), retryable: Boolean(linkCause?.retryable) };
+            printCliResponse(false, command, null, linkError, { runtime: 'iris-link' });
+            return;
+          }
+        }
+      }
       printCliResponse(false, command, null, workspaceError, { runtime: 'workspace-adapter' });
     }
     return;

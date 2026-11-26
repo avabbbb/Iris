@@ -31,4 +31,26 @@ describe('iris status', () => {
     expect(result.frontend).toEqual({ status: 'ready', url: 'http://127.0.0.1:37522' });
     expect(JSON.stringify(result)).not.toContain('secret-token');
   }, 20_000);
+
+  it('reports ready when the local Agent has a connected browser canvas even without a local Vite server', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'iris-local-status-hosted-'));
+    tempDirs.push(dir);
+    const configPath = join(dir, 'agent.json');
+    writeFileSync(configPath, JSON.stringify({ url: 'http://127.0.0.1:17373', token: 'secret-token' }), 'utf8');
+    const fetchImpl = async (input) => {
+      const url = new URL(String(input));
+      if (url.port === '17373' && url.pathname === '/health') {
+        return new Response(JSON.stringify({ ok: true, hasWorkflow: true, clients: 1, clientId: 'hosted-tab', activeProjectId: 'project-hosted', revision: 2 }), { status: 200 });
+      }
+      if (url.port === '17373' && url.pathname === '/crew/protocol') {
+        return new Response(JSON.stringify({ ok: true, protocolVersion: '1' }), { status: 200 });
+      }
+      throw new Error('local frontend offline');
+    };
+
+    const result = await getLocalStatus({ configPath, fetchImpl });
+
+    expect(result).toMatchObject({ ready: true, browserConnected: true, clientId: 'hosted-tab', projectId: 'project-hosted', revision: 2 });
+    expect(result.frontend).toEqual({ status: 'offline', url: null });
+  }, 20_000);
 });

@@ -37,9 +37,17 @@ export interface AgentConnectionBootstrapOptions {
   diagnose?: typeof diagnoseAgentLink;
 }
 
+const BOOTSTRAP_EXCHANGE_TIMEOUT_MS = 8000;
+
 let inFlight: Promise<AgentBootstrapResult> | null = null;
 /** Bumped by every run; a run that is no longer the latest must not touch the store or binding. */
 let generation = 0;
+/**
+ * 内存暂存尚未成功换票的一次性 bootstrap 参数（不写入 localStorage / sessionStorage）。
+ * 线上 HTTPS 页面首次请求本机 Agent 可能触发浏览器“允许访问本地网络”权限框导致首次换票超时；
+ * URL 参数在首轮已被擦除，保留在内存里可让用户放行权限后点击「重新连接」继续完成换票。
+ */
+let pendingBootstrap: { url: string; bootstrapToken: string; autoActivate: boolean } | null = null;
 
 function browserLocation(): BootstrapLocation | null {
   return typeof window === 'undefined' ? null : window.location;
@@ -248,9 +256,15 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
   const history = options.history || browserHistory();
   if (params.fromUrl) scrubConnectionParams(location, history);
   const session = readSessionConnection(storage);
-  const url = params.url || session.url;
+  if (params.bootstrapToken && params.url) {
+    pendingBootstrap = { url: params.url, bootstrapToken: params.bootstrapToken, autoActivate: params.autoActivate };
+  }
+  const reusablePending = !params.fromUrl && !session.token && pendingBootstrap ? pendingBootstrap : null;
+  const url = params.url || session.url || reusablePending?.url || '';
   const token = params.token || session.token;
-  if (!url && !token && !params.bootstrapToken) {
+  const bootstrapToken = params.bootstrapToken || reusablePending?.bootstrapToken || '';
+  const autoActivate = params.fromUrl ? params.autoActivate : Boolean(reusablePending?.autoActivate);
+  if (!url && !token && !bootstrapToken) {
     // Nothing handed over: say so (with the next step) instead of a bare "offline".
     const state = useAgentConnectionStore.getState();
     if (isCurrent() && state.status === 'offline' && !state.issue) setStoreStatus('offline', { issue: agentLinkIssue('not_configured', null) });
@@ -260,10 +274,38 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
   setStoreStatus('connecting', { url: url || null, error: null, issue: null });
   let connection: ManagedAgentConnection;
   let sessionExpiresAt: number | undefined;
+  const maxAttempts = Math.max(1, options.maxAttempts || 8);
   try {
-    const exchanged = params.bootstrapToken
-      ? await exchangeBootstrapCredential(url, params.bootstrapToken, options)
-      : { token, expiresAt: undefined };
+    let exchanged: { token: string; expiresAt: number | undefined };
+    if (bootstrapToken) {
+      const exchangeOptions = { ...options, timeoutMs: options.timeoutMs ?? BOOTSTRAP_EXCHANGE_TIMEOUT_MS };
+      const maxExchangeAttempts = Math.min(maxAttempts, 3);
+      let exchangeResult: { token: string; expiresAt: number | undefined } | null = null;
+      let exchangeError: unknown = null;
+      for (let attempt = 0; attempt < maxExchangeAttempts; attempt += 1) {
+        if (!isCurrent()) return { state: 'offline', error: 'superseded' };
+        try {
+          exchangeResult = await exchangeBootstrapCredential(url, bootstrapToken, exchangeOptions);
+          pendingBootstrap = null;
+          break;
+        } catch (cause) {
+          exchangeError = cause;
+          const httpStatus = (cause as Error & { httpStatus?: number })?.httpStatus;
+          if (typeof httpStatus === 'number') {
+            // 服务端已明确拒绝（401 / 403）：一次性凭证已作废，立即清除且不重试。
+            pendingBootstrap = null;
+            throw cause;
+          }
+          if (attempt + 1 < maxExchangeAttempts) {
+            await new Promise(resolve => setTimeout(resolve, options.retryDelayMs || 350));
+          }
+        }
+      }
+      if (!exchangeResult) throw exchangeError;
+      exchanged = exchangeResult;
+    } else {
+      exchanged = { token, expiresAt: undefined };
+    }
     sessionExpiresAt = exchanged.expiresAt;
     connection = normalizeConnection(url, exchanged.token);
   } catch (cause) {
@@ -272,13 +314,14 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
     const rejected = typeof httpStatus === 'number';
     // No HTTP answer at all means the Agent is down / unreachable — that is
     // "offline", not an expired credential. Only a real rejection is auth.
-    if (params.bootstrapToken && !rejected) {
+    if (bootstrapToken && !rejected) {
       const issue = await classifyFailure(options, url || null, null, 'unreachable');
       if (!isCurrent()) return { state: 'offline', error: 'superseded' };
       const error = agentLinkIssueMessage(issue);
       setStoreStatus('offline', { url: url || null, error, issue });
       return { state: 'offline', error };
     }
+    pendingBootstrap = null;
     clearSessionConnection(storage);
     saveAutoActivation(storage, false);
     setBrowserWorkflowBinding(null);
@@ -294,14 +337,13 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
   saveSessionConnection(storage, connection);
   saveSessionExpiry(storage, sessionExpiresAt);
 
-  const maxAttempts = Math.max(1, options.maxAttempts || 8);
   let lastError = 'Iris Agent 暂时不可用。';
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
     try {
       await authenticate(connection, options);
       if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
-      saveAutoActivation(storage, params.autoActivate);
+      saveAutoActivation(storage, autoActivate);
       setBrowserWorkflowBinding(connection);
       return { state: 'ready', connection };
     } catch (cause) {
@@ -347,6 +389,7 @@ export function isAgentBootstrapInFlight() {
 export function resetAgentConnectionBootstrapForTests() {
   inFlight = null;
   generation = 0;
+  pendingBootstrap = null;
 }
 
 export function consumeBrowserWriterAutoActivation(storage: StorageLike | null = sessionStore()) {
