@@ -85,7 +85,7 @@ describe('budget reservation under concurrency', () => {
     const budget = new SessionBudget();
     budget.grant({ maxRuns: 3 });
     const first = budget.reserve('workflow.node.run', { nodeId: 'a' }, { key: 'k1' });
-    expect(budget.reserve('workflow.node.run', { nodeId: 'a' }, { key: 'k1' })).toEqual({ reservation: null, duplicate: true });
+    expect(budget.reserve('workflow.node.run', { nodeId: 'a' }, { key: 'k1' })).toEqual({ reservation: null, duplicate: true, inFlight: first.reservation });
     budget.commit(first.reservation);
     expect(budget.reserve('workflow.node.run', { nodeId: 'a' }, { key: 'k1' }).duplicate).toBe(true);
     expect(budget.snapshot().budget.used).toBe(1);

@@ -99,6 +99,8 @@ export class SessionBudget {
    * 在发出付费请求之前原子预留额度（check 与扣减在同一个同步步骤里，并发请求不会看到同一份剩余）。
    * 返回 { blocked } 或 { reservation }；reservation 为 null 表示不需要预留（非付费命令 / 未授权预算）。
    * 同一 idempotencyKey 在本授权内只扣一次：重试拿到 { reservation: null, duplicate: true }。
+   * 键还在途（预留未结算）时额外带 inFlight = 那条预留：调用方必须合并到它的结果上（single-flight），
+   * 不能再发一次——否则重试不占额度却又提交了一次，供应商侧会超支。合并只在这里判定，是唯一的规则来源。
    */
   reserve(command, args = {}, { key } = {}) {
     const units = paidUnits(command, args);
@@ -106,14 +108,16 @@ export class SessionBudget {
     const grant = this.grantState;
     const dedupeKey = typeof key === 'string' && key ? key.slice(0, 200) : '';
     if (grant && dedupeKey && grant.keys.has(dedupeKey) && !this.paused && this.now() <= grant.expiresAt) {
-      return { reservation: null, duplicate: true };
+      const state = grant.keys.get(dedupeKey);
+      return state === 'used' ? { reservation: null, duplicate: true } : { reservation: null, duplicate: true, inFlight: state };
     }
     const blocked = this.blockedFor(units);
     if (blocked) return { blocked };
     if (!grant) return { reservation: null };
     grant.reserved += units;
-    const reservation = { grant, units, key: dedupeKey, settled: false };
-    if (dedupeKey) grant.keys.set(dedupeKey, 'reserved');
+    const reservation = { grant, units, key: dedupeKey, settled: false, pending: null };
+    // 键的状态：在途时存预留本身（重试据此合并到 reservation.pending），结算后为 'used' 或删除。
+    if (dedupeKey) grant.keys.set(dedupeKey, reservation);
     return { reservation };
   }
 
@@ -135,7 +139,7 @@ export class SessionBudget {
     reservation.settled = true;
     const { grant, units } = reservation;
     grant.reserved = Math.max(0, grant.reserved - units);
-    if (reservation.key && grant.keys.get(reservation.key) === 'reserved') grant.keys.delete(reservation.key);
+    if (reservation.key && grant.keys.get(reservation.key) === reservation) grant.keys.delete(reservation.key);
     return units;
   }
 

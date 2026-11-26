@@ -466,8 +466,17 @@ export class WorkflowAgentSession {
       return { ok: true, result: buildPlanCard(command, args, { snapshot: this.snapshot, budget: this.budget }) };
     }
     // 先原子预留再异步提交：并发的两条付费请求不会看到同一份剩余额度。
-    const { blocked, reservation } = this.budget.reserve(command, args, { key: idempotencyKey });
+    const { blocked, reservation, inFlight } = this.budget.reserve(command, args, { key: idempotencyKey });
     if (blocked) return blocked;
+    // 同键请求还在途：合并到第一次的结果（成功 / 失败 / 超时 / 抛错都一样），不再预留、不再提交。
+    if (inFlight?.pending) return inFlight.pending;
+    const run = this.runReserved(command, args, source, idempotencyKey, signal, caller, runOptions, reservation);
+    // 同步登记（runReserved 在第一次 await 前不会让出），重试在任何交错下都能看到它。
+    if (reservation?.key) reservation.pending = run;
+    return run;
+  }
+
+  async runReserved(command, args, source, idempotencyKey, signal, caller, runOptions, reservation) {
     const entry = this.recordActivity({ command, source, caller, args });
     try {
       const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller, runOptions);

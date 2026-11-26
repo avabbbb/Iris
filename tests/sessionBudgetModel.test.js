@@ -5,10 +5,9 @@
 //   2. 不重复扣：会话记的 used 恰好等于供应商实际（或可能）扣费的次数，同一幂等键只记一次，结果未知的不漏记。
 // 能抓到的历史错误：19ea7fd^ 的 check-then-consume（两条并发请求都看到「还剩最后一次」，重试再扣一次，超时不计）。
 // 证明命令写在引入本测试的 commit 正文里。
-// 模型假设（已知缺口）：同一幂等键的请求还在途时再来一次，session 判为 duplicate、不预留就放行，
-// 只有下游把在途的同键请求合并成一次提交才不超支。services/workflowDispatcher.ts 的幂等缓存只在出结果后写入，
-// 并不合并在途请求（浏览器的人工确认门仍逐次拦付费 run）。去掉下面「合并在途」那一行，fast-check 会给出
-// [maxRuns=1, call k0, call k0, call 无键] 超支。修法另行处理（例如 reserve 对 'reserved' 状态的键返回 DUPLICATE_IN_FLIGHT）。
+// 假供应商不合并在途请求（每次提交都单独扣费），所以同键在途重试的合并由真实代码负责：
+// SessionBudget.reserve 对在途键返回 inFlight，callCommand 直接复用第一次的 promise（single-flight），不预留、不再提交。
+// 修复前（179669f2）fast-check 给出 [maxRuns=1, call k2, call k2, call 无键] → 步骤 1 超支 2 > 1；证明写在修复 commit 正文里。
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { WorkflowAgentSession } from '../agent/session.js';
@@ -44,7 +43,7 @@ async function runScenario(maxRuns, actions) {
   const session = new WorkflowAgentSession();
   session.budget.grant({ maxRuns, grantedBy: 'model-test' });
 
-  // 假供应商：同一幂等键在途时合并为同一次提交；已扣费的键再来直接返回成功、不再扣。
+  // 假供应商：每次提交都单独扣费（不合并在途的同键请求）；只有已扣费的键再来才直接返回成功、不再扣。
   const inFlight = []; // { id, key, units, promise, resolve, reject }
   const chargedKeys = new Set();
   let chargedUnits = 0;
@@ -52,8 +51,6 @@ async function runScenario(maxRuns, actions) {
   session.dispatchCommand = (_command, args, _source, idempotencyKey) => {
     const key = idempotencyKey || null;
     if (key && chargedKeys.has(key)) return Promise.resolve({ ok: true, result: {}, duplicate: true });
-    const joined = key ? inFlight.find(sub => sub.key === key) : null;
-    if (joined) return joined.promise; // 合并在途（见文件头的模型假设）
     const sub = { id: nextId++, key, units: args.nodeIds.length };
     sub.promise = new Promise((resolve, reject) => { sub.resolve = resolve; sub.reject = reject; });
     inFlight.push(sub);
