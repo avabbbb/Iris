@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 护栏：会话预算的 fast-check 模型测试 `tests/sessionBudgetModel.test.js`（新增 devDependency `fast-check`）——随机交错的付费调用 / 成功 / 拒绝 / 需确认 / 超时 / 未知提交 / 发出前后异常 / 同键重试，真实走 `WorkflowAgentSession.callCommand`，断言供应商侧已扣 + 在途永不超过批准的 `maxRuns`、`used` 与实际（可能）扣费逐次相等（同键不重复计、结果未知不漏计）。在 19ea7fd^ 的 check-then-consume 上失败，最小反例：`maxRuns=1` 时两条并发调用都被放行。已知缺口记在测试文件头：同键请求在途时的重试依赖下游合并，`workflowDispatcher` 目前不合并在途请求。
 - 护栏：PR 也跑契约门禁——`ci.yml` 的 `release:red-team` 不再只在 main 上跑（公开面白名单曾两次在合并后才发现漂移，b24d6512 / 94a7f8e8）；新增 `.github/workflows/contract-gates.yml`，PR 改到 `tools/iris/contracts/**`、`tools/iris/registry.js`、`src-tauri/**` 时运行 `cargo test --test runtime_contract`（466abae3 改了注册表、Rust 里钉住的 registry hash 直到 e1ddce1 才在 main 上补）。main 的 push 仍跑完整 `cargo test`。
 - 护栏：生产构建（`vite build`，production 模式）前运行 `scripts/check-build-env.mjs`，任何一条命中即构建失败——生效的扩展 ID 为空（06d1647 之前线上画布因此配不上扩展，构建却不报错）、`VITE_IRIS_EXTENSION_IDS` 里有会被静默丢掉的无效 ID、`IRIS_SIDELOAD_EXTENSION_ID` 与 `extension/manifest.json` 的 key 推导值不一致、环境里有 `vite-env.d.ts` 未声明的 `VITE_IRIS_*` / `VITE_FLOVART_*`（拼错的变量名）。新增 `tests/buildEnvCheck.test.ts`（含旁加载 ID 与 manifest key 对拍）。
 - 护栏：根 `npx tsc --noEmit` 回到 0 错误且不再依赖 dsh-plugin 的安装——引用 `dsh-plugin/` 的测试（`tests/dsh*`、`tests/agentToolRegistryParity.test.ts`）移到 `tsconfig.dsh-tests.json` 单独检查。之前没装 dsh 依赖时固定有 17 条「基线错误」，Agent 只能按「没有新增」判断，真错误会被淹没（a9eeeecd）。CI 在安装 dsh 依赖之前跑根 tsc（任何错误即失败），装完再查 dsh 测试。

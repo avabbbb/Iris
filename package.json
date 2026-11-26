@@ -128,6 +128,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "esbuild": "^0.25.12",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.11.0",
     "jsdom": "^27.0.1",
     "miniflare": "^4.20260730.0",
     "playwright": "^1.60.0",
