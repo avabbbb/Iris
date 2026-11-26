@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 文档口径：Iris 不再内置模型映射（2026-11-27 用户决定）。AGENTS.md §6 删去「RunningHub 保持内置（含预设模型与线路）」，改为：每个模型由用户 / Agent 声明（`iris.service/1`：显示名、节点类型、模式、参数、参考上限、价格），价格未声明一律走审批；上游自己返回的能力只能作「未确认」预填；不得新增按名称猜能力的代码；现有内置目录是过渡期遗留，先迁移老用户的有效映射（保留旧 id）再删除。SUPPORT_MATRIX 的认证对象改为「RunningHub 协议适配器 + 用户声明的 routeId」，不再以内置 Route Catalog 作为对外承诺。代码行为本条不变。新增 `tests/modelDeclarationPolicyDocs.test.ts`。
 - 设置：「DeepSeek 服务端扩展」（服务端会话标题 / DeepSeek 联网搜索 / 安全审核）不再摆在「AI 服务」标签页顶层（没配置任何服务时也露在空态下面），改为渐进披露——只在添加 / 编辑 AI 服务抽屉的「更多设置」里、且该服务 Base URL 为 api.deepseek.com 时出现，其它服务不显示。开关仍是全局存储（`iris.deepseek.extensions.v1`，所有 DeepSeek 官方服务共用，卡片上注明），默认值与请求行为不变。新增 `tests/settingsDeepSeekExtensionsPlacement.test.tsx`。
 - 修复：同一幂等键的付费请求还在途时再来一次（Agent 重试、双发），会话预算以前判为 duplicate、不预留就放行再提交一次——只靠浏览器调度器的在途合并兜底，而那层按 `source:key` 合并、只覆盖四个 run 命令、换页面就失效，供应商侧可以超出批准的 `maxRuns`（fast-check 反例：`maxRuns=1`，`call k, call k` → 已扣 + 在途 = 2）。现在 `SessionBudget.reserve` 对在途键返回 `inFlight`（唯一判定处），`WorkflowAgentSession.callCommand` 直接合并到第一次调用的结果（single-flight）：不再预留、不再提交；第一次成功 / 失败 / 超时 / 未知提交 / 抛错，重试拿到同一个结局，预算只按第一次的结算记一次。未授权预算、或键已结算后的重试行为不变。`tests/sessionBudgetModel.test.js` 的假供应商不再替代码合并在途请求；新增 `tests/sessionInFlightMerge.test.js`。
 - 护栏：付费授权凭证 `SpendGrant`（`services/workflowDispatcher.ts`）——画布工具适配器 `nodeToolRunner` 的最后一个参数必须是 `SpendGrant`，只能由调度器里不导出的 `nodeToolSpendGrant` 签发：工具说明书里不是 paid 的（free）、用户在界面里自己点的（user-initiated）、或外部 Agent 带一次性人工批准的（human-approved）。不带凭证调用适配器、或手写对象冒充凭证，tsc 报错；凭证按计费说明书独立判定，确认判定再漏判付费工具（9b7c579b 之前 outpaint / mask 在 Agent 路径上没确认就调了付费图片服务），执行前仍返回「需要确认」。测试里对适配器调用参数的断言加上了凭证（付费工具断言 human-approved）。

@@ -187,7 +187,11 @@ third_party/opencut/  Cut 编辑器 UX 来源说明（见 docs/adr/cut-editor.md
 - **不因“精简”删掉**目标绑定、revision、幂等、取消、错误恢复、费用授权、素材持久化或权限校验。
 - 技术栈：React 19 + TypeScript + Vite + Tailwind 4 + Ant Design + Zustand（以 lockfile 为准）；动效库 `motion`（GSAP 未经决定不得加依赖）；桌面 Tauri / Rust；CLI / 本机 Agent 为 Node ESM。
 - 浏览器业务数据用 localforage / IndexedDB，localStorage 只放极小配置；存储形态变化同步 [backend-database.mdx](docs/content/docs/backend/backend-database.mdx)。
-- RunningHub 保持内置（含预设模型与线路）；其他第三方站点优先做成用户自定义脚本，并随配置导出。
+- **不内置模型映射**（2026-11-27 用户决定，取代旧规则「RunningHub 保持内置（含预设模型与线路）」）：每个模型都由用户或替用户操作的 Agent 在添加服务时声明——显示名、节点类型、模式、参数、参考上限、价格（`iris.service/1` 清单，不含 Key）。没声明价格 = 价格未知 → 一律走审批，金额型预算不能放行。
+  - 代码里只保留各协议的请求适配器（OpenAI 兼容、Gemini、火山方舟、Veo、xAI、RunningHub 线路序列化、用户脚本）：协议决定「怎么发请求」，声明决定「这个模型能做什么」。
+  - 「获取模型」时**上游自己返回**的能力（如 OpenRouter `/models` 的 modalities、RunningHub 官方文档解析出的线路参数）可以预填声明，但标「未确认」，用户确认后才生效。不要新增按模型名 / 别名猜能力、价格或模式的代码，也不要新增内置模型表或自动映射。
+  - 现有内置目录（`tools/iris/product-models.js`、`services/productModelCatalog.ts` 的静态能力表、`suggestProductRouteMappings`、`services/routeMapping.ts`、「模型映射」设置页）是过渡期遗留：先把老用户当前的有效映射一次性迁成他们自己的声明（保留旧模型 id，老节点不改写），迁移与测试夹具就绪后再删除。
+  - 其他第三方站点优先做成用户自定义脚本，并随配置导出。
 - `.editorconfig`：UTF-8、LF、末尾换行。提交信息用 Conventional Commits（`feat(cut): …`、`fix(agent): …`、`docs(…): …`）。不顺手改无关文件，保护已有用户改动。
 - 代码注释和文档多为中文，保持所在文件的语言。
 

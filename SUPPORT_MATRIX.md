@@ -57,8 +57,11 @@ Scope and proposed benchmarks are defined in the [main design](docs/design/00-ov
 
 ## Runtime and provider paths
 
-Closed Beta 只认证一条付费 Provider 路径：RunningHub 图片 + 视频（Route
-Catalog 驱动的标准模型线路）。它是本 release 唯一可走认证流程的 Provider
+Closed Beta 只认证一条付费 Provider 路径：RunningHub 图片 + 视频。认证对象是
+**RunningHub 协议适配器 + 用户声明的 routeId**（请求序列化、提交 / 轮询 / 取消、
+扣费与恢复语义），不是任何内置模型列表：2026-11-27 起 Iris 不再内置模型映射，
+每个模型由用户或替用户操作的 Agent 声明（名称、节点类型、模式、参数、参考上限、
+价格；价格未声明一律走审批）。它是本 release 唯一可走认证流程的 Provider
 path，认证完成前其发布状态仍为 `Beta (pending certification)`；其余
 Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 
@@ -70,7 +73,7 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 | ProductionTask v1 projection | Experimental | `task.inspect` / safe `task.resume` over durable ProductionRun/StageRun and scheduler lease；真实 Agent 跨会话、429/提交未知恢复与 Task Center 未认证 |
 | Agent video pipeline（`pipeline.run.*`、`capture.ui`、`composition.*`、`review.submit` 等 14 条，CLI 与 stdio MCP） | Experimental | Fake TTS + fixture 转写 + 本机 ffmpeg 的 e2e trace（`npm run e2e:pipeline`，35 项检查）与 Vitest；trace 存于 Runtime 共用 `flovart-state.db`（migration 5），Rust `pipeline.run.get` 只读且与 Node 一致（`npm run e2e:pipeline:parity`，`cargo test --lib`）；`capture.ui` 截图与录屏由 `npm run e2e:pipeline:capture` 实测；Remotion 引擎文字 / 字幕 / 音频轨由 `npm run e2e:pipeline:remotion` 在 Linux arm64 实渲染验证；Canvas 抽屉 run 卡片与画布版本分组有 Vitest 覆盖，未做真机视觉验收；配音 `runninghub` 路由（RunningHub 上的 MiniMax speech-2.8-turbo）已于 2026-11-15 用真实 Key 跑通配音 → 字幕 → draft（`npm run trial:runninghub-tts`）；直连 MiniMax 与 WhisperX 未验证 |
 | Local Fake Provider HTTP fixture | Stable test fixture | Provider resilience 与 wire tests；不代表第三方账号/账单行为 |
-| RunningHub image + video routes | Beta (pending certification) | 唯一进入认证流程的 Provider path：Schema 驱动 Route Catalog（18 条认证候选线路）+ 真实付费 trial capture（seedream t2i、seedance i2v、restart-after-submit）；真实账号、扣费与恢复语义的认证 gate 见下文 External Gate |
+| RunningHub image + video routes | Beta (pending certification) | 唯一进入认证流程的 Provider path。认证对象：RunningHub 协议适配器 + 用户声明的 routeId；真实付费 trial capture（seedream t2i、seedance i2v、restart-after-submit）按 routeId 记录，迁成用户声明后同一 routeId 的证据继续有效。过渡期代码里仍有 Schema 驱动的 Route Catalog（18 条线路）与按线路自动映射（已实现），迁成用户声明后删除；之后官方文档解析只作「获取模型」的预填来源（标「未确认」，设计目标）。两者都不构成对外承诺的内置模型列表；真实账号、扣费与恢复语义的认证 gate 见下文 External Gate |
 | OpenAI-compatible BYOK | Experimental / unverified | 本地 Fake Provider + Browser/Workflow path；真实供应商、价格、取消语义待认证，Closed Beta 不作发布承诺 |
 | Seedance direct / other remote providers | Experimental / unverified | route/adapter 存在；真实账号、账单和生产失败语义未验证，Closed Beta 不作发布承诺 |
 
