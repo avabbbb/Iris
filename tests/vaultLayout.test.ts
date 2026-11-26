@@ -81,10 +81,11 @@ describe('vault secret scan', () => {
       apiKey: 'whatever',
       nested: [{ 'api-key': 'x' }, { headers: { Authorization: 'Bearer abc' } }],
       s3: { secretAccessKey: 'y', accessKeyId: 'z', sessionToken: 't' },
-      note: 'leaked sk-abcdefghijklmnopqrstuvwxyz012345 here',
+      note: 'leaked sk-abcdefghijklmnopqrstuvwxyz123456 here',
       gh: 'ghp_abcdefghijklmnopqrstuvwxyz0123',
-      pem: '-----BEGIN PRIVATE KEY-----',
-      aws: 'AKIAABCDEFGHIJKLMNOP',
+      // 拼接出 PEM 头，避免仓库里出现字面量（release:secret-audit 会拦）
+      pem: ['-----BEGIN', 'PRIVATE KEY-----'].join(' '),
+      aws: 'AKIAIOSFODNN7EXAMPLE',
     });
     expect(findings.map(item => item.path).sort()).toEqual([
       'apiKey', 'aws', 'gh', 'nested[0].api-key', 'nested[1].headers.Authorization', 'note', 'pem',

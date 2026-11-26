@@ -71,7 +71,7 @@ describe('iris.service/1 manifest', () => {
   it('never accepts a key or any other secret in the manifest', () => {
     expectIssue({ ...base(), apiKey: 'sk-abc' }, /apiKey/);
     expectIssue({ ...base(), protocolOptions: { token: 'abc' } }, /秘密/);
-    expectIssue({ ...base(), notes: 'key is sk-abcdefghijklmnopqrstuvwxyz0123' }, /秘密/);
+    expectIssue({ ...base(), notes: 'key is sk-abcdefghijklmnopqrstuvwxyz123456' }, /秘密/);
     expect(issuesOf({ ...base(), secretRef: 'svc_openai_main' })).toEqual([]);
   });
 
