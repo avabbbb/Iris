@@ -1,0 +1,1116 @@
+{
+  "$comment": "冻结副本：2026-11-27 内置产品目录（tools/iris/product-models.js + services/productModelCatalog.ts，默认 RunningHub 种子线路）里 19 个模型的能力，按 iris.service/1 模型声明写出。只给测试夹具与迁移对拍用；内置目录删除后它是这些旧 id 的唯一声明来源。价格一律未知。",
+  "models": [
+    {
+      "legacyProvider": "openai",
+      "declaration": {
+        "id": "flovart:gpt-image-2",
+        "upstreamId": "gpt-image-2",
+        "displayName": "GPT Image 2",
+        "vendor": "OpenAI",
+        "description": "高质量图片生成与编辑",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 16,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:gemini-3-pro-image",
+        "upstreamId": "gemini-3-pro-image",
+        "displayName": "Gemini Pro Image",
+        "vendor": "Google",
+        "description": "Nano Banana Pro，适合专业设计资产",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 14,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": true,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:gemini-3.1-flash-image",
+        "upstreamId": "gemini-3.1-flash-image",
+        "displayName": "Gemini Flash Image",
+        "vendor": "Google",
+        "description": "Nano Banana 2，设计与速度平衡，最多 14 张参考图",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 14,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "4:5",
+            "5:4",
+            "1:4",
+            "4:1",
+            "1:8",
+            "8:1",
+            "21:9",
+            "9:21"
+          ],
+          "resolutions": [
+            "512",
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": true,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:gemini-3.1-flash-lite-image",
+        "upstreamId": "gemini-3.1-flash-lite-image",
+        "displayName": "Gemini Flash Lite Image",
+        "vendor": "Google",
+        "description": "Nano Banana 2 Lite，亚秒延迟，推荐替代 NB 1",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 14,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "512",
+            "1K",
+            "2K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": true,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:imagen-4",
+        "upstreamId": "imagen-4.0-generate-001",
+        "displayName": "Imagen 4",
+        "vendor": "Google",
+        "description": "Imagen 4，2026-08-17 关停，建议迁移到 Nano Banana 2 Lite",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 0,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedream-5-pro",
+        "upstreamId": "seedream-5.0-pro",
+        "displayName": "Seedream Pro",
+        "vendor": "ByteDance",
+        "description": "官方产品已发布，API 模型 ID 由用户映射",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 8,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": true,
+          "realPersonCheck": true
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedream-5-flash",
+        "upstreamId": "seedream-5-flash",
+        "displayName": "Seedream 5.0 Flash",
+        "vendor": "ByteDance",
+        "description": "Seedream 5.0 Flash 文生图 / 图生图（最多 10 张参考图），1K–2K 同价，适合快速打样，通过 RunningHub 国内站调用",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image",
+          "image-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 10,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "3:2",
+            "2:3",
+            "21:9"
+          ],
+          "resolutions": [
+            "1K",
+            "2K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedream-4.5",
+        "upstreamId": "seedream-4.5",
+        "displayName": "Seedream 4.5",
+        "vendor": "ByteDance",
+        "description": "Seedream 4.5 文生图，文字渲染与 4K 自定义分辨率，通过 RunningHub 线路调用",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 0,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "midjourney",
+      "declaration": {
+        "id": "flovart:midjourney-v8-1",
+        "upstreamId": "midjourney-v8.1",
+        "displayName": "Midjourney",
+        "vendor": "Midjourney",
+        "description": "艺术风格文生图，通过 RunningHub 悠船渠道调用",
+        "nodeTypes": [
+          "image"
+        ],
+        "modes": [
+          "text-to-image"
+        ],
+        "inputs": {
+          "maxImageRefs": 1,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "3:2",
+            "2:3",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4"
+          ],
+          "resolutions": [
+            "1K",
+            "2K",
+            "4K"
+          ],
+          "qualities": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "counts": [
+            1,
+            2,
+            4
+          ],
+          "durations": [],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedance-2",
+        "upstreamId": "doubao-seedance-2-0-260128",
+        "displayName": "Seedance",
+        "vendor": "ByteDance",
+        "description": "图文音视频统一参考，任务提交后不自动切线",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 9,
+          "maxVideoRefs": 3,
+          "maxAudioRefs": 3,
+          "referenceVideoLimits": {
+            "minDurationSec": 2,
+            "maxDurationSec": 15,
+            "maxTotalDurationSec": 15,
+            "maxBytes": 209715200,
+            "minAspectRatio": 0.4,
+            "maxAspectRatio": 2.5
+          },
+          "referenceVideoPixelRange": {
+            "min": 409600,
+            "max": 927408
+          }
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "resolutions": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            -1,
+            4,
+            5,
+            6,
+            8,
+            10,
+            12,
+            15
+          ],
+          "audio": "optional",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": true
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedance-2-fast",
+        "upstreamId": "doubao-seedance-2-0-fast-260128",
+        "displayName": "Seedance Fast",
+        "vendor": "ByteDance",
+        "description": "快速版本，独立能力与价格线路",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 9,
+          "maxVideoRefs": 3,
+          "maxAudioRefs": 3,
+          "referenceVideoLimits": {
+            "minDurationSec": 2,
+            "maxDurationSec": 15,
+            "maxTotalDurationSec": 15,
+            "maxBytes": 209715200,
+            "minAspectRatio": 0.4,
+            "maxAspectRatio": 2.5
+          },
+          "referenceVideoPixelRange": {
+            "min": 409600,
+            "max": 927408
+          }
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4",
+            "21:9",
+            "adaptive"
+          ],
+          "resolutions": [
+            "480p",
+            "720p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            -1,
+            4,
+            5,
+            6,
+            8,
+            10,
+            12,
+            15
+          ],
+          "audio": "optional",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": true
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "volcengine",
+      "declaration": {
+        "id": "flovart:seedance-2.5",
+        "upstreamId": "seedance-2.5",
+        "displayName": "Seedance 2.5",
+        "vendor": "ByteDance",
+        "description": "Seedance 2.5 标准版，经 RunningHub Token 渠道调用，时长最长 30s，支持首尾帧与多模态参考",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 30,
+          "maxVideoRefs": 10,
+          "maxAudioRefs": 10,
+          "referenceVideoLimits": {
+            "minDurationSec": 2,
+            "maxDurationSec": 30,
+            "maxTotalDurationSec": 30,
+            "maxBytes": 209715200,
+            "minAspectRatio": 0.4,
+            "maxAspectRatio": 2.5
+          },
+          "referenceVideoPixelRange": {
+            "min": 409600,
+            "max": 927408
+          }
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16",
+            "1:1",
+            "4:3",
+            "3:4",
+            "adaptive"
+          ],
+          "resolutions": [
+            "480p",
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            -1,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30
+          ],
+          "audio": "optional",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": true
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:veo-3.1",
+        "upstreamId": "veo-3.1-generate-preview",
+        "displayName": "Veo",
+        "vendor": "Google",
+        "description": "支持首尾帧与最多 3 张参考图",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 3,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p",
+            "4K"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            4,
+            6,
+            8
+          ],
+          "audio": "always",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:veo-3.1-fast",
+        "upstreamId": "veo-3.1-fast-generate-preview",
+        "displayName": "Veo Fast",
+        "vendor": "Google",
+        "description": "更快的 Veo 3.1 线路",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 3,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p",
+            "4K"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            4,
+            6,
+            8
+          ],
+          "audio": "always",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "google",
+      "declaration": {
+        "id": "flovart:veo-3.1-lite",
+        "upstreamId": "veo-3.1-lite-generate-preview",
+        "displayName": "Veo Lite",
+        "vendor": "Google",
+        "description": "轻量线路，不显示 4K 与参考图模式",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 1,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            4,
+            6,
+            8
+          ],
+          "audio": "always",
+          "seed": true,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "keling",
+      "declaration": {
+        "id": "flovart:kling-video-3",
+        "upstreamId": "kling-video-3.0",
+        "displayName": "Kling Video",
+        "vendor": "Kuaishou",
+        "description": "公开产品能力已确认，API ID 由用户映射",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 1,
+          "maxVideoRefs": 0,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            3,
+            5,
+            10,
+            15
+          ],
+          "audio": "optional",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "keling",
+      "declaration": {
+        "id": "flovart:kling-video-3-omni",
+        "upstreamId": "kling-video-3.0-omni",
+        "displayName": "Kling Video Omni",
+        "vendor": "Kuaishou",
+        "description": "多模态参考与多镜头版本",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "first-last-frame"
+        ],
+        "inputs": {
+          "maxImageRefs": 4,
+          "maxVideoRefs": 1,
+          "maxAudioRefs": 1
+        },
+        "params": {
+          "aspectRatios": [
+            "16:9",
+            "9:16"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            3,
+            5,
+            10,
+            15
+          ],
+          "audio": "optional",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "xai",
+      "declaration": {
+        "id": "flovart:grok-imagine-video",
+        "upstreamId": "grok-imagine-video",
+        "displayName": "Grok Imagine Video",
+        "vendor": "xAI",
+        "description": "xAI 视频生成，支持文生、图生与视频扩展",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "reference-to-video",
+          "video-extension"
+        ],
+        "inputs": {
+          "maxImageRefs": 7,
+          "maxVideoRefs": 1,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "2:3",
+            "3:2"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            1,
+            3,
+            5,
+            8,
+            10,
+            15
+          ],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    },
+    {
+      "legacyProvider": "xai",
+      "declaration": {
+        "id": "flovart:grok-imagine-video-1.5",
+        "upstreamId": "grok-imagine-video-1.5",
+        "displayName": "Grok Imagine Video",
+        "vendor": "xAI",
+        "description": "xAI 1.5 线路视频生成，更长时长与更高清晰度",
+        "nodeTypes": [
+          "video"
+        ],
+        "modes": [
+          "text-to-video",
+          "image-to-video",
+          "video-extension"
+        ],
+        "inputs": {
+          "maxImageRefs": 10,
+          "maxVideoRefs": 1,
+          "maxAudioRefs": 0
+        },
+        "params": {
+          "aspectRatios": [
+            "1:1",
+            "16:9",
+            "9:16",
+            "4:3",
+            "3:4",
+            "2:3",
+            "3:2"
+          ],
+          "resolutions": [
+            "720p",
+            "1080p"
+          ],
+          "qualities": [],
+          "counts": [
+            1
+          ],
+          "durations": [
+            1,
+            3,
+            5,
+            8,
+            10,
+            15
+          ],
+          "audio": "none",
+          "seed": false,
+          "webSearch": false,
+          "realPersonCheck": false
+        },
+        "pricing": {
+          "basis": "unknown"
+        }
+      }
+    }
+  ]
+}
