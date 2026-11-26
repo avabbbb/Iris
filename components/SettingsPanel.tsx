@@ -28,6 +28,7 @@ import { buildConfigBundle, parseConfigBundle } from '../services/configMigratio
 import { importUserScriptProviders } from '../services/userScriptAuthoring';
 import { ExtensionPairingSection } from './settings/ExtensionPairingSection';
 import { DeepSeekExtensionsSection } from './settings/DeepSeekExtensionsSection';
+import { isDeepSeekOfficialRoute } from '../services/deepseekExtensions';
 import { WebDavSettingsTab } from './settings/WebDavSettingsTab';
 import { LocalStorageTab } from './settings/LocalStorageTab';
 import { ChannelList } from './settings/ChannelList';
@@ -1388,7 +1389,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             />
                         </div>
                     </section>
-                    <DeepSeekExtensionsSection isDark={isDark} t={t} />
                     </>
                 )}
 
@@ -1733,6 +1733,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                     <button type="button" onClick={() => setEditStreamUsage(value => !value)} aria-pressed={editStreamUsage} data-testid="key-stream-usage-toggle" className={`isl-chip shrink-0 px-3 py-1.5 text-xs ${editStreamUsage ? 'isl-chip--active' : ''}`}>{editStreamUsage ? '请求 usage' : '仅被动读取'}</button>
                                 </div>
                             </div>
+                            {/* DeepSeek 官方线路专属的服务端扩展：只在本服务 Base URL 为 api.deepseek.com 时出现（渐进披露）。开关仍是全局存储，对所有 DeepSeek 官方服务共用。 */}
+                            {isDeepSeekOfficialRoute({ baseUrl }) && <DeepSeekExtensionsSection isDark={isDark} t={t} className={sectionPanelClass} />}
 
                             {/* extraConfig（如 Google Veo projectId） */}
                             <div>

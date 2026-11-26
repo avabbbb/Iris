@@ -12,6 +12,8 @@ import {
 interface DeepSeekExtensionsSectionProps {
     isDark: boolean;
     t: (key: string, ...args: unknown[]) => string;
+    /** 外壳样式；嵌在 AI 服务抽屉「更多设置」里时传入抽屉的分区样式。 */
+    className?: string;
 }
 
 function cx(...parts: Array<string | false | undefined>): string {
@@ -35,9 +37,10 @@ function useDeepSeekExtensionState(): { settings: DeepSeekExtensionSettings; com
 
 /**
  * DeepSeek 官方线路的三个服务端扩展开关（标题 / 联网 / 安全审核）。
+ * 入口：AI 服务抽屉「更多设置」，仅当该服务 Base URL 为 api.deepseek.com 时渲染；开关是全局存储（所有 DeepSeek 官方服务共用）。
  * 只影响 Base URL 为 api.deepseek.com 的请求；兼容探测的结论（扩展与 Agent 工具不能共存等）显示在下方。
  */
-export function DeepSeekExtensionsSection({ isDark, t }: DeepSeekExtensionsSectionProps) {
+export function DeepSeekExtensionsSection({ isDark, t, className }: DeepSeekExtensionsSectionProps) {
     const copy = (name: string, ...args: unknown[]) => t('settingsExtra.deepseekExt.' + name, ...args);
     const { settings, compat } = useDeepSeekExtensionState();
     const inkClass = isDark ? 'text-[#D0D5DD]' : 'text-[#344054]';
@@ -51,11 +54,12 @@ export function DeepSeekExtensionsSection({ isDark, t }: DeepSeekExtensionsSecti
     ];
 
     return (
-        <section className={cx('rounded-2xl p-4', isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]')} data-testid="deepseek-extensions">
+        <section className={className ?? cx('rounded-2xl p-4', isDark ? 'bg-[#161A22]' : 'bg-[#F8FAFC]')} data-testid="deepseek-extensions">
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className={cx('text-sm font-medium', inkClass)}>{copy('title')}</div>
                     <div className={cx('mt-1 text-xs', softClass)}>{copy('details')}</div>
+                    <div className={cx('mt-0.5 text-[11px]', softClass)}>{copy('sharedHint')}</div>
                 </div>
                 <span className="shrink-0 rounded-full bg-[var(--isl-card)] px-2.5 py-1 font-mono text-[11px] text-[var(--isl-ink-soft)]">{copy('badge')}</span>
             </div>
