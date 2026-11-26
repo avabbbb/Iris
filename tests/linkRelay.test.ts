@@ -248,4 +248,44 @@ describe('Iris Link relay (Durable Object)', () => {
     client.close();
     second.close();
   });
+
+  it('relays workflow.read, workflow.exec, and multi-chunk >256KB media transfers without S3/R2', async () => {
+    const { tabToken, tokens } = await pairAndApprove(
+      ['agent.read', 'agent.run', 'tools.invoke'],
+      ['agent.read', 'agent.run', 'tools.invoke'],
+    );
+    const tab = await openTab(tabToken);
+    const chunks = new Map<number, string>();
+    serveTab(tab, frame => {
+      if (frame.cmd === 'workflow.read') return { ok: true, data: { ok: true, result: { projectId: 'p-web' } } };
+      if (frame.cmd === 'workflow.exec') return { ok: true, data: { immediate: true, result: { ok: true, result: { draftVersion: 2 } } } };
+      if (frame.cmd === 'media.upload.start') return { ok: true, data: { uploadId: 'u1', chunkBytes: 96 * 1024, totalChunks: 4 } };
+      if (frame.cmd === 'media.upload.chunk') {
+        chunks.set(Number(frame.args.index), String(frame.args.dataBase64));
+        return { ok: true, data: { uploadId: 'u1', index: frame.args.index } };
+      }
+      if (frame.cmd === 'media.upload.finish') {
+        const total = [...chunks.values()].reduce((sum, b64) => sum + Buffer.from(b64, 'base64').length, 0);
+        return { ok: true, data: { immediate: true, result: { ok: true, result: { bytes: total } } } };
+      }
+      return { ok: false, error: { code: 'UNKNOWN_COMMAND', message: frame.cmd } };
+    });
+
+    const { client } = cliFor(tokens);
+    await client.connect();
+    expect(await client.request('workflow.read', { command: 'workflow.inspect', args: { summary: true } })).toMatchObject({ ok: true, result: { projectId: 'p-web' } });
+    expect(await client.request('workflow.exec', { command: 'workflow.apply', args: { operations: [] } }, { idempotencyKey: 'exec-1' })).toMatchObject({ immediate: true, result: { ok: true, result: { draftVersion: 2 } } });
+
+    // 发送 >300 KiB 的文件（超过单帧 256 KiB 上限），经 4 个 96 KiB 分片穿过真实 DO 中继
+    const big = Buffer.alloc(320 * 1024, 0x5a);
+    const start = await client.request('media.upload.start', { fileName: 'clip.png', mimeType: 'image/png', bytes: big.length, sha256: 'a'.repeat(64) }, { idempotencyKey: 'm-start' });
+    for (let i = 0; i < 4; i += 1) {
+      const slice = big.subarray(i * 96 * 1024, Math.min(big.length, (i + 1) * 96 * 1024));
+      await client.request('media.upload.chunk', { uploadId: start.uploadId, index: i, dataBase64: slice.toString('base64') });
+    }
+    const finish = await client.request('media.upload.finish', { uploadId: start.uploadId }, { idempotencyKey: 'm-finish' });
+    expect(finish).toMatchObject({ immediate: true, result: { ok: true, result: { bytes: big.length } } });
+    client.close();
+    tab.close();
+  });
 });

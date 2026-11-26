@@ -16,6 +16,11 @@ export const DEFAULT_LINK_WEB_URL = 'https://iris.avabbbb.com';
 
 /** 单帧上限（字节，UTF-8）。超过的帧中继直接拒绝（FRAME_TOO_LARGE），不截断。 */
 export const LINK_MAX_FRAME_BYTES = 256 * 1024;
+/** 无 S3/R2 媒体直传上限与分片大小（96 KiB 原始字节 ≈ 128 KiB base64，远低于 256 KiB 单帧上限）。 */
+export const LINK_MAX_MEDIA_BYTES = 20 * 1024 * 1024;
+export const LINK_MEDIA_CHUNK_BYTES = 96 * 1024;
+/** 单条响应 JSON 超过该字节数时自动转为内存分片下载，避免大图 workflow.inspect 撞 256 KiB 帧上限。 */
+export const LINK_CHUNKED_RESULT_THRESHOLD = 180 * 1024;
 /** 配对码有效期 / 轮询间隔。 */
 export const LINK_PAIR_TTL_MS = 10 * 60_000;
 export const LINK_PAIR_POLL_INTERVAL_MS = 2_000;
@@ -58,6 +63,15 @@ export const LINK_COMMANDS = Object.freeze({
   'agent.tools.list': { scope: 'agent.read', write: false },
   // execute=true 时标签页额外要求 tools.invoke；中继只按基础 scope 拦。
   'agent.tools.invoke': { scope: 'agent.read', write: false },
+  // 直接操作画布（不依赖打开内置 Agent 面板；写操作仍走 Tool Policy、Spend Mandate 与页面审批）。
+  'workflow.read': { scope: 'agent.read', write: false },
+  'workflow.exec': { scope: 'tools.invoke', write: true },
+  // 无 S3/R2 媒体与大响应直传：分片走现有 WebSocket 内存转发，不经过任何对象存储。
+  'media.upload.start': { scope: 'tools.invoke', write: true },
+  'media.upload.chunk': { scope: 'tools.invoke', write: false },
+  'media.upload.finish': { scope: 'tools.invoke', write: true },
+  'media.download.start': { scope: 'agent.read', write: false },
+  'media.download.chunk': { scope: 'agent.read', write: false },
 });
 
 export function isLinkCommand(command) {

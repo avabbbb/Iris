@@ -7,7 +7,7 @@ import type { WorkflowNode, WorkflowProject } from '../components/workflow/types
 import { getIrisRuntimeApi, type RuntimeCommandEnvelope } from './irisRuntime';
 import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './browserWorkflowContract';
 import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime';
-import { redactWorkflowAgentValue, withWorkflowHumanApproval, WORKFLOW_READ_COMMANDS as WORKFLOW_DISPATCHER_READ_COMMANDS, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
+import { getWorkflowUserApiKeys, redactWorkflowAgentValue, withWorkflowHumanApproval, WORKFLOW_READ_COMMANDS as WORKFLOW_DISPATCHER_READ_COMMANDS, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 import { groupRunOrder } from '../components/workflow/canvasGroups';
@@ -28,7 +28,12 @@ export function setAgentGateKeysProvider(provider: (() => GateApiKey[]) | null) 
   setAgentModelKeysProvider(provider);
 }
 function agentGateKeys(): GateApiKey[] {
-  try { return agentGateKeysProvider(); } catch { return []; }
+  try {
+    const keys = agentGateKeysProvider();
+    return keys.length ? keys : getWorkflowUserApiKeys();
+  } catch {
+    return getWorkflowUserApiKeys();
+  }
 }
 
 const RUNTIME_COMMANDS = new Set([

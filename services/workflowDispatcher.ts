@@ -30,7 +30,7 @@ import type { UserApiKey } from '../types';
 import { planGenerationGate, seedancePreflightForNodes } from './generationPlan';
 import { describeSeedanceFailures } from './seedancePreflight';
 import { executeWorkflowExport, planWorkflowExport, WorkflowExportError, type WorkflowExportRuntime } from '../components/workflow/nodeExport';
-import { agentModelCatalogSummary, normalizeOperationModelIds } from './agentModelCatalog';
+import { agentModelCatalogSummary, normalizeOperationModelIds, setAgentModelKeysProvider } from './agentModelCatalog';
 import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 
 export interface WorkflowCommandEnvelope {
@@ -112,6 +112,8 @@ export interface WorkflowDispatcherDependencies {
   lookupAsset?: (assetId: string) => WorkflowImportAsset | undefined;
   /** URL → durable Workflow 媒体记录；默认在浏览器里下载后走 ingestWorkflowMedia */
   importMediaUrl?: (url: string) => Promise<WorkflowImportedMedia>;
+  /** 无 S3/R2 直传：由浏览器内存中的已校验 Blob 直接入库（供 Iris Link 分片上传复用同一导入逻辑）。 */
+  importMediaBlob?: () => Promise<WorkflowImportedMedia>;
   /** workflow.export：读媒体原文件与保存到本机；默认读 Workflow 媒体存储并走 saveBlob（桌面另存为 / 浏览器下载）。 */
   exportRuntime?: WorkflowExportRuntime;
 }
@@ -145,13 +147,10 @@ const browserExportRuntime: WorkflowExportRuntime = {
   },
 };
 
-async function browserImportMediaUrl(url: string): Promise<WorkflowImportedMedia> {
+export async function browserImportMediaBlob(blob: Blob, fileName: string, mimeType = ''): Promise<WorkflowImportedMedia> {
   const { ingestWorkflowMedia, fitWorkflowMediaSize, releaseWorkflowMediaRecord, discardWorkflowMediaRecord } = await import('../components/workflow/media');
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('下载素材失败：HTTP ' + response.status);
-  const blob = await response.blob();
-  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'imported') || 'imported';
-  const record = await ingestWorkflowMedia(new File([blob], name, { type: blob.type || response.headers.get('content-type') || '' }));
+  const safeName = fileName.trim() || 'imported';
+  const record = await ingestWorkflowMedia(new File([blob], safeName, { type: mimeType || blob.type || '' }));
   const { type, ...metadata } = record;
   const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
   return {
@@ -162,6 +161,14 @@ async function browserImportMediaUrl(url: string): Promise<WorkflowImportedMedia
     commit: () => releaseWorkflowMediaRecord(record.storageKey),
     discard: () => discardWorkflowMediaRecord(record.storageKey),
   };
+}
+
+async function browserImportMediaUrl(url: string): Promise<WorkflowImportedMedia> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('下载素材失败：HTTP ' + response.status);
+  const blob = await response.blob();
+  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || 'imported') || 'imported';
+  return browserImportMediaBlob(blob, name, blob.type || response.headers.get('content-type') || '');
 }
 
 const NOTE_IS_ANNOTATION_MESSAGE = '文本节点是备注，只给人看、不参与生成：生成请用 iris_generate（提示词写进生成节点的 Prompt Bar）；用户明确要求写备注时用 iris_note_write。';
@@ -1309,7 +1316,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       } else if (command === 'workflow.media.import') {
         const url = typeof args.url === 'string' ? args.url.trim() : '';
         const assetId = typeof args.assetId === 'string' ? args.assetId.trim() : '';
-        if (Boolean(url) === Boolean(assetId)) throw new Error('url 与 assetId 必须二选一');
+        const hasBlobImporter = typeof dependencies.importMediaBlob === 'function';
+        if (!hasBlobImporter && Boolean(url) === Boolean(assetId)) throw new Error('url 与 assetId 必须二选一');
         const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || 'import-' + envelope.id;
         const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
         const attachToNodeId = typeof args.attachToNodeId === 'string' ? args.attachToNodeId.trim() : '';
@@ -1320,7 +1328,18 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
         const importedId = stableShortId('media-', mutationId);
         let imported: WorkflowImportedMedia;
-        if (assetId) {
+        if (hasBlobImporter) {
+          if (project.nodes.some(node => node.id === importedId)) {
+            result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId: importedId, replayed: true, draftVersion: project.draftVersion || 1 } };
+            cache(cacheKey, result);
+            return result;
+          }
+          try {
+            imported = await dependencies.importMediaBlob!();
+          } catch (cause) {
+            return error(envelope.id, 'IMPORT_FAILED', '素材导入失败：' + displayError(cause));
+          }
+        } else if (assetId) {
           const asset = dependencies.lookupAsset?.(assetId);
           if (!asset) return error(envelope.id, 'NOT_FOUND', '素材库里没有这个素材：' + assetId);
           const type = asset.mimeType.startsWith('video/') ? 'video' : asset.mimeType.startsWith('audio/') ? 'audio' : 'image';
@@ -1652,6 +1671,12 @@ let browserAssetLookup: WorkflowDispatcherDependencies['lookupAsset'];
 /** App 注入当前 BYOK Key（只在浏览器内存里读取，不进入命令结果）。 */
 export function setWorkflowUserApiKeysProvider(provider?: () => UserApiKey[]) {
   browserUserApiKeys = provider;
+  setAgentModelKeysProvider(provider || null);
+}
+
+/** 仅供浏览器侧审批预估与模型目录读取（绝不暴露到 CLI / 中继响应）。 */
+export function getWorkflowUserApiKeys(): UserApiKey[] {
+  try { return browserUserApiKeys?.() || []; } catch { return []; }
 }
 
 export function setWorkflowAssetLookup(lookup?: WorkflowDispatcherDependencies['lookupAsset']) {
@@ -1684,3 +1709,37 @@ const browserDependencies: WorkflowDispatcherDependencies = {
 };
 
 export const dispatchWorkflowCommand = createWorkflowDispatcher(browserDependencies);
+
+/** 无 S3/R2 本地媒体直传：用同一个浏览器依赖与审批逻辑，仅注入内存 Blob 导入器。 */
+export function dispatchWorkflowMediaImportBlob(
+  envelope: WorkflowCommandEnvelope,
+  importMediaBlob: () => Promise<WorkflowImportedMedia>,
+): Promise<WorkflowCommandResult> {
+  return createWorkflowDispatcher({ ...browserDependencies, importMediaBlob })(envelope);
+}
+
+/** 仅返回脱敏后的浏览器端 Provider 就绪状态（绝不包含明文 Key 或自定义 baseUrl）。 */
+export function getBrowserProviderStatusSummary() {
+  const keys = browserUserApiKeys?.() || [];
+  const configured = keys
+    .filter(item => Boolean(item && typeof item.key === 'string' && item.key.trim()))
+    .map(item => {
+      const raw = item.key.trim();
+      const mask = raw.length <= 8 ? '****' : '****' + raw.slice(-4);
+      return {
+        provider: String(item.provider || ''),
+        keyId: String(item.id || ''),
+        label: item.name || null,
+        capabilities: Array.isArray(item.capabilities) ? [...item.capabilities] : [],
+        mask,
+      };
+    });
+  const providers = [...new Set(configured.map(item => item.provider).filter(Boolean))];
+  return {
+    ok: true,
+    source: 'browser-web-link',
+    ready: configured.length > 0,
+    providers,
+    credentials: configured,
+  };
+}

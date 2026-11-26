@@ -81,6 +81,10 @@ Iris Link 让任何机器上的 `iris` CLI —— 包括没有模型 Key 的沙�
 | `agent.cancel` | `runId` | `{cancelled, phase}` |
 | `agent.tools.list` | — | 每个工具的 tier、命令、按当前 Tool Policy 的解析（allow / prompt / deny）、硬闸（spend / delete） |
 | `agent.tools.invoke` | `tool`、`args`、`execute?` | dry-run：schema 校验 + 策略解析 + 是否付费；`execute`：建一个 run 立即返回 runId，轨迹里看结果（`done.result`） |
+| `workflow.read` | `command`、`args?`、`projectId?` | 直接执行只读画布命令（`workflow.project.list`、`workflow.inspect`、`workflow.selection.get`、`workflow.models.list`、`workflow.shortcut.list`、`workflow.nodes.search`、`workflow.cost.estimate`、`workflow.node.tool.list`、`provider.status` 脱敏就绪态）；仅需 `agent.read`，不要求打开内置 Agent 面板；超过 180 KiB 自动转内存分片下载 |
+| `workflow.exec` | `command`、`args?`、`projectId?` | 直接执行写 / 运行类 `workflow.*` 命令（需 `tools.invoke` + 幂等键）；同样经 Tool Policy、Spend Mandate 与页面审批托盘（付费 / 删除 / exec 仍只能在页面批准） |
+| `media.upload.start` / `chunk` / `finish` | `fileName`、`mimeType`、`bytes`、`sha256`、`index`、`dataBase64`、`uploadId` | **无 S3/R2 本地媒体直传**：CLI 将本地图片 / 视频 / 音频（≤20 MiB）按 96 KiB 分片经 WebSocket 内存转发到标签页，SHA-256 校验通过后直接写入浏览器 IndexedDB 并创建画布媒体节点 |
+| `media.download.start` / `chunk` | `nodeIds?`、`groupId?`、`fileName?`、`downloadId`、`index`、`release?` | **无 S3/R2 导出直传**：标签页在内存构建原文件 / ZIP / CSV（≤20 MiB），CLI 按 96 KiB 分片拉回并校验 SHA-256 后落盘，不经任何云端对象存储 |
 
 ### 执行路径（复用，不平行）
 
@@ -119,6 +123,9 @@ iris agent cancel --run <runId> --idempotency-key <key>
 iris agent tools list
 iris agent tools invoke --tool <name> [--args-json '<json>'] [--execute --idempotency-key <key>]
 iris agent e2e [--out <dir>] [--only answer,tool,tool-error,approval,parallel,cancel] [--allow-real-model]
+iris workflow.inspect --summary --json
+iris workflow.media.import --file ./hero.png --idempotency-key <key> --json
+iris workflow.export --node-ids <id> --output ./out.png --json
 ```
 
 stdout 每条结果一行 JSON（`--pretty` 缩进），`--follow` 时每个轨迹事件一行 `{ok, command:'agent.trace', runId, event}`，最后一行是命令结果；进度走 stderr。点分写法（`iris agent.send …`）同样可用；不带子命令的 `iris agent` 仍然启动本机 Agent 服务。

@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLocalStatus } from './local-status.js';
 import { toLocalLinkPublicStatus } from './public-status.js';
+import { probeWebLinkStatus } from './link/web-workspace.js';
 
 function cliPath() {
   try { return fileURLToPath(new URL('./cli.js', import.meta.url)); }
@@ -103,9 +104,73 @@ function ensureResponse(status, fallbackError) {
   return response;
 }
 
-export async function ensureIris({ open = true, web = false, source = false, cwd = process.cwd(), env = process.env, statusReader = getLocalStatus, startRunner = runStart, sourceDir } = {}) {
+function isRemoteHttpsUrl(value) {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    return parsed.protocol === 'https:' && !['127.0.0.1', 'localhost', '[::1]', '::1'].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureIris({ open = true, web = false, source = false, url, cwd = process.cwd(), env = process.env, statusReader = getLocalStatus, webLinkReader = probeWebLinkStatus, startRunner = runStart, sourceDir } = {}) {
   let status = await statusReader({ env });
-  if (status.ready) return ensureResponse(status);
+  if (status.ready && !isRemoteHttpsUrl(url)) return ensureResponse(status);
+
+  // 已配对线上 Iris Link 时直接复用，不再强行拉起本地 Vite。
+  const webLink = typeof webLinkReader === 'function'
+    ? await webLinkReader({ env, ...(isRemoteHttpsUrl(url) ? { baseUrl: url } : {}) }).catch(() => null)
+    : null;
+  if (webLink?.tabOnline) {
+    return {
+      ok: true,
+      state: 'ready',
+      mode: 'web-link',
+      frontend: 'ready',
+      agent: 'ready',
+      browser: 'ready',
+      projectId: webLink.tab?.projectId || null,
+      revision: null,
+      url: webLink.url,
+    };
+  }
+  if (isRemoteHttpsUrl(url)) {
+    if (webLink?.linked) {
+      return {
+        ok: false,
+        state: 'offline',
+        mode: 'web-link',
+        frontend: 'offline',
+        agent: 'ready',
+        browser: 'offline',
+        projectId: null,
+        revision: null,
+        url: webLink.url || url,
+        error: {
+          code: 'TAB_OFFLINE',
+          message: `已配对线上 Iris（${webLink.url || url}），但浏览器标签页未打开。请在浏览器打开 ${url} 后重试。`,
+          action: 'open',
+        },
+      };
+    }
+    return {
+      ok: false,
+      state: 'needs_login',
+      mode: 'web-link',
+      frontend: 'offline',
+      agent: 'needs_login',
+      browser: 'offline',
+      projectId: null,
+      revision: null,
+      url,
+      error: {
+        code: 'HOST_NEEDS_LOGIN',
+        message: `尚未配对线上 Iris（${url}）。运行：npm run iris:cli -- login web --open --url ${url} --scopes agent.read,agent.run,tools.invoke`,
+        action: 'login',
+      },
+    };
+  }
+
   if (!startRunner) return ensureResponse(status);
   const projectDir = sourceDir === undefined ? resolveSourceDir(cwd) : sourceDir;
   // start 在源码仓库里执行，它的 resolveProjectDir 才会指向这个仓库。

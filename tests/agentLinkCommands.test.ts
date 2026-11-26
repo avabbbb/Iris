@@ -277,6 +277,68 @@ describe('Iris Link commands in the tab', () => {
     const noKey = await call('agent.tools.invoke', { tool: 'iris_workflow_inspect', args: {}, execute: true }, LOCAL_LINK_SCOPES);
     expect(noKey.error.code).toBe('INVALID_ARGUMENT');
   });
+
+  it('workflow.read works with closed Agent panel and empty workspace; provider.status never leaks raw keys', async () => {
+    const { setWorkflowUserApiKeysProvider } = await import('../services/workflowDispatcher');
+    setWorkflowUserApiKeysProvider(() => [{ id: 'k1', provider: 'openai', capabilities: ['text'], name: 'Primary', key: 'sk-super-secret-value-9999' } as never]);
+    useWorkflowStore.setState({ projects: [], activeProjectId: null } as never);
+    try {
+      const list = await call('workflow.read', { command: 'workflow.project.list' }, READ);
+      expect(list.ok).toBe(true);
+      expect(list.data).toMatchObject({ ok: true, result: [] });
+
+      const providers = await call('workflow.read', { command: 'provider.status' }, READ);
+      expect(providers.ok).toBe(true);
+      expect(providers.data).toMatchObject({ ok: true, ready: true, providers: ['openai'] });
+      expect(JSON.stringify(providers.data)).not.toContain('sk-super-secret');
+
+      const denied = await call('workflow.read', { command: 'workflow.apply', args: {} }, READ);
+      expect(denied.ok).toBe(false);
+      expect(denied.error.code).toBe('SCOPE_DENIED');
+    } finally {
+      setWorkflowUserApiKeysProvider(undefined);
+    }
+  });
+
+  it('media.upload verifies SHA-256 and media.download chunks script CSV without S3/R2', async () => {
+    const { resetLinkMediaTransfersForTests, encodeBase64, sha256Hex } = await import('../services/link/mediaTransfer');
+    resetLinkMediaTransfersForTests();
+    const project = { ...createWorkflowProject('媒体直传测试'), id: 'p-media' };
+    project.nodes.push({
+      id: 'script-1',
+      type: 'script',
+      title: '分镜脚本',
+      position: { x: 0, y: 0 },
+      width: 320,
+      height: 240,
+      metadata: {
+        scriptBreakdown: {
+          shots: [{ index: 1, durationSec: 5, scene: '雨夜', action: '转身', camera: '推进' }],
+        },
+      },
+    } as never);
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id } as never);
+
+    // 1. 下载分片导出 CSV（无需 S3/R2）
+    const dlStart = await call('media.download.start', { nodeIds: ['script-1'] }, READ);
+    expect(dlStart.ok).toBe(true);
+    expect(dlStart.data).toMatchObject({ fileName: '分镜脚本.csv', mimeType: 'text/csv', totalChunks: 1 });
+    const dlChunk = await call('media.download.chunk', { downloadId: dlStart.data.downloadId, index: 0, release: true }, READ);
+    expect(dlChunk.ok).toBe(true);
+    expect(dlChunk.data.done).toBe(true);
+
+    // 2. 上传分片 SHA-256 校验失败会被拒绝
+    const rawBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const wrongSha = '0'.repeat(64);
+    const upStart = await call('media.upload.start', { fileName: 'a.png', mimeType: 'image/png', bytes: rawBytes.length, sha256: wrongSha }, LOCAL_LINK_SCOPES, 'u-start');
+    expect(upStart.ok).toBe(true);
+    const upChunk = await call('media.upload.chunk', { uploadId: upStart.data.uploadId, index: 0, dataBase64: encodeBase64(rawBytes) }, LOCAL_LINK_SCOPES);
+    expect(upChunk.ok).toBe(true);
+    const upFinish = await call('media.upload.finish', { uploadId: upStart.data.uploadId }, LOCAL_LINK_SCOPES, 'u-finish');
+    expect(upFinish.ok).toBe(false);
+    expect(upFinish.error.code).toBe('CHECKSUM_MISMATCH');
+    expect(await sha256Hex(rawBytes)).toHaveLength(64);
+  });
 });
 
 describe('web link host (tab ↔ relay WebSocket)', () => {

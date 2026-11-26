@@ -153,7 +153,7 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   let args = normalizedAtomic.args;
   let fileReadError = false;
 
-  if (args.file) {
+  if (args.file && ['generate.images-batch', 'generate.video', 'production.dry-run'].includes(command)) {
     try {
       const payload = JSON.parse(await readFile(args.file, 'utf8'));
       if (command === 'generate.images-batch' || command === 'generate.video') args.items = payload.items || payload;
@@ -218,7 +218,12 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   }
 
   if (routingCommand === 'ensure') {
-    const result = await ensureIris({ open: !(args.noOpen || args['no-open']), web: Boolean(args.web), source: Boolean(args.source) });
+    const result = await ensureIris({
+      open: !(args.noOpen || args['no-open']),
+      web: Boolean(args.web),
+      source: Boolean(args.source),
+      ...(typeof args.url === 'string' && args.url.trim() ? { url: args.url.trim() } : {}),
+    });
     printCliResponse(result.ok, command, result, result.ok ? null : result.error, { runtime: 'iris-link' });
     return;
   }
@@ -319,17 +324,37 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
       // Web mode has no desktop Runtime. The Agent vault mirrors the keys the
       // browser Settings synced, so it is the masked fallback for provider.status.
       if (routingCommand === 'provider.status' && runtimeError.code === 'RUNTIME_UNAVAILABLE') {
-        try {
-          const vault = await readVaultProviderStatus();
-          printCliResponse(true, command, { ...vault, runtimeUnavailable: runtimeError }, null, { runtime: 'agent-vault' });
-          return;
-        } catch (vaultError) {
-          runtimeError.details = {
-            ...(runtimeError.details || {}),
-            agentVault: vaultError instanceof ProviderVaultError
-              ? vaultError.toJSON()
-              : { code: 'AGENT_UNAVAILABLE', message: vaultError instanceof Error ? vaultError.message : String(vaultError), retryable: true },
-          };
+        const target = String(args.target || 'auto').trim().toLowerCase();
+        if (target !== 'web') {
+          try {
+            const vault = await readVaultProviderStatus();
+            printCliResponse(true, command, { ...vault, runtimeUnavailable: runtimeError }, null, { runtime: 'agent-vault' });
+            return;
+          } catch (vaultError) {
+            runtimeError.details = {
+              ...(runtimeError.details || {}),
+              agentVault: vaultError instanceof ProviderVaultError
+                ? vaultError.toJSON()
+                : { code: 'AGENT_UNAVAILABLE', message: vaultError instanceof Error ? vaultError.message : String(vaultError), retryable: true },
+            };
+          }
+        }
+        if (target !== 'local') {
+          const { executeWorkspaceCommandOverWebLink, hasSavedWebLink } = await import('./link/web-workspace.js');
+          if (target === 'web' || hasSavedWebLink()) {
+            try {
+              const linked = await executeWorkspaceCommandOverWebLink('provider.status', args, { progress: cliProgress });
+              printCliResponse(true, command, { ...linked, runtimeUnavailable: runtimeError }, null, { runtime: 'iris-link' });
+              return;
+            } catch (linkError) {
+              runtimeError.details = {
+                ...(runtimeError.details || {}),
+                irisLink: typeof linkError?.toJSON === 'function'
+                  ? linkError.toJSON()
+                  : { code: linkError?.code || 'LINK_UNAVAILABLE', message: linkError instanceof Error ? linkError.message : String(linkError), retryable: true },
+              };
+            }
+          }
         }
       }
       printCliResponse(false, command, null, runtimeError, { runtime: 'production-runtime' });
@@ -383,6 +408,8 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
       const ok = isResultOk(result);
       printCliResponse(ok, command, ok ? result : null, ok ? null : result.error || null, { runtime: 'iris-link' });
     };
+    const isDirectFileImport = routingCommand === 'workflow.media.import' && Boolean(args.file || args.filePath || args['file-path']);
+    const isDirectFileExport = routingCommand === 'workflow.export' && Boolean(args.output || args.out || args.outputPath || args['output-path']);
     if (target === 'web') {
       try {
         await runViaWebLink();
@@ -396,6 +423,17 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
     }
     try {
       const workspace = new IrisWorkspaceClient();
+      if (isDirectFileImport || isDirectFileExport) {
+        const { createLocalTransport } = await import('./link/transports.js');
+        const { downloadExportOverTransport, uploadLocalMediaOverTransport } = await import('./link/web-workspace.js');
+        const localTransport = createLocalTransport({ workspace });
+        const result = isDirectFileImport
+          ? await uploadLocalMediaOverTransport(localTransport, args, { idempotencyKey, progress: cliProgress })
+          : await downloadExportOverTransport(localTransport, args, { progress: cliProgress });
+        const ok = isResultOk(result);
+        printCliResponse(ok, command, ok ? result : null, ok ? null : result.error || null, { runtime: 'workspace-adapter' });
+        return;
+      }
       const operation = createOperationGateway({ workspace });
       let result = routingCommand === 'workspace.status'
         ? await workspace.status()
@@ -493,8 +531,46 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   }
 
   if (routingCommand === 'status') {
-    const result = await getLocalStatus();
-    printCliResponse(true, command, result, null, { runtime: 'local-system' });
+    const target = String(args.target || 'auto').trim().toLowerCase();
+    const local = target === 'web' ? null : await getLocalStatus();
+    if (local?.ready || target === 'local') {
+      printCliResponse(true, command, local, null, { runtime: 'local-system' });
+      return;
+    }
+    const { hasSavedWebLink, probeWebLinkStatus } = await import('./link/web-workspace.js');
+    if (target === 'web' || hasSavedWebLink()) {
+      const webLink = await probeWebLinkStatus({ baseUrl: typeof args.url === 'string' ? args.url : undefined });
+      if (webLink) {
+        const merged = {
+          ...(local || {
+            runtime: { status: 'offline', surface: 'desktop-runtime' },
+            frontend: { status: webLink.tabOnline ? 'ready' : 'offline', url: webLink.url },
+            agent: { status: webLink.tabOnline ? 'ready' : 'offline', url: webLink.url },
+            browser: { connected: webLink.tabOnline, clientId: null, projectId: webLink.tab?.projectId || null, revision: null, clients: webLink.tabOnline ? 1 : 0, hasWorkflow: Boolean(webLink.tab?.projectId), activeHostWriter: null },
+          }),
+          ready: Boolean(webLink.tabOnline),
+          transport: 'web-link',
+          browserConnected: Boolean(webLink.tabOnline),
+          projectId: webLink.tab?.projectId || local?.projectId || null,
+          webLink,
+        };
+        if (webLink.tabOnline) {
+          merged.frontend = { status: 'ready', url: webLink.url };
+          merged.agent = { status: 'ready', url: webLink.url };
+          merged.browser = {
+            ...(merged.browser || {}),
+            connected: true,
+            projectId: webLink.tab?.projectId || null,
+            clients: 1,
+            hasWorkflow: Boolean(webLink.tab?.projectId),
+          };
+          if (merged.diagnostics) merged.diagnostics = { ...merged.diagnostics, workspaceUnavailableReason: null };
+        }
+        printCliResponse(true, command, merged, null, { runtime: 'iris-link' });
+        return;
+      }
+    }
+    printCliResponse(true, command, local || await getLocalStatus(), null, { runtime: 'local-system' });
     return;
   }
 

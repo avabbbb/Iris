@@ -67,4 +67,25 @@ describe('iris ensure', () => {
         .toEqual(['start', '--source', '--web', '--json', '--no-open']);
     });
   });
+
+  describe('hosted Iris Link web-first mode', () => {
+    it('reuses an online paired Iris Link tab without starting local Vite', async () => {
+      const startRunner = vi.fn();
+      const statusReader = vi.fn().mockResolvedValue({ ready: false, agent: { status: 'offline' }, browserConnected: false, frontend: { status: 'offline' } });
+      const webLinkReader = vi.fn().mockResolvedValue({ ok: true, linked: true, tabOnline: true, url: 'https://iris.avabbbb.com', tab: { projectId: 'p-web' } });
+      const result = await ensureIris({ statusReader, webLinkReader, startRunner });
+      expect(result).toMatchObject({ ok: true, state: 'ready', mode: 'web-link', browser: 'ready', projectId: 'p-web', url: 'https://iris.avabbbb.com' });
+      expect(startRunner).not.toHaveBeenCalled();
+    });
+
+    it('returns needs_login with login web guidance when given an unpaired hosted URL', async () => {
+      const startRunner = vi.fn();
+      const statusReader = vi.fn().mockResolvedValue({ ready: false, agent: { status: 'offline' }, browserConnected: false, frontend: { status: 'offline' } });
+      const webLinkReader = vi.fn().mockResolvedValue(null);
+      const result = await ensureIris({ url: 'https://iris.avabbbb.com', statusReader, webLinkReader, startRunner });
+      expect(result).toMatchObject({ ok: false, state: 'needs_login', mode: 'web-link' });
+      expect(result.error.message).toContain('login web --open --url https://iris.avabbbb.com');
+      expect(startRunner).not.toHaveBeenCalled();
+    });
+  });
 });

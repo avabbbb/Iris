@@ -1,6 +1,7 @@
 import { AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMANDS, AGENT_PUBLIC_COMMAND_SET } from './agent-surface.js';
 import { getAgentToolSpecs } from './agent-tools.js';
 import { getLocalStatus } from './local-status.js';
+import { executeWorkspaceCommandOverWebLink, hasSavedWebLink, probeWebLinkStatus } from './link/web-workspace.js';
 import { IrisWorkspaceClient, WorkspaceClientError } from './workspace-client.js';
 
 export const CANONICAL_AGENT_OPERATIONS = Object.freeze([...AGENT_PUBLIC_COMMANDS]);
@@ -83,12 +84,30 @@ export function createOperationGateway(options = {}) {
     return workspace;
   };
 
+  const allowWebLinkFallback = !options.workspace && options.webLinkFallback !== false;
+
   return async function executeOperation(command, args = {}, context = {}) {
     assertPublicOperation(command);
     const idempotencyKey = context.idempotencyKey || args.idempotencyKey || args['idempotency-key'];
     assertWriteEnvelope(command, idempotencyKey);
 
-    if (command === 'status') return status();
+    if (command === 'status') {
+      const local = await status();
+      if (!local?.ready && allowWebLinkFallback && hasSavedWebLink()) {
+        const webLink = await probeWebLinkStatus().catch(() => null);
+        if (webLink?.tabOnline) {
+          return {
+            ...local,
+            ready: true,
+            transport: 'web-link',
+            browserConnected: true,
+            projectId: webLink.tab?.projectId || local?.projectId || null,
+            webLink,
+          };
+        }
+      }
+      return local;
+    }
 
     const caller = callerFromContext(context);
     const operationArgs = { ...args };
@@ -105,6 +124,19 @@ export function createOperationGateway(options = {}) {
         ...(context.timeoutMs ? { timeoutMs: context.timeoutMs } : {}),
       });
     } catch (error) {
+      const isUnavailable = error instanceof WorkspaceClientError && error.code === 'WORKSPACE_UNAVAILABLE';
+      if (isUnavailable && allowWebLinkFallback && hasSavedWebLink()) {
+        try {
+          return await executeWorkspaceCommandOverWebLink(command, operationArgs, { idempotencyKey });
+        } catch (linkError) {
+          if (linkError instanceof OperationGatewayError || linkError instanceof WorkspaceClientError) throw linkError;
+          throw new OperationGatewayError(
+            linkError?.code || 'LINK_COMMAND_FAILED',
+            linkError instanceof Error ? linkError.message : String(linkError),
+            { retryable: Boolean(linkError?.retryable), details: linkError?.details ?? null },
+          );
+        }
+      }
       if (error instanceof OperationGatewayError || error instanceof WorkspaceClientError) throw error;
       throw new OperationGatewayError(
         'WORKSPACE_COMMAND_FAILED',

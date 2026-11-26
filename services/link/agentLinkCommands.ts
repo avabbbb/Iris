@@ -3,14 +3,44 @@
 // 全部复用现有系统：回合由面板登记的后台运行时跑（Session Authority / Tool Policy / Spend Mandate 不变），
 // 工具调用走 createBrowserAgentTools 的同一个审批层与浏览器契约；付费 / 删除的确认永远只能由用户在页面上批准。
 import { Validator } from '@cfworker/json-schema';
-import { LINK_ERROR, LINK_PROTOCOL_VERSION, isLinkCommand, missingLinkScope, linkCommandNeedsIdempotency } from '../../tools/iris/link/protocol.js';
+import {
+  LINK_CHUNKED_RESULT_THRESHOLD,
+  LINK_ERROR,
+  LINK_MAX_MEDIA_BYTES,
+  LINK_PROTOCOL_VERSION,
+  isLinkCommand,
+  linkCommandNeedsIdempotency,
+  missingLinkScope,
+  utf8Length,
+} from '../../tools/iris/link/protocol.js';
 import { useWorkflowStore } from '../../components/workflow/store';
 import { createAgentSessionCard, selectionBounds } from '../../components/workflow/agentSessionCard';
+import { workflowCommandSummary } from '../../components/workflow/agentOps';
+import { buildWorkflowExportPayload, planWorkflowExport, WorkflowExportError } from '../../components/workflow/nodeExport';
 import { readApprovalMode, readUserToolPolicy, resolveToolApproval, toolApprovalFor, type ApprovalContext } from '../agentToolPolicy';
 import { createBrowserAgentTools } from '../browserAgentKernel';
-import { consumeSpendMandate, evaluateSpendMandate, type AgentConfirmRequest } from '../agentSpendMandate';
+import { consumeSpendMandate, evaluateSpendMandate, planBlocked, type AgentConfirmRequest } from '../agentSpendMandate';
+import { workflowConfirmRequest } from '../workflowAgentBridge';
+import {
+  browserImportMediaBlob,
+  dispatchWorkflowCommand,
+  dispatchWorkflowMediaImportBlob,
+  getBrowserProviderStatusSummary,
+  withWorkflowHumanApproval,
+  WORKFLOW_READ_COMMANDS,
+  type WorkflowCommandEnvelope,
+  type WorkflowCommandResult,
+} from '../workflowDispatcher';
 import { getAgentLinkHost, type AgentLinkPanelHost } from './agentLinkHost';
 import { agentLinkRunManager, findLinkRun, LINK_TERMINAL_PHASES, linkApprovalView, type AgentLinkRunManager, type LinkRun } from './agentLinkRuns';
+import {
+  appendMediaUploadChunk,
+  finalizeMediaUpload,
+  MediaTransferError,
+  readDownloadChunk,
+  registerDownloadBuffer,
+  startMediaUpload,
+} from './mediaTransfer';
 
 export interface AgentLinkCommandContext {
   /** 这次调用被授予的范围（线上：标签页自己保存的配对记录；本机：可信 CLI 的全部非付费范围）。 */
@@ -331,6 +361,330 @@ function compactResult(result: unknown): unknown {
   return { text: text.slice(0, 64_000), ...(details !== undefined ? { details } : {}) };
 }
 
+/* ── 直接画布操作 & 无 S3/R2 分片直传 ── */
+
+const LONG_EXEC_COMMANDS = new Set([
+  'workflow.node.run',
+  'workflow.group.run',
+  'workflow.generate',
+  'workflow.shortcut.apply',
+  'workflow.node.tool',
+  'workflow.image.tool',
+  'workflow.video.tool',
+  'workflow.audio.tool',
+]);
+
+const PROJECT_LESS_COMMANDS = new Set([
+  'workflow.project.list',
+  'workflow.project.create',
+  'workflow.models.list',
+  'workflow.shortcut.list',
+  'workflow.node.tool.list',
+]);
+
+/** 响应 JSON 超过 180 KiB 时自动存入内存下载缓冲并分片回传，避免大图 inspect 触发 FRAME_TOO_LARGE。 */
+async function packLinkData(value: unknown): Promise<unknown> {
+  const serialized = JSON.stringify(value);
+  if (utf8Length(serialized) <= LINK_CHUNKED_RESULT_THRESHOLD) return value;
+  const encoded = new TextEncoder().encode(serialized);
+  const buffer = await registerDownloadBuffer({
+    data: encoded,
+    fileName: 'response.json',
+    mimeType: 'application/json',
+  });
+  return { chunked: true, ...buffer };
+}
+
+function resolveOptionalProjectId(args: Record<string, unknown>, commandArgs: Record<string, unknown>, command: string): string | undefined {
+  const state = useWorkflowStore.getState();
+  const explicit = String(args.projectId || commandArgs.projectId || '').trim();
+  const projectId = explicit || state.activeProjectId || '';
+  if (PROJECT_LESS_COMMANDS.has(command)) return projectId || undefined;
+  if (!projectId || !state.projects.some(project => project.id === projectId)) {
+    fail('WORKSPACE_UNAVAILABLE', '这个标签页没有打开的画布项目。');
+  }
+  return projectId;
+}
+
+async function workflowRead(args: Record<string, unknown>, ctx: AgentLinkCommandContext) {
+  const command = String(args.command || '').trim();
+  if (command === 'provider.status') return getBrowserProviderStatusSummary();
+  if (!WORKFLOW_READ_COMMANDS.has(command)) {
+    fail(LINK_ERROR.SCOPE_DENIED, `workflow.read 只允许只读命令，不能执行：${command || '(空)'}。`);
+  }
+  const commandArgs = args.args && typeof args.args === 'object' && !Array.isArray(args.args)
+    ? { ...(args.args as Record<string, unknown>) }
+    : {};
+  const projectId = resolveOptionalProjectId(args, commandArgs, command);
+  const envelope: WorkflowCommandEnvelope = {
+    id: crypto.randomUUID(),
+    command,
+    args: {
+      ...commandArgs,
+      ...(projectId ? { projectId } : {}),
+      workspaceMode: 'browser',
+    },
+    source: ctx.source === 'local' ? 'cli' : 'agent',
+  };
+  const result = await dispatchWorkflowCommand(envelope);
+  return packLinkData(result);
+}
+
+function startApprovalGatedWorkflowRun(
+  managerKey: string,
+  command: string,
+  envelope: WorkflowCommandEnvelope,
+  summary: string,
+  confirmRequest: AgentConfirmRequest,
+  ctx: AgentLinkCommandContext,
+  executeFn: (approvedEnvelope: WorkflowCommandEnvelope) => Promise<WorkflowCommandResult>,
+  requireApprovalFirst: boolean,
+) {
+  const manager = agentLinkRunManager(managerKey);
+  return manager.once(ctx.idempotencyKey, 'workflow.exec', async () => {
+    const run = manager.createRun({
+      kind: 'invoke',
+      prompt: `${command} ${JSON.stringify(envelope.args).slice(0, 160)}`,
+      canvas: false,
+      ...(ctx.clientName ? { clientName: ctx.clientName } : {}),
+    });
+    run.abort = new AbortController();
+    let approvalSeq = 0;
+
+    const requestApproval = (promptSummary: string, request: AgentConfirmRequest): Promise<boolean> => {
+      if (run.abort?.signal.aborted) return Promise.resolve(false);
+      const mandate = getAgentLinkHost(managerKey)?.mandate;
+      const current = mandate?.get() ?? null;
+      if (mandate && mandate.enabled() && current && evaluateSpendMandate(current, request).allow) {
+        mandate.set(consumeSpendMandate(current, request));
+        manager.push(run, { type: 'approval.auto', reason: 'spend-mandate', command: request.command });
+        return Promise.resolve(true);
+      }
+      return new Promise<boolean>(resolve => {
+        const id = run.runId + '-ap' + ++approvalSeq;
+        run.invokeApproval = {
+          id,
+          resolve: approved => {
+            manager.setApproval(run, undefined);
+            manager.setPhase(run, 'running');
+            resolve(approved);
+          },
+        };
+        const blocked = planBlocked(request);
+        manager.setApproval(run, { ...linkApprovalView(id, promptSummary, request, blocked), request });
+        manager.setPhase(run, 'awaitingApproval');
+      });
+    };
+
+    const toolCallId = 'exec-' + run.runId;
+    manager.setPhase(run, 'running');
+    manager.push(run, { type: 'tool.start', toolCallId, tool: command, label: command, kind: 'tool' });
+    const startedAt = Date.now();
+
+    void (async () => {
+      let humanApproved = false;
+      if (requireApprovalFirst) {
+        const approved = await requestApproval(summary, confirmRequest);
+        if (!approved) throw new Error(run.abort?.signal.aborted ? '用户取消了操作。' : '用户拒绝了操作。');
+        humanApproved = true;
+      }
+      let result = await executeFn(humanApproved ? withWorkflowHumanApproval(envelope) : envelope);
+      if (result.confirmation?.required) {
+        const approved = await requestApproval(result.confirmation.summary || summary, confirmRequest);
+        if (!approved) throw new Error(run.abort?.signal.aborted ? '用户取消了操作。' : '用户拒绝了操作。');
+        result = await executeFn(withWorkflowHumanApproval(envelope));
+      }
+      const packed = await packLinkData(result);
+      const isError = result.ok === false;
+      manager.push(run, {
+        type: 'tool.end',
+        toolCallId,
+        tool: command,
+        status: isError ? 'error' : 'success',
+        ms: Date.now() - startedAt,
+        ...(isError && result.error?.message ? { error: result.error.message.slice(0, 300) } : {}),
+      });
+      run.result = packed;
+      if (isError && result.error?.message) run.error = result.error.message.slice(0, 600);
+      manager.setPhase(run, run.abort?.signal.aborted ? 'cancelled' : isError ? 'error' : 'done');
+    })()
+      .catch(error => {
+        const message = error instanceof Error ? error.message : String(error);
+        manager.push(run, {
+          type: 'tool.end',
+          toolCallId,
+          tool: command,
+          status: run.abort?.signal.aborted ? 'denied' : 'error',
+          ms: Date.now() - startedAt,
+          error: message.slice(0, 300),
+        });
+        run.error = message.slice(0, 600);
+        manager.setPhase(run, run.abort?.signal.aborted ? 'cancelled' : 'error');
+      })
+      .finally(() => manager.finish(run));
+
+    return { mode: 'execute', runId: run.runId, phase: run.phase };
+  });
+}
+
+async function workflowExec(args: Record<string, unknown>, ctx: AgentLinkCommandContext) {
+  const command = String(args.command || '').trim();
+  if (!command.startsWith('workflow.')) {
+    fail(LINK_ERROR.INVALID_ARGUMENT, `workflow.exec 只接受 workflow.* 命令：${command || '(空)'}。`);
+  }
+  const commandArgs = args.args && typeof args.args === 'object' && !Array.isArray(args.args)
+    ? { ...(args.args as Record<string, unknown>) }
+    : {};
+  const projectId = resolveOptionalProjectId(args, commandArgs, command);
+  const host = getAgentLinkHost(projectId);
+  const context = approvalContext(host);
+  const decision = toolApprovalFor(command, commandArgs);
+  const resolution = resolveToolApproval({ ...context, tool: command, decision });
+  if (resolution.action === 'deny') {
+    fail('POLICY_DENIED', 'reason' in resolution && resolution.reason ? resolution.reason : 'Tool Policy 拒绝了这次调用。');
+  }
+  const envelope: WorkflowCommandEnvelope = {
+    id: crypto.randomUUID(),
+    command,
+    args: {
+      ...commandArgs,
+      ...(projectId ? { projectId } : {}),
+      workspaceMode: 'browser',
+    },
+    source: ctx.source === 'local' ? 'cli' : 'agent',
+    idempotencyKey: ctx.idempotencyKey,
+  };
+  const confirmRequest: AgentConfirmRequest = {
+    ...workflowConfirmRequest(envelope),
+    tier: decision.tier,
+    tool: command,
+    ...(decision.reason ? { reason: decision.reason } : {}),
+  };
+  const needsApproval = resolution.action === 'prompt' || Boolean(decision.hardGate);
+  const isLong = LONG_EXEC_COMMANDS.has(command);
+
+  if (!needsApproval && !isLong) {
+    const dispatched = await dispatchWorkflowCommand(envelope);
+    if (!dispatched.confirmation?.required) {
+      return { immediate: true, result: await packLinkData(dispatched) };
+    }
+    return startApprovalGatedWorkflowRun(
+      projectId || '__workspace__',
+      command,
+      envelope,
+      dispatched.confirmation.summary || workflowCommandSummary(command, envelope.args),
+      confirmRequest,
+      ctx,
+      env => dispatchWorkflowCommand(env),
+      true,
+    );
+  }
+
+  return startApprovalGatedWorkflowRun(
+    projectId || '__workspace__',
+    command,
+    envelope,
+    workflowCommandSummary(command, envelope.args),
+    confirmRequest,
+    ctx,
+    env => dispatchWorkflowCommand(env),
+    needsApproval,
+  );
+}
+
+async function mediaUploadFinish(args: Record<string, unknown>, ctx: AgentLinkCommandContext) {
+  const projectId = activeProjectId(args);
+  const assembled = await finalizeMediaUpload(args.uploadId);
+  const importArgs: Record<string, unknown> = {
+    ...(typeof args.title === 'string' && args.title.trim() ? { title: args.title.trim() } : { title: assembled.fileName }),
+    ...(typeof args.attachToNodeId === 'string' && args.attachToNodeId.trim() ? { attachToNodeId: args.attachToNodeId.trim() } : {}),
+    ...(args.mention !== undefined ? { mention: args.mention } : {}),
+    ...(args.expectedRevision !== undefined ? { expectedRevision: args.expectedRevision } : {}),
+    ...(typeof args.mutationId === 'string' && args.mutationId.trim() ? { mutationId: args.mutationId.trim() } : {}),
+    projectId,
+    workspaceMode: 'browser',
+  };
+  const host = getAgentLinkHost(projectId);
+  const context = approvalContext(host);
+  const decision = toolApprovalFor('workflow.media.import', importArgs);
+  const resolution = resolveToolApproval({ ...context, tool: 'workflow.media.import', decision });
+  if (resolution.action === 'deny') {
+    fail('POLICY_DENIED', 'reason' in resolution && resolution.reason ? resolution.reason : 'Tool Policy 拒绝导入素材。');
+  }
+  const envelope: WorkflowCommandEnvelope = {
+    id: crypto.randomUUID(),
+    command: 'workflow.media.import',
+    args: importArgs,
+    source: ctx.source === 'local' ? 'cli' : 'agent',
+    idempotencyKey: ctx.idempotencyKey,
+  };
+  const importBlob = () => browserImportMediaBlob(
+    new Blob([assembled.data as BlobPart], { type: assembled.mimeType }),
+    assembled.fileName,
+    assembled.mimeType,
+  );
+  if (resolution.action === 'allow' && !decision.hardGate) {
+    const dispatched = await dispatchWorkflowMediaImportBlob(envelope, importBlob);
+    return { immediate: true, result: await packLinkData(dispatched) };
+  }
+  const confirmRequest: AgentConfirmRequest = {
+    ...workflowConfirmRequest(envelope),
+    tier: decision.tier,
+    tool: 'workflow.media.import',
+    ...(decision.reason ? { reason: decision.reason } : {}),
+  };
+  return startApprovalGatedWorkflowRun(
+    projectId,
+    'workflow.media.import',
+    envelope,
+    `导入本地素材「${assembled.fileName}」（${(assembled.bytes / 1024).toFixed(1)} KB）到画布`,
+    confirmRequest,
+    ctx,
+    env => dispatchWorkflowMediaImportBlob(env, importBlob),
+    true,
+  );
+}
+
+async function mediaDownloadStart(args: Record<string, unknown>) {
+  const projectId = activeProjectId(args);
+  const project = useWorkflowStore.getState().projects.find(item => item.id === projectId)!;
+  const rawNodeIds = args.nodeIds;
+  const nodeIds = Array.isArray(rawNodeIds)
+    ? rawNodeIds.map(String).filter(Boolean)
+    : typeof rawNodeIds === 'string'
+      ? rawNodeIds.split(',').map(item => item.trim()).filter(Boolean)
+      : undefined;
+  const groupId = typeof args.groupId === 'string' && args.groupId.trim() ? args.groupId.trim() : undefined;
+  const fileName = typeof args.fileName === 'string' && args.fileName.trim() ? args.fileName.trim() : undefined;
+  try {
+    const plan = planWorkflowExport(project, { nodeIds, groupId, fileName });
+    const payload = await buildWorkflowExportPayload(plan, {
+      loadMedia: async source => {
+        const { loadWorkflowMediaBlob } = await import('../../components/workflow/media');
+        return loadWorkflowMediaBlob(source.storageKey, source.href, source.artifactRef);
+      },
+    });
+    if (payload.bytes > LINK_MAX_MEDIA_BYTES) {
+      fail(LINK_ERROR.INVALID_ARGUMENT, `导出文件 ${(payload.bytes / 1024 / 1024).toFixed(1)} MB 超过直传上限 ${(LINK_MAX_MEDIA_BYTES / 1024 / 1024).toFixed(0)} MB。`);
+    }
+    const buffer = await registerDownloadBuffer({
+      data: payload.data,
+      fileName: payload.fileName,
+      mimeType: payload.mimeType,
+    });
+    return {
+      projectId,
+      ...buffer,
+      mode: payload.mode,
+      files: payload.files,
+      skipped: payload.skipped,
+    };
+  } catch (cause) {
+    if (cause instanceof WorkflowExportError) fail(cause.code, cause.message, false, cause.details);
+    throw cause;
+  }
+}
+
 /* ── 入口 ── */
 
 export async function handleAgentLinkCommand(command: string, rawArgs: unknown, ctx: AgentLinkCommandContext): Promise<AgentLinkCommandResult> {
@@ -352,11 +706,19 @@ export async function handleAgentLinkCommand(command: string, rawArgs: unknown, 
       case 'agent.cancel': data = await cancel(args, ctx); break;
       case 'agent.tools.list': data = toolsList(args); break;
       case 'agent.tools.invoke': data = await toolsInvoke(args, ctx); break;
+      case 'workflow.read': data = await workflowRead(args, ctx); break;
+      case 'workflow.exec': data = await workflowExec(args, ctx); break;
+      case 'media.upload.start': data = startMediaUpload(args); break;
+      case 'media.upload.chunk': data = appendMediaUploadChunk(args); break;
+      case 'media.upload.finish': data = await mediaUploadFinish(args, ctx); break;
+      case 'media.download.start': data = await mediaDownloadStart(args); break;
+      case 'media.download.chunk': data = readDownloadChunk(args); break;
       default: fail(LINK_ERROR.UNKNOWN_COMMAND, command);
     }
     return { ok: true, data };
   } catch (error) {
     if (error instanceof LinkCommandError) return { ok: false, error: { code: error.code, message: error.message, retryable: error.retryable, ...(error.details !== undefined ? { details: error.details } : {}) } };
+    if (error instanceof MediaTransferError) return { ok: false, error: { code: error.code, message: error.message, retryable: error.retryable, ...(error.details !== undefined ? { details: error.details } : {}) } };
     return { ok: false, error: { code: 'LINK_COMMAND_FAILED', message: error instanceof Error ? error.message : String(error), retryable: false } };
   }
 }

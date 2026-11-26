@@ -78,6 +78,10 @@ npm run iris:cli -- link status --json
 连接后先读：
 npm run iris:cli -- workflow.inspect --summary --json
 
+本地素材无需 S3/R2，可直接分片直传：
+- 导入本地文件到画布：npm run iris:cli -- workflow.media.import --file <本地路径> --idempotency-key <key> --json
+- 导出画布产物到本地：npm run iris:cli -- workflow.export --node-ids <nodeId> --output <本地路径> --json
+
 约束：
 - 只通过 iris CLI / Iris Skill 的 Workflow 契约读写；参考 .claude/skills/iris/SKILL.md。
 - 写入只用 workflow.apply，带 projectId、expectedRevision、mutationId 和 --idempotency-key；多个修改合并为一次 apply。
@@ -98,6 +102,10 @@ npm run iris:cli -- link status --json
 
 Read the graph first:
 npm run iris:cli -- workflow.inspect --summary --json
+
+Direct local media transfer (no S3/R2 needed):
+- Import local file to canvas: npm run iris:cli -- workflow.media.import --file <local-path> --idempotency-key <key> --json
+- Export canvas media to disk: npm run iris:cli -- workflow.export --node-ids <nodeId> --output <local-path> --json
 
 Constraints:
 - Read/write only through the iris CLI / Iris Skill Workflow contract; see .claude/skills/iris/SKILL.md.
@@ -121,6 +129,10 @@ npm run iris:cli -- status --json
 连接后先读：
 npm run iris:cli -- workflow.inspect --summary --json
 
+本地素材无需 S3/R2，可直接分片直传：
+- 导入本地文件到画布：npm run iris:cli -- workflow.media.import --file <本地路径> --idempotency-key <key> --json
+- 导出画布产物到本地：npm run iris:cli -- workflow.export --node-ids <nodeId> --output <本地路径> --json
+
 约束：
 - 只通过 iris CLI / Iris Skill 的 Workflow 契约读写；参考 .claude/skills/iris/SKILL.md。
 - 写入只用 workflow.apply，带 projectId、expectedRevision、mutationId；多个修改合并为一次 apply。
@@ -141,6 +153,10 @@ npm run iris:cli -- status --json
 
 Read the graph first:
 npm run iris:cli -- workflow.inspect --summary --json
+
+Direct local media transfer (no S3/R2 needed):
+- Import local file to canvas: npm run iris:cli -- workflow.media.import --file <local-path> --idempotency-key <key> --json
+- Export canvas media to disk: npm run iris:cli -- workflow.export --node-ids <nodeId> --output <local-path> --json
 
 Constraints:
 - Read/write only through the iris CLI / Iris Skill Workflow contract; see .claude/skills/iris/SKILL.md.

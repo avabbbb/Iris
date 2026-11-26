@@ -273,11 +273,20 @@ function blobBytes(blob: Blob): Promise<Uint8Array> {
   });
 }
 
-export async function executeWorkflowExport(
+export interface WorkflowExportPayload {
+  fileName: string;
+  mimeType: string;
+  bytes: number;
+  mode: 'single' | 'zip';
+  data: Uint8Array;
+  files: Array<{ nodeId: string; fileName: string; mimeType: string; bytes: number }>;
+  skipped: WorkflowExportSkip[];
+}
+
+export async function buildWorkflowExportPayload(
   plan: WorkflowExportPlan,
-  runtime: WorkflowExportRuntime,
-  options: { save?: boolean; inline?: boolean } = {},
-): Promise<WorkflowExportResult> {
+  runtime: Pick<WorkflowExportRuntime, 'loadMedia'>,
+): Promise<WorkflowExportPayload> {
   const files: Array<{ entry: WorkflowExportEntry; data: Uint8Array; mimeType: string }> = [];
   for (const entry of plan.entries) {
     if (entry.kind === 'csv') {
@@ -290,19 +299,36 @@ export async function executeWorkflowExport(
   const single = plan.mode === 'single';
   const data = single ? files[0].data : buildStoredZip(files.map(file => ({ name: file.entry.fileName, data: file.data })));
   const mimeType = single ? files[0].mimeType : 'application/zip';
-  if (options.inline && data.length > WORKFLOW_EXPORT_INLINE_LIMIT) {
-    throw new WorkflowExportError('INVALID_ARGUMENT', '导出文件 ' + (data.length / 1024 / 1024).toFixed(1) + 'MB，超过 inline 上限 20MB；请去掉 inline，改由用户保存到本机。');
-  }
-  let saved = false;
-  if (options.save !== false && runtime.save) saved = await runtime.save(new Blob([data as BlobPart], { type: mimeType }), plan.fileName);
   return {
     fileName: plan.fileName,
     mimeType,
     bytes: data.length,
     mode: plan.mode,
-    saved,
+    data,
     files: files.map(file => ({ nodeId: file.entry.nodeId, fileName: file.entry.fileName, mimeType: file.mimeType, bytes: file.data.length })),
     skipped: plan.skipped,
-    ...(options.inline ? { dataBase64: toBase64(data) } : {}),
+  };
+}
+
+export async function executeWorkflowExport(
+  plan: WorkflowExportPlan,
+  runtime: WorkflowExportRuntime,
+  options: { save?: boolean; inline?: boolean } = {},
+): Promise<WorkflowExportResult> {
+  const payload = await buildWorkflowExportPayload(plan, runtime);
+  if (options.inline && payload.bytes > WORKFLOW_EXPORT_INLINE_LIMIT) {
+    throw new WorkflowExportError('INVALID_ARGUMENT', '导出文件 ' + (payload.bytes / 1024 / 1024).toFixed(1) + 'MB，超过 inline 上限 20MB；请去掉 inline，改由用户保存到本机。');
+  }
+  let saved = false;
+  if (options.save !== false && runtime.save) saved = await runtime.save(new Blob([payload.data as BlobPart], { type: payload.mimeType }), payload.fileName);
+  return {
+    fileName: payload.fileName,
+    mimeType: payload.mimeType,
+    bytes: payload.bytes,
+    mode: payload.mode,
+    saved,
+    files: payload.files,
+    skipped: payload.skipped,
+    ...(options.inline ? { dataBase64: toBase64(payload.data) } : {}),
   };
 }
