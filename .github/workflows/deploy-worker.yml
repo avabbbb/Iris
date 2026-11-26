@@ -1,11 +1,8 @@
 name: Deploy Worker (Cloudflare)
 
-# 推 main 时把 Worker（/api/*，含 Iris Link 中继 DO）和静态资源部署到 Cloudflare。
+# 手动触发（Actions → Deploy Worker → Run workflow）时把 Worker（/api/*，含 Iris Link 中继 DO）和静态资源部署到 Cloudflare。
 # 需要仓库 Secret：CLOUDFLARE_API_TOKEN（Workers Scripts:Edit）。
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
