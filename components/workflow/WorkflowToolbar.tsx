@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Camera, FileDown, FileText, Focus, GitCommitVertical, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, StickyNote, Trash2, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, GitCommitVertical, Grid2X2, Hand, History, ImageDown, Keyboard, LayoutTemplate, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, StickyNote, Trash2, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -112,6 +112,7 @@ export function WorkflowToolbar({
   onDeleteSnapshot,
   autoMediaDerive,
   onToggleAutoMediaDerive,
+  onOpenTemplates,
 }: {
   tool: WorkflowTool;
   canUndo: boolean;
@@ -161,6 +162,8 @@ export function WorkflowToolbar({
   /** 新视频（上传/生成完成）自动截帧、音视频分离；默认全部关闭。 */
   autoMediaDerive?: { firstFrame: boolean; lastFrame: boolean; avSplit: boolean };
   onToggleAutoMediaDerive?: (key: 'firstFrame' | 'lastFrame' | 'avSplit') => void;
+  /** 打开 Tapflow 工作流模板库（内置蓝图 + 自定义模板保存/导入/复用）。 */
+  onOpenTemplates?: () => void;
 }) {
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
@@ -287,6 +290,7 @@ export function WorkflowToolbar({
       <div className="workflow-toolbar__popover-wrap">
         <Tip title={copy.tools}><button type="button" className={btn(toolsOpen)} aria-label={copy.tools} aria-expanded={toolsOpen} onClick={event => togglePopover('tools', event.currentTarget)}><SlidersHorizontal size={18} /></button></Tip>
       </div>
+      {onOpenTemplates && <Tip title={language === 'en' ? 'Workflow blueprint templates' : '工作流模板库'}><button type="button" className={btn()} data-testid="workflow-toolbar-templates" aria-label={language === 'en' ? 'Workflow blueprint templates' : '工作流模板库'} onClick={() => { closePopover(); onOpenTemplates(); }}><LayoutTemplate size={17} /></button></Tip>}
       <Tip title={copy.generationHistory}><button type="button" className={btn(libraryOpen)} aria-label={copy.generationHistory} aria-expanded={libraryOpen} onClick={event => togglePopover('library', event.currentTarget)}><History size={18} /></button></Tip>
       <Tip title={copy.undo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.undo} disabled={!canUndo} onClick={onUndo}><Undo2 size={17} /></button></Tip>
       <Tip title={copy.redo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.redo} disabled={!canRedo} onClick={onRedo}><Redo2 size={17} /></button></Tip>

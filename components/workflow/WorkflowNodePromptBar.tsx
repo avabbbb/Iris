@@ -1,7 +1,9 @@
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Camera, Sparkles, Zap } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
+import { CameraControlPopover, type CameraControlValue } from './CameraControlPopover';
+import { applyCameraFragmentToPrompt, summarizeCameraControl } from './cameraControl';
 import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { editorJSONToText, extractMentions, type MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
@@ -72,7 +74,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, onSlashShortcut, expanded = false, onToggleExpanded, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, onSlashShortcut, onSpawnCameraNode, expanded = false, onToggleExpanded, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -87,6 +89,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onChange: (metadata: Partial<WorkflowNodeMetadata>) => void;
   /** 在提示词里键入 `/`（开头或空格后）时弹出与画布 `/` 同一份快捷工具菜单；选中后由 Workflow 层套用到本节点。只加弹层，不改 Prompt Bar 本体。 */
   onSlashShortcut?: (shortcut: SlashShortcut, remainingPrompt: string) => void;
+  /** 3D 视角面板「派生新视角节点」：创建连好线的下游节点（不自动计费运行）。 */
+  onSpawnCameraNode?: (fragment: string, value: CameraControlValue) => void;
   /** PromptBar 的稳定业务输出，不携带 Provider wire 字段或凭据。 */
   onPromptIntent?: (intent: PromptIntent) => void;
   onRun: () => void;
@@ -116,6 +120,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const [libraryOpen, setLibraryOpen] = useState(false);
   const libraryKeys = useMenuKeyboard({ open: libraryOpen, onClose: () => setLibraryOpen(false) });
   const [slashOpen, setSlashOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
   const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
@@ -278,6 +283,26 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     setRegionChipId(null);
   };
 
+  const cameraSummary = summarizeCameraControl({
+    camera: config.camera,
+    cameraMovement: config.cameraMovement,
+    rig3d: node.metadata.cameraRig,
+  }, language);
+  const showCameraControl = !isLocalOperation && (generationMode === 'image' || generationMode === 'video');
+  const isDraftVideo = generationMode === 'video' && Boolean(config.draftMode);
+  const hasDraftUpgrade = isDraftVideo && node.metadata.status === 'success' && Boolean(node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef);
+  const toggleDraftMode = () => {
+    if (isDraftVideo) {
+      patchConfig({ draftMode: false, resolution: config.draftPreviousResolution || '720p' });
+    } else {
+      const prev = config.resolution && config.resolution !== '480p' ? config.resolution : '720p';
+      patchConfig({ draftMode: true, draftPreviousResolution: prev, resolution: '480p' });
+    }
+  };
+  const upgradeDraftToHd = () => {
+    patchConfig({ draftMode: false, resolution: config.draftPreviousResolution || '1080p' });
+  };
+
   return (
     <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ ['--workflow-node-prompt-width' as string]: `${width}px` }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {operationCapability && <WorkflowOperationParameterPanel
@@ -286,6 +311,83 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         onChange={operationParameters => patchConfig({ operationParameters })}
         language={language}
       />}
+      {(showCameraControl || generationMode === 'video') && !isLocalOperation && (
+        <div className="wf-prompt-director-strip" data-testid="wf-prompt-director-strip">
+          {showCameraControl && (
+            <button
+              type="button"
+              className={`wf-director-pill${cameraSummary ? ' is-active' : ''}`}
+              data-testid="wf-camera-control-trigger"
+              aria-expanded={cameraOpen}
+              onClick={() => setCameraOpen(open => !open)}
+              title={language === 'en' ? 'Cinema camera, lens & 3D multi-angle rig' : '电影机身、镜头组合与 3D 多角度机位'}
+            >
+              <Camera size={12} />
+              <span>{cameraSummary || (language === 'en' ? 'Cine Lens / 3D Angle' : '电影镜头 · 3D 视角')}</span>
+            </button>
+          )}
+          {generationMode === 'video' && (
+            <button
+              type="button"
+              className={`wf-director-pill${isDraftVideo ? ' is-draft' : ''}`}
+              data-testid="wf-video-draft-toggle"
+              aria-pressed={isDraftVideo}
+              onClick={toggleDraftMode}
+              title={language === 'en' ? 'Draft Mode renders fast 480p preview before upgrading to HD' : '草稿模式先以 480p 快速低成本预演运镜，满意后再升级高清'}
+            >
+              <Zap size={12} />
+              <span>{isDraftVideo ? (language === 'en' ? 'Draft 480p' : '草稿 480p') : (language === 'en' ? 'Draft Mode' : '草稿模式')}</span>
+            </button>
+          )}
+          {hasDraftUpgrade && (
+            <button
+              type="button"
+              className="wf-director-pill is-upgrade"
+              data-testid="wf-video-draft-upgrade"
+              onClick={upgradeDraftToHd}
+              title={language === 'en' ? 'Switch resolution to HD (ready to run)' : '切换为高清分辨率，确认后运行高清成片'}
+            >
+              <Sparkles size={12} />
+              <span>{language === 'en' ? `Upgrade to ${config.draftPreviousResolution || '1080p'}` : `升级为高清 (${config.draftPreviousResolution || '1080p'})`}</span>
+            </button>
+          )}
+        </div>
+      )}
+      {cameraOpen && showCameraControl && (
+        <div className="wf-camera-popover-anchor">
+          <CameraControlPopover
+            value={{ camera: config.camera, cameraMovement: config.cameraMovement, rig3d: node.metadata.cameraRig }}
+            mode={generationMode === 'video' ? 'video' : 'image'}
+            language={language}
+            onChange={next => {
+              onChange({
+                cameraRig: next.rig3d,
+                config: {
+                  ...config,
+                  camera: next.camera,
+                  cameraMovement: next.cameraMovement,
+                },
+              });
+            }}
+            onApplyToPrompt={(fragment, next) => {
+              const updatedPrompt = applyCameraFragmentToPrompt(node.metadata.prompt || '', fragment);
+              emitPromptIntent(updatedPrompt, keepConnectedMentions(updatedPrompt, documentMentionIds), 'edit');
+              onChange({
+                prompt: updatedPrompt,
+                richTextDocument: undefined,
+                cameraRig: next.rig3d,
+                config: {
+                  ...config,
+                  camera: next.camera,
+                  cameraMovement: next.cameraMovement,
+                },
+              });
+            }}
+            onSpawnMultiAngle={onSpawnCameraNode}
+            onClose={() => setCameraOpen(false)}
+          />
+        </div>
+      )}
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label={language === 'en' ? 'Prompt library' : '提示词库'} title={language === 'en' ? 'Prompt library' : '提示词库'} onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
       {slashOpen && onSlashShortcut && <div className="workflow-node-prompt__slash" data-testid="workflow-node-prompt-slash">
         <SlashMenu

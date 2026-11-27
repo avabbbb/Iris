@@ -1,6 +1,7 @@
 import { localizeWorkflowNodeTitle } from './constants';
 import { TextNodeBody } from './TextNodeBody';
-import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Gauge, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Scissors, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Gauge, Image as ImageIcon, Lock, Music2, Pause, Pencil, Pin, Play, Plus, RefreshCw, Scissors, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { summarizeCameraControl } from './cameraControl';
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
@@ -422,12 +423,18 @@ export function WorkflowNode({
       <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
     </div>
   );
+  const cameraBadge = (node.type === 'image' || node.type === 'video')
+    ? summarizeCameraControl({ camera: node.metadata.config?.camera, cameraMovement: node.metadata.config?.cameraMovement, rig3d: node.metadata.cameraRig }, language)
+    : '';
   const liftMotion = !reduceMotion && lifted;
   return (
     <motion.div
       data-workflow-node-id={node.id}
       data-lifted={lifted ? 'true' : undefined}
-      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${lifted ? ' is-lifted' : ''}${contextSource ? ' is-context-source' : ''}${isContextCard ? ' is-context-card' : ''}${isAgentSession ? ' is-agent-session' : ''}`}
+      data-locked={node.isLocked ? 'true' : undefined}
+      data-pinned={node.metadata.pinned ? 'true' : undefined}
+      data-color-tag={node.metadata.colorTag || undefined}
+      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${node.isLocked ? ' is-locked' : ''}${isDropTarget ? ' is-drop-target' : ''}${lifted ? ' is-lifted' : ''}${contextSource ? ' is-context-source' : ''}${isContextCard ? ' is-context-card' : ''}${isAgentSession ? ' is-agent-session' : ''}`}
       role="group"
       aria-label={language === 'en' ? `${node.title} workflow node` : `${node.title} 工作流节点`}
       tabIndex={0}
@@ -527,9 +534,12 @@ export function WorkflowNode({
           title={onChangeTitle ? (language === 'en' ? 'Double-click to rename' : '双击重命名') : undefined}
         >
           <TitleIcon size={12} />
+          {node.metadata.pinned && <span className="workflow-node__status-pill workflow-node__status-pill--pin" data-testid="workflow-node-pinned" title={language === 'en' ? 'Pinned' : '已钉选'}><Pin size={9} /></span>}
+          {node.isLocked && <span className="workflow-node__status-pill workflow-node__status-pill--lock" data-testid="workflow-node-locked" title={language === 'en' ? 'Locked (right-click to unlock)' : '已锁定（右键可解锁）'}><Lock size={9} /></span>}
           {anchorCode && <span className="workflow-node__anchor-code" data-testid="anchor-code" title={language === 'en' ? 'Anchor code: reference it as @' + anchorCode : '锚点编号：可用 @' + anchorCode + ' 引用'}>{anchorCode}</span>}
           <span className="workflow-node__title-text">{localizeWorkflowNodeTitle(node.title, language)}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
+          {cameraBadge && <span className="workflow-node__status-pill workflow-node__status-pill--camera" data-testid="workflow-node-camera-badge" title={cameraBadge}><Camera size={9} />{cameraBadge}</span>}
           {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}
           {node.anchor && (
             <button

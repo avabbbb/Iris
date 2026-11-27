@@ -1,4 +1,8 @@
+import '../../styles/tapnowFeatures.css';
 import { FAN_SPRING, fanPose } from '../ui/ImageFan';
+import { WorkflowTemplateModal } from './WorkflowTemplateModal';
+import { applyCameraFragmentToPrompt } from './cameraControl';
+import type { CameraControlValue } from './CameraControlPopover';
 import { BATCH_GRID_GAP, BATCH_STACK_SPRING, batchCellCloseTransition, batchCellOpenTransition, batchCellStackedPose } from './batchStackMotion';
 import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
@@ -87,7 +91,7 @@ import { useProductionProjectionAdapter } from './useProductionProjectionAdapter
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
-import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot } from './types';
+import type { WorkflowAnchorKind, WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeColorTag, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot } from './types';
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
@@ -512,6 +516,7 @@ export function InfiniteWorkflow({
   const [keyboardConnectionSourceId, setKeyboardConnectionSourceId] = useState<string | null>(null);
   const [createMenu, setCreateMenu] = useState<WorkflowCreateMenuState | null>(null);
   const [contextMenu, setContextMenu] = useState<WorkflowContextMenuState | null>(null);
+  const [templateModal, setTemplateModal] = useState<'browse' | 'save' | null>(null);
   const [renameSignal, setRenameSignal] = useState<{ nodeId: string; nonce: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [focusBadge, setFocusBadge] = useState(false);
@@ -1016,6 +1021,9 @@ export function InfiniteWorkflow({
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0], ids); },
     extractFrame: handleExtractFrame,
     extractFrameAt: id => openVideoTool('extract-frame', id),
+    smartSplit: id => openVideoTool('smart-split', id),
+    extend: id => openVideoTool('extend', id),
+    retake: id => openVideoTool('retake', id),
   }), [openVideoTool, openInlineTrim, handleExtractFrame, handleAvSplit]);
 
   // 自动派生（默认关闭）：视频节点新进入成功状态时，按设置串行执行截帧 / 音视频分离 Operation。
@@ -1084,6 +1092,101 @@ export function InfiniteWorkflow({
         if (selectedNodes.length < 2) { videoControls.fail(transaction, '至少需要选择 2 个视频节点'); return; }
         result = await runWorkflowVideoMergeOperation(transaction.projectId, selectedNodes.map(item => item.id), imageToolRuntime);
         successNotice = '视频拼接完成';
+      } else if (confirmation.kind === 'smart-split') {
+        let splitCount = 0;
+        for (const seg of confirmation.segments) {
+          const outcome = await runWorkflowVideoTrimOperation(transaction.projectId, node.id, {
+            startSec: seg.startSec,
+            endSec: seg.endSec,
+          }, imageToolRuntime);
+          if (outcome.status === 'committed') {
+            result = outcome;
+            splitCount += 1;
+          }
+        }
+        successNotice = splitCount > 0 ? `智能拆条完成：已拆分为 ${splitCount} 个独立视频节点` : '未生成有效视频片段';
+      } else if (confirmation.kind === 'extend') {
+        const framePos = confirmation.direction === 'backward' ? 'first' : 'last';
+        const frameOutcome = await runWorkflowVideoExtractFrameOperation(transaction.projectId, node.id, framePos, imageToolRuntime).catch(() => null);
+        const currentNodes = projectRef.current.nodes;
+        const extractedFrameNode = frameOutcome?.status === 'committed'
+          ? frameOutcome.project.nodes.find(item => !currentNodes.some(prev => prev.id === item.id)) || null
+          : null;
+        const sourceId = extractedFrameNode?.id || node.id;
+        const anchorNode = extractedFrameNode || node;
+        const nextPrompt = confirmation.cameraMovement
+          ? applyCameraFragmentToPrompt(confirmation.prompt, confirmation.cameraMovement)
+          : confirmation.prompt;
+        const extendedNode: WorkflowNodeData = {
+          ...createWorkflowNode(nanoid(), 'video', {
+            x: anchorNode.position.x + anchorNode.width + 110,
+            y: anchorNode.position.y,
+          }, {
+            prompt: nextPrompt,
+            status: 'idle',
+            origin: 'user',
+            colorTag: 'violet',
+            config: {
+              mode: 'video',
+              submode: extractedFrameNode ? 'image-to-video' : 'video-extension',
+              aspectRatio: node.metadata.config?.aspectRatio || '16:9',
+              durationSec: confirmation.durationSec,
+              cameraMovement: confirmation.cameraMovement,
+              draftMode: node.metadata.config?.draftMode,
+              resolution: node.metadata.config?.resolution,
+            },
+          }),
+          title: confirmation.direction === 'backward' ? `${node.title} · 序幕延长` : `${node.title} · 镜头延长`,
+        };
+        if (applyOps([{ type: 'create_connected_node', fromNodeId: sourceId, node: extendedNode }])) {
+          setNotice(confirmation.direction === 'backward' ? '已创建向前延长镜头节点（已绑定首帧，确认后手动运行）' : '已创建向后延长镜头节点（已绑定尾帧，确认后手动运行）');
+          videoControls.close(transaction);
+          return;
+        }
+      } else if (confirmation.kind === 'retake') {
+        const frameOutcome = await runWorkflowVideoExtractFrameOperation(
+          transaction.projectId,
+          node.id,
+          confirmation.referenceFrame,
+          imageToolRuntime,
+          confirmation.currentTimeSec,
+        ).catch(() => null);
+        const currentNodes = projectRef.current.nodes;
+        const extractedFrameNode = frameOutcome?.status === 'committed'
+          ? frameOutcome.project.nodes.find(item => !currentNodes.some(prev => prev.id === item.id)) || null
+          : null;
+        const sourceId = extractedFrameNode?.id || node.id;
+        const anchorNode = extractedFrameNode || node;
+        const nextPrompt = confirmation.cameraMovement
+          ? applyCameraFragmentToPrompt(confirmation.prompt, confirmation.cameraMovement)
+          : confirmation.prompt;
+        const retakeNode: WorkflowNodeData = {
+          ...createWorkflowNode(nanoid(), 'video', {
+            x: anchorNode.position.x + anchorNode.width + 110,
+            y: anchorNode.position.y + 40,
+          }, {
+            prompt: nextPrompt,
+            status: 'idle',
+            origin: 'user',
+            colorTag: 'amber',
+            config: {
+              mode: 'video',
+              submode: extractedFrameNode ? 'image-to-video' : 'reference-to-video',
+              aspectRatio: node.metadata.config?.aspectRatio || '16:9',
+              durationSec: node.metadata.config?.durationSec || 5,
+              cameraMovement: confirmation.cameraMovement,
+              draftMode: confirmation.draftMode,
+              resolution: confirmation.draftMode ? '480p' : node.metadata.config?.resolution,
+              draftPreviousResolution: confirmation.draftMode ? (node.metadata.config?.resolution && node.metadata.config.resolution !== '480p' ? node.metadata.config.resolution : '1080p') : undefined,
+            },
+          }),
+          title: `${node.title} · 重拍`,
+        };
+        if (applyOps([{ type: 'create_connected_node', fromNodeId: sourceId, node: retakeNode }])) {
+          setNotice('已创建重拍候选节点（非破坏性，确认后手动运行）');
+          videoControls.close(transaction);
+          return;
+        }
       }
       if (!videoControls.owns(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
@@ -3379,6 +3482,7 @@ export function InfiniteWorkflow({
         onSaveSnapshot={saveSnapshot}
         onRestoreSnapshot={restoreSnapshot}
         onDeleteSnapshot={deleteSnapshot}
+        onOpenTemplates={() => setTemplateModal('browse')}
       />
       {project.nodes.length === 0 && (
         // The empty canvas is its own guide: one sentence and the two most common starts.
@@ -3750,6 +3854,15 @@ export function InfiniteWorkflow({
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onPreviewMedia={(id) => { const target = projectRef.current.nodes.find(n => n.id === id); if (target) setPreviewNode(target); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}
+            onTogglePin={ids => {
+              const allPinned = ids.every(id => projectRef.current.nodes.find(item => item.id === id)?.metadata.pinned);
+              applyOps(ids.map(id => ({ type: 'update_node' as const, id, metadata: { pinned: !allPinned } })));
+            }}
+            onToggleLock={ids => {
+              const allLocked = ids.every(id => projectRef.current.nodes.find(item => item.id === id)?.isLocked);
+              applyOps(ids.map(id => ({ type: 'update_node' as const, id, patch: { isLocked: !allLocked } })));
+              setNotice(allLocked ? '已解锁节点' : '已锁定节点（右键可解锁）');
+            }}
             onLayer={position => {
               const selected = projectRef.current.nodes.filter(node => selectedNodes.has(node.id));
               const remaining = projectRef.current.nodes.filter(node => !selectedNodes.has(node.id));
@@ -3766,7 +3879,31 @@ export function InfiniteWorkflow({
           />
         </div>
         {selectedNodeData.length === 1 && workflowPromptBarTarget(selectedNodeData[0]) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
-      <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} onSlashShortcut={(shortcut, remaining) => handleSlashCommand(shortcut, selectedNodeData[0].id, remaining)} />
+      <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} onSlashShortcut={(shortcut, remaining) => handleSlashCommand(shortcut, selectedNodeData[0].id, remaining)} onSpawnCameraNode={(fragment: string, value: CameraControlValue) => {
+        const source = selectedNodeData[0];
+        if (!source || source.isLocked) return;
+        const targetType = source.type === 'video' ? 'video' : 'image';
+        const nextPrompt = applyCameraFragmentToPrompt(source.metadata.prompt || '', fragment);
+        const child = {
+          ...createWorkflowNode(nanoid(), targetType, { x: source.position.x + source.width + 110, y: source.position.y }, {
+            prompt: nextPrompt,
+            status: 'idle',
+            origin: 'user' as const,
+            cameraRig: value.rig3d,
+            config: {
+              ...(source.metadata.config || { mode: targetType }),
+              mode: targetType,
+              camera: value.camera,
+              cameraMovement: value.cameraMovement,
+            },
+          }),
+          title: `${source.title} · 新视角`,
+        };
+        if (applyOps([{ type: 'create_connected_node', fromNodeId: source.id, node: child }])) {
+          selectNodes([child.id]);
+          setNotice('已派生新视角节点（已绑定参考连线，确认后手动运行）');
+        }
+      }} />
         </div>}
       </>}
       <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />
@@ -3904,6 +4041,37 @@ export function InfiniteWorkflow({
           }) : undefined}
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) runNodeWithKeyGuide(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
+          isLocked={Boolean(ctxNode?.isLocked)}
+          isPinned={Boolean(ctxNode?.metadata.pinned)}
+          colorTag={ctxNode?.metadata.colorTag}
+          onToggleLock={contextMenu.type === 'node' && ctxNode ? (() => {
+            const ids = selectedIdsRef.current.includes(ctxNode.id) ? selectedIdsRef.current : [ctxNode.id];
+            const nextLocked = !ctxNode.isLocked;
+            applyOps(ids.map(id => ({ type: 'update_node' as const, id, patch: { isLocked: nextLocked } })));
+            setNotice(nextLocked ? '已锁定节点' : '已解锁节点');
+            setContextMenu(null);
+          }) : undefined}
+          onTogglePin={contextMenu.type === 'node' && ctxNode ? (() => {
+            const ids = selectedIdsRef.current.includes(ctxNode.id) ? selectedIdsRef.current : [ctxNode.id];
+            const nextPinned = !ctxNode.metadata.pinned;
+            applyOps(ids.map(id => ({ type: 'update_node' as const, id, metadata: { pinned: nextPinned } })));
+            setContextMenu(null);
+          }) : undefined}
+          onSetColorTag={contextMenu.type === 'node' && ctxNode ? ((tag: WorkflowNodeColorTag | undefined) => {
+            const ids = selectedIdsRef.current.includes(ctxNode.id) ? selectedIdsRef.current : [ctxNode.id];
+            applyOps(ids.map(id => ({ type: 'update_node' as const, id, metadata: { colorTag: tag } })));
+            setContextMenu(null);
+          }) : undefined}
+          onPromoteAnchor={contextMenu.type === 'node' && ctxNode && (ctxNode.type === 'image' || ctxNode.type === 'video') && !ctxNode.isLocked ? ((kind: WorkflowAnchorKind) => {
+            const patch = anchorApprovalPatch({ id: ctxNode.id, anchor: { kind, approved: false } }, new Date(), projectRef.current.nodes);
+            if (patch) {
+              applyOps([{ type: 'update_node', id: ctxNode.id, patch }]);
+              setNotice(`已设为已批准锚点 ${patch.anchor?.code || ''}`);
+            }
+            setContextMenu(null);
+          }) : undefined}
+          onSaveAsTemplate={contextMenu.type === 'node' && ctxNode ? (() => { setContextMenu(null); setTemplateModal('save'); }) : undefined}
+          onOpenTemplates={() => { setContextMenu(null); setTemplateModal('browse'); }}
           onDelete={() => { if (contextMenu.type !== 'pane') deleteSelection(); setContextMenu(null); }}
         />
           );
@@ -3965,6 +4133,26 @@ export function InfiniteWorkflow({
         gallery={galleryState}
         onClose={() => { setPreviewNode(null); setGalleryPreview(null); }}
         language={language}
+      />
+      <WorkflowTemplateModal
+        open={templateModal !== null}
+        initialMode={templateModal === 'save' ? 'save' : 'browse'}
+        language={language}
+        selectedNodes={selectedNodeData}
+        allNodes={project.nodes}
+        allConnections={project.connections}
+        anchor={viewportCenter()}
+        onInsert={({ nodes: insertedNodes, connections: insertedConnections, label }) => {
+          const ops: WorkflowDocumentOperation[] = [
+            ...insertedNodes.map(node => ({ type: 'add_node' as const, node })),
+            ...insertedConnections.map(connection => ({ type: 'connect_nodes' as const, fromNodeId: connection.fromNodeId, toNodeId: connection.toNodeId, kind: connection.kind })),
+          ];
+          if (ops.length && applyOps(ops)) {
+            selectNodes(insertedNodes.map(n => n.id));
+            setNotice(`已插入模板「${label}」（${insertedNodes.length} 个节点）`);
+          }
+        }}
+        onClose={() => setTemplateModal(null)}
       />
     </div>
   );

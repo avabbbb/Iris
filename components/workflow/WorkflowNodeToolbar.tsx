@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, CornerDownRight, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, PenTool } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, CornerDownRight, Crop, Download, Eraser, Expand, FastForward, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lock, Maximize2, MessageSquareText, Pin, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, SplitSquareHorizontal, Square, Trash2, Ungroup, Unlock, ZoomIn, Gauge, PenTool } from 'lucide-react';
 import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Box, Camera, Focus, LayoutGrid, Mic, Mountain, Music, Sparkles, StretchHorizontal, StretchVertical, Space, UserRound } from 'lucide-react';
 import { sequencedFileNames, type WorkflowAlignment, type WorkflowArrangeLayout, type WorkflowDistributeAxis } from './arrange';
 import { useRef, useState } from 'react';
@@ -36,6 +36,12 @@ export interface WorkflowVideoToolHandlers {
   merge?: (ids: string[]) => void;
   extractFrame?: (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => void;
   extractFrameAt?: (id: string) => void;
+  /** TapNow 智能拆条：本地镜头切点识别并拆分为独立视频节点。 */
+  smartSplit?: (id: string) => void;
+  /** TapNow 延长镜头：非破坏性派生连线延长视频节点。 */
+  extend?: (id: string) => void;
+  /** TapNow 视频重拍：非破坏性派生重拍视频节点。 */
+  retake?: (id: string) => void;
 }
 
 export interface WorkflowAudioToolHandlers {
@@ -56,7 +62,7 @@ const TOOL_LABELS_EN: Record<string, string> = {
   'split-grid': 'Split grid', 'video-trim': 'Trim video', 'video-merge': 'Merge videos', 'audio-trim': 'Trim audio', 'audio-speed': 'Audio speed', 'audio-stem-split': 'Split stems',
 };
 
-export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onDiscussWithAgent, onAddToAgent, onGenerateAsset, onMergeNotePrompt, toolHints, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false, language = 'zho' }: {
+export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, onStop, onPromptFocus, onSaveMedia, onReversePrompt, onReplaceMedia, onToggleFreeResize, onToggleLock, onTogglePin, onAlign, onDistribute, onLayer, onGroup, onUngroup, onExecuteGroup, onArrange, onSequencedExport, onDiscussWithAgent, onAddToAgent, onGenerateAsset, onMergeNotePrompt, toolHints, onPreviewMedia, onFrameSelection, imageTools, imageToolBusy = false, videoTools, videoToolBusy = false, audioTools, audioToolBusy = false, language = 'zho' }: {
   nodes: WorkflowNode[];
   onCopy: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
@@ -68,6 +74,8 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
   onReversePrompt?: (id: string, mediaUrl: string) => void;
   onReplaceMedia?: (id: string, file: File) => void;
   onToggleFreeResize?: (id: string) => void;
+  onToggleLock?: (ids: string[]) => void;
+  onTogglePin?: (ids: string[]) => void;
   onAlign?: (alignment: Alignment) => void;
   onDistribute?: (direction: WorkflowDistributeAxis) => void;
   onLayer?: (position: 'front' | 'back') => void;
@@ -153,7 +161,12 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'text' && (node.metadata.noteMergeTargetIds?.length || 0) > 0 && onMergeNotePrompt && { key: 'merge-note-prompt', label: L('并入下游提示词', 'Merge into downstream prompt'), icon: <CornerDownRight size={18} />, onClick: () => onMergeNotePrompt(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: L('分镜组拼接', 'Storyboard sheet'), icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },
     node?.type === 'video' && videoTools?.trim && { key: 'video-trim', label: hasMediaSource ? toolLabel('video-trim') : toolLabel('video-trim') + L('（请先上传视频）', ' (upload a video first)'), icon: <Scissors size={18} />, disabled: videoToolBusy || mediaPending || !hasMediaSource, onClick: () => videoTools.trim?.(node.id) },
+    node?.type === 'video' && videoTools?.smartSplit && { key: 'video-smart-split', label: L('智能拆条', 'Smart split'), icon: <SplitSquareHorizontal size={18} />, disabled: videoToolBusy || mediaPending || !hasMediaSource, onClick: () => videoTools.smartSplit?.(node.id) },
+    node?.type === 'video' && videoTools?.extend && { key: 'video-extend', label: L('延长镜头', 'Extend clip'), icon: <FastForward size={18} />, disabled: videoToolBusy || mediaPending || !hasMediaSource, onClick: () => videoTools.extend?.(node.id) },
+    node?.type === 'video' && videoTools?.retake && { key: 'video-retake', label: L('视频重拍', 'Retake'), icon: <RefreshCw size={18} />, disabled: videoToolBusy || mediaPending || !hasMediaSource, onClick: () => videoTools.retake?.(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: toolLabel('video-merge'), icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
+    onTogglePin && { key: 'pin-node', label: nodes.every(item => item.metadata.pinned) ? L('取消钉选', 'Unpin') : L('钉选节点', 'Pin node'), icon: <Pin size={18} />, active: nodes.every(item => item.metadata.pinned), onClick: () => onTogglePin(ids) },
+    onToggleLock && { key: 'lock-node', label: nodes.every(item => item.isLocked) ? L('解锁节点', 'Unlock') : L('锁定节点', 'Lock node'), icon: nodes.every(item => item.isLocked) ? <Unlock size={18} /> : <Lock size={18} />, active: nodes.every(item => item.isLocked), onClick: () => onToggleLock(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: toolLabel('audio-trim'), icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: toolLabel('audio-speed'), icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.pitch && { key: 'audio-pitch', label: L('变调', 'Pitch'), icon: <Music size={18} />, disabled: audioToolBusy, onClick: () => audioTools.pitch?.(node.id) },

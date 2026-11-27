@@ -267,6 +267,8 @@ export interface CameraParams {
   aperture?: string;
 }
 
+export type WorkflowNodeColorTag = 'rose' | 'amber' | 'mint' | 'sky' | 'violet' | 'slate';
+
 export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   mode: WorkflowGenerationMode;
   operationParameters?: Record<string, unknown>;
@@ -275,6 +277,10 @@ export interface WorkflowGenerationConfig extends WorkflowProviderConfig {
   /** 图生图 / 图生视频时，是否忽略用户在 PromptBar 中选择的比例，改用第一张参考图的原始宽高比。 */
   preserveReferenceAspectRatio?: boolean;
   resolution?: string;
+  /** TapNow 草稿模式：快速 480p 预演构图与动效，确认后一键升级为高清分辨率。 */
+  draftMode?: boolean;
+  /** 开启草稿模式前保存的目标高清分辨率，用于一键升级还原。 */
+  draftPreviousResolution?: string;
   durationSec?: number;
   quality?: string;
   count?: number;
@@ -412,6 +418,12 @@ export interface WorkflowNodeMetadata {
   reverseKey?: string;
   /** Iris 故事版里的素材分类（文本：剧本 / 其他；图片：角色 / 场景 / 物品 / 其他；视频：视频片段 / 成片）。缺省按节点语义推断，见 components/reverse/irisStoryboard.ts。 */
   storyboardTag?: 'script' | 'character' | 'scene' | 'prop' | 'clip' | 'final' | 'other';
+  /** TapNow 3D 多角度机位参数（水平/俯仰/滚转/距离），供 3D 立方体交互与提示词编译。 */
+  cameraRig?: import('./cameraControl').CameraRig3D;
+  /** 钉选标记：在画布与图层列表高亮置顶关键参考节点。 */
+  pinned?: boolean;
+  /** 颜色标签：影视制作阶段或分组色标（6 色语义色板）。 */
+  colorTag?: WorkflowNodeColorTag;
 }
 
 /** 节点上的一份备选媒体（图片或视频，可混合）。id 稳定：来自旧的叠放兄弟节点 ID 或生成时分配。 */

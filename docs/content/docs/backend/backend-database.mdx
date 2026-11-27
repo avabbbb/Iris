@@ -6,7 +6,7 @@ title: 数据存储
 
 网页版全静态，没有服务端数据库。原 Go Hub（`backend/`：账号、提示词包、R2 上传，PostgreSQL + GORM）已删除，回滚点为 git tag `go-backend-final`。
 
-- 浏览器：工程、素材、提示词与 API Key 存在本机 localforage / IndexedDB，localStorage 只放极小配置。
+- 浏览器：工程、素材、提示词、自定义工作流模板（`iris_custom_templates_v1`）、Agent 动态面板（`iris_hark_panels_v1`）、项目长效记忆（`agent-memory`）、后台任务台账（`iris_agent_tasks_v1`）与 API Key 均存在本机 localforage / IndexedDB，localStorage 只放极小配置。
 - 线上 Cloudflare Worker（`worker/index.ts`）无状态，只做 `/api/llm-proxy/*` 同源 CORS 转发，不存任何数据。
 
 ## 本机 Agent 视频流水线存储

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, Quote, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
+import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Mic, MicOff, Minimize2, Plus, Quote, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -103,6 +104,9 @@ interface IrisAgentPanelProps {
   onUpdateApiKey?: (id: string, patch: Partial<Omit<UserApiKey, 'id' | 'createdAt'>>) => void;
   /** 就绪且空闲时输入框的占位文案（Iris 故事版用「开始你的创作，或者 @ 引用…」）；缺省为抽屉文案。 */
   composerPlaceholder?: string;
+  /** Hark 主页或主动建议卡交接过来的一条待发送提示词（消费后由 onConsumedPendingPrompt 清空）。 */
+  pendingPrompt?: { id: string; text: string } | null;
+  onConsumedPendingPrompt?: () => void;
 }
 
 interface AgentReference {
@@ -211,7 +215,7 @@ function toolResultText(result: unknown, language: 'en' | 'zho') {
   return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || (language === 'en' ? 'Workflow operation completed.' : 'Workflow 操作已完成');
 }
 
-export function IrisAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey, composerPlaceholder }: IrisAgentPanelProps) {
+export function IrisAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey, composerPlaceholder, pendingPrompt, onConsumedPendingPrompt }: IrisAgentPanelProps) {
   const client = useRef<ManagedIrisAgentClient | undefined>(undefined);
   const kernelRef = useRef<BrowserAgentRuntime | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
@@ -279,6 +283,13 @@ const userApiKeysRef = useRef(userApiKeys);
   const userTurnCountRef = useRef(0);
   userTurnCountRef.current = messages.filter(message => message.role === 'user').length;
   const [prompt, setPrompt] = useState('');
+  const consumedPendingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingPrompt?.text || pendingPrompt.id === consumedPendingIdRef.current) return;
+    consumedPendingIdRef.current = pendingPrompt.id;
+    setPrompt(pendingPrompt.text);
+    onConsumedPendingPrompt?.();
+  }, [pendingPrompt, onConsumedPendingPrompt]);
   const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [workspaceStatus, setWorkspaceStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
@@ -503,6 +514,12 @@ const userApiKeysRef = useRef(userApiKeys);
   const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
   const needsConfiguration = needsCredential(setupBlocker);
   const language = useWorkspaceStore(s => s.language);
+  const voiceInput = useVoiceInput({
+    language,
+    onFinalTranscript: transcript => {
+      setPrompt(prev => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript));
+    },
+  });
   // 确认卡按节点标题描述操作：读画布的实时节点，Agent 刚建的节点也能叫出名字。
   const liveNodes = useWorkflowStore(s => s.projects.find(item => item.id === project.id)?.nodes) || project.nodes;
   const languageRef = useRef(language);
@@ -2424,6 +2441,18 @@ const userApiKeysRef = useRef(userApiKeys);
                 </div>}
               </div>
               <CreationModeTag value={creationMode} onReset={() => setCreationMode('all')} language={language} />
+              <button
+                type="button"
+                className={`hark-voice-btn${voiceInput.listening ? ' is-listening' : ''}`}
+                data-testid="agent-composer-voice-btn"
+                title={voiceInput.supported
+                  ? (voiceInput.listening ? (language === 'zho' ? '停止语音输入' : 'Stop voice input') : (language === 'zho' ? '语音输入指令' : 'Voice dictation'))
+                  : (language === 'zho' ? '当前浏览器不支持语音输入' : 'Voice input unsupported')}
+                aria-label={voiceInput.listening ? (language === 'zho' ? '停止语音输入' : 'Stop voice input') : (language === 'zho' ? '语音输入' : 'Voice input')}
+                onClick={voiceInput.toggle}
+              >
+                {voiceInput.listening ? <MicOff size={15} /> : <Mic size={15} />}
+              </button>
             </div>
             {sending
               ? <span className="agent-composer__running">

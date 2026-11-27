@@ -19,7 +19,8 @@ import { runCanvasSwitch, type CanvasSwitchOrigin } from './components/studio/ca
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { IrisAgentPanel } from './components/agent/IrisAgentPanel';
-import { AgentConnectionsPage, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
+import { AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
+import { HarkAgentWorkspace } from './components/agent/HarkAgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
@@ -754,7 +755,17 @@ const App: React.FC = () => {
                         />
                     </Suspense>
                 ) : canvasView === 'agent' ? (
-                    <AgentConnectionsPage project={activeWorkflowProject} language={language} />
+                    <HarkAgentWorkspace
+                        project={activeWorkflowProject}
+                        language={language}
+                        userApiKeys={userApiKeys}
+                        assetLibrary={assetLibrary}
+                        onAddApiKey={handleAddApiKey}
+                        onUpdateApiKey={handleUpdateApiKey}
+                        onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                        onFocusNode={handleFocusNodeFromDrawer}
+                        onCreateProject={(title, seed) => workflowCreateProject(title || (language === 'zho' ? '未命名工作流' : 'Untitled workflow'), seed)}
+                    />
                 ) : (
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Workflow...' : 'Loading Workflow...'}</div>}>
                         <WorkflowWorkspace

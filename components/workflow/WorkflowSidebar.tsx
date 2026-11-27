@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Maximize2, Music, PanelLeftClose, Pencil, SlidersHorizontal, Sparkles, Type, Video, X } from 'lucide-react';
+import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Lock, Maximize2, Music, PanelLeftClose, Pencil, Pin, SlidersHorizontal, Sparkles, Type, Unlock, Video, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
 import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
@@ -282,8 +282,21 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                           }}
                         />
                       ) : (
-                        <span className="workflow-layer-card__name min-w-0 flex-1 truncate">{node.title}</span>
+                        <span className="workflow-layer-card__name min-w-0 flex-1 truncate">
+                          {node.metadata.colorTag && <span className="workflow-node__color-dot mr-1.5" style={{ backgroundColor: ({ rose: '#e8615a', amber: '#f5b91c', mint: '#19c8b9', sky: '#3b82f6', violet: '#8b5cf6', slate: '#64748b' })[node.metadata.colorTag] }} />}
+                          {node.metadata.pinned && <Pin size={10} className="mr-1 inline opacity-75" />}
+                          {node.title}
+                        </span>
                       )}
+                      <button
+                        type="button"
+                        className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"
+                        onClick={event => { event.stopPropagation(); patchNode(node.id, { isLocked: !node.isLocked }); }}
+                        title={node.isLocked ? (language === 'zho' ? '解锁' : 'Unlock') : (language === 'zho' ? '锁定' : 'Lock')}
+                        aria-label={node.isLocked ? (language === 'zho' ? '解锁图层' : 'Unlock layer') : (language === 'zho' ? '锁定图层' : 'Lock layer')}
+                      >
+                        {node.isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+                      </button>
                       <button
                         type="button"
                         className="workflow-layer-card__action shrink-0 rounded p-0.5 transition-opacity"

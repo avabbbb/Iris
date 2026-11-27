@@ -1,4 +1,4 @@
-import { ArrowUp, Clapperboard, ImagePlus, Package, Sparkles } from 'lucide-react';
+import { ArrowUp, Camera, Clapperboard, Film, ImagePlus, Music2, Package, RefreshCw, Sparkles, Sun, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { WORKFLOW_TEMPLATES, buildWorkflowTemplate, matchWorkflowTemplate } from './templates';
@@ -9,6 +9,12 @@ const ICONS: Record<WorkflowTemplateId, typeof Sparkles> = {
   'reference-edit': ImagePlus,
   'storyboard-video': Clapperboard,
   'product-scene': Package,
+  'character-turnaround': UserRound,
+  'multi-angle-studio': Camera,
+  'commercial-three-shot': Film,
+  'video-extend-retake': RefreshCw,
+  'relight-portrait': Sun,
+  'music-beat-edit': Music2,
 };
 
 export function WorkflowStartScreen({ language, onStart, onBlank, onSample }: {
@@ -50,7 +56,7 @@ export function WorkflowStartScreen({ language, onStart, onBlank, onSample }: {
           : (zh ? '或者直接选一个模板' : 'Or pick a template')}
       </p>
       <div className={'workflow-start-templates'}>
-        {WORKFLOW_TEMPLATES.map(template => {
+        {WORKFLOW_TEMPLATES.filter(template => template.featuredOnStart !== false).map(template => {
           const Icon = ICONS[template.id];
           return (
             <button key={template.id} type={'button'} className={matched === template.id ? 'workflow-start-card is-active' : 'workflow-start-card'} onClick={() => onStart(buildWorkflowTemplate(template.id, prompt, language))}>

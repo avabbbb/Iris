@@ -2,14 +2,21 @@ import { parse, resolve } from 'node:path';
 
 const isGitHubActions = () => process.env.GITHUB_ACTIONS === 'true';
 
+function requiredDriveRoot() {
+  const configured = process.env.IRIS_TEST_DRIVE?.trim().replace(/:?\\?$/, '').toUpperCase();
+  if (!configured || !/^[A-Z]$/.test(configured)) return null;
+  return `${configured}:\\`;
+}
+
 export function assertTestPath(targetPath, label = 'Test path') {
   const absolutePath = resolve(targetPath);
   if (process.platform !== 'win32') return absolutePath;
 
   const driveRoot = parse(absolutePath).root.toUpperCase();
   if (driveRoot === 'C:\\') throw new Error(`${label} must not use C: ${absolutePath}`);
-  if (!isGitHubActions() && driveRoot !== 'H:\\') {
-    throw new Error(`${label} must use H: for local Windows runs: ${absolutePath}`);
+  const pinnedRoot = !isGitHubActions() ? requiredDriveRoot() : null;
+  if (pinnedRoot && driveRoot !== pinnedRoot) {
+    throw new Error(`${label} must use ${pinnedRoot.slice(0, 2)} for local Windows runs: ${absolutePath}`);
   }
   return absolutePath;
 }

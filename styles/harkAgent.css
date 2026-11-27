@@ -1,0 +1,649 @@
+/* Hark Agent OS Full-Screen Workspace (components/agent/HarkAgentWorkspace.tsx).
+   Inspired by Hark Pro / Hark Web atmospheric glassmorphism (deep navy -> indigo sky,
+   soft ambient bloom, 26px translucent glass shell via ::before, 18px widget cards,
+   24px pill composer, spring-feel segmented nav) with light/dark support and
+   reduced-transparency / reduced-motion fallbacks. */
+
+.hark-workspace {
+  --hark-bg-top: #e8edf9;
+  --hark-bg-mid: #dde2f6;
+  --hark-bg-bottom: #d4d3f1;
+  --hark-bloom-1: color-mix(in srgb, #ffffff 82%, transparent);
+  --hark-bloom-2: color-mix(in srgb, #19c8b9 18%, transparent);
+  --hark-glass: color-mix(in srgb, #ffffff 42%, transparent);
+  --hark-glass-strong: color-mix(in srgb, #ffffff 68%, transparent);
+  --hark-glass-edge: color-mix(in srgb, #ffffff 78%, transparent);
+  --hark-glass-shadow: 0 1px 2px color-mix(in srgb, #1d2340 6%, transparent), 0 24px 60px color-mix(in srgb, #1d2340 12%, transparent);
+  --hark-card-fill: color-mix(in srgb, #ffffff 64%, transparent);
+  --hark-card-hover: color-mix(in srgb, #ffffff 88%, transparent);
+  --hark-pill-track: color-mix(in srgb, #1d2340 7%, transparent);
+  --hark-pill-active: #ffffff;
+  --hark-pill-ink: var(--isl-ink);
+
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--isl-ink);
+}
+
+:root[data-theme='dark'] .hark-workspace {
+  --hark-bg-top: #0b1022;
+  --hark-bg-mid: #161b3a;
+  --hark-bg-bottom: #242652;
+  --hark-bloom-1: color-mix(in srgb, #8e9eff 19%, transparent);
+  --hark-bloom-2: color-mix(in srgb, #3ad9c9 14%, transparent);
+  --hark-glass: color-mix(in srgb, #ffffff 6%, transparent);
+  --hark-glass-strong: color-mix(in srgb, #ffffff 10%, transparent);
+  --hark-glass-edge: color-mix(in srgb, #ffffff 11%, transparent);
+  --hark-glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.34), 0 28px 70px rgba(5, 7, 15, 0.48);
+  --hark-card-fill: color-mix(in srgb, #ffffff 6%, transparent);
+  --hark-card-hover: color-mix(in srgb, #ffffff 11%, transparent);
+  --hark-pill-track: color-mix(in srgb, #ffffff 7%, transparent);
+  --hark-pill-active: #f3f5fc;
+  --hark-pill-ink: #111428;
+}
+
+.hark-workspace[data-sky='dawn'] {
+  --hark-bloom-2: color-mix(in srgb, #f5b91c 18%, transparent);
+}
+
+.hark-workspace[data-sky='dusk'] {
+  --hark-bloom-2: color-mix(in srgb, #c084fc 22%, transparent);
+}
+
+.hark-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(155deg, var(--hark-bg-top) 0%, var(--hark-bg-mid) 52%, var(--hark-bg-bottom) 100%);
+  pointer-events: none;
+}
+
+.hark-backdrop__orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(44px);
+  pointer-events: none;
+}
+
+.hark-backdrop__orb--primary {
+  width: 56%;
+  height: 56%;
+  left: 16%;
+  top: -8%;
+  background: radial-gradient(closest-side, var(--hark-bloom-1), transparent);
+}
+
+.hark-backdrop__orb--accent {
+  width: 48%;
+  height: 48%;
+  right: -6%;
+  bottom: 4%;
+  background: radial-gradient(closest-side, var(--hark-bloom-2), transparent);
+}
+
+/* ── Top Spatial Nav Rail ── */
+.hark-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px 8px;
+  flex-shrink: 0;
+}
+
+.hark-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hark-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: var(--hark-card-fill);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--isl-ink);
+}
+
+.hark-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--isl-mint);
+}
+
+.hark-status-pill[data-state='running'] .hark-status-dot {
+  background: var(--isl-mint);
+  animation: harkPulse 1.4s ease-in-out infinite;
+}
+
+.hark-status-pill[data-state='approval'] .hark-status-dot {
+  background: var(--isl-coral);
+  animation: harkPulse 1s ease-in-out infinite;
+}
+
+.hark-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--hark-pill-track);
+  backdrop-filter: blur(20px);
+}
+
+.hark-nav__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--isl-ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.hark-nav__btn:hover {
+  color: var(--isl-ink);
+}
+
+.hark-nav__btn.is-active {
+  background: var(--hark-pill-active);
+  color: var(--hark-pill-ink);
+  box-shadow: 0 2px 10px rgba(15, 20, 45, 0.14);
+}
+
+.hark-nav__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--isl-coral);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hark-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hark-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--hark-card-fill);
+  color: var(--isl-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.hark-ghost-btn:hover {
+  background: var(--hark-card-hover);
+}
+
+/* ── Main Content Shell ── */
+.hark-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 18px 22px;
+}
+
+.hark-body--chat {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 14px;
+}
+
+.hark-glass-shell {
+  position: relative;
+  border-radius: 26px;
+  padding: 18px;
+}
+
+.hark-glass-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--hark-glass);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge), inset 0 0 0 1px color-mix(in srgb, var(--hark-glass-edge) 45%, transparent), var(--hark-glass-shadow);
+  pointer-events: none;
+}
+
+.hark-container {
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Home Hero & Unified Pill Composer ── */
+.hark-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 20px 12px 6px;
+  gap: 8px;
+}
+
+.hark-hero h1 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.hark-hero p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--isl-ink-soft);
+}
+
+.hark-pill-composer {
+  width: min(740px, 100%);
+  margin: 10px auto 0;
+  border-radius: 24px;
+  padding: 10px 12px 10px 18px;
+  background: var(--hark-glass-strong);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge), var(--hark-glass-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hark-pill-composer__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hark-pill-composer input,
+.hark-pill-composer textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--isl-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.hark-pill-composer textarea::placeholder {
+  color: var(--isl-ink-ghost);
+}
+
+.hark-circle-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--hark-card-fill);
+  color: var(--isl-ink-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.hark-circle-btn:hover {
+  background: var(--hark-card-hover);
+  color: var(--isl-ink);
+}
+
+.hark-circle-btn--primary {
+  background: var(--isl-mint);
+  color: #101514;
+}
+
+.hark-circle-btn--primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hark-circle-btn--listening {
+  background: var(--isl-coral);
+  color: #ffffff;
+  animation: harkPulse 1.1s ease-in-out infinite;
+}
+
+.hark-composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hark-composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--hark-card-fill);
+  color: var(--isl-ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.hark-composer-chip:hover {
+  background: var(--hark-card-hover);
+  color: var(--isl-ink);
+}
+
+/* ── Proactive Action Cards ── */
+.hark-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hark-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--isl-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hark-action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.hark-action-card {
+  border-radius: 18px;
+  padding: 14px;
+  background: var(--hark-card-fill);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.hark-action-card:hover {
+  background: var(--hark-card-hover);
+  transform: translateY(-1px);
+}
+
+.hark-action-card__badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--isl-mint-bg);
+  color: var(--isl-mint-deep);
+}
+
+.hark-action-card[data-tone='amber'] .hark-action-card__badge {
+  background: color-mix(in srgb, var(--isl-sun) 22%, transparent);
+  color: var(--isl-ink);
+}
+
+.hark-action-card[data-tone='coral'] .hark-action-card__badge {
+  background: color-mix(in srgb, var(--isl-coral) 20%, transparent);
+  color: var(--isl-coral-deep);
+}
+
+.hark-action-card[data-tone='violet'] .hark-action-card__badge {
+  background: color-mix(in srgb, #8b5cf6 20%, transparent);
+  color: var(--isl-ink);
+}
+
+.hark-action-card strong { font-size: 13px; line-height: 1.35; }
+.hark-action-card p { margin: 0; font-size: 11.5px; color: var(--isl-ink-soft); line-height: 1.45; flex: 1; }
+
+.hark-action-card__cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--hark-pill-active);
+  color: var(--hark-pill-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Modular Live Panels Grid ── */
+.hark-panels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+}
+
+.hark-widget {
+  border-radius: 18px;
+  padding: 15px;
+  background: var(--hark-card-fill);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hark-widget__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hark-widget__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.hark-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.hark-kpi {
+  border-radius: 12px;
+  padding: 9px;
+  background: var(--hark-pill-track);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hark-kpi strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.hark-kpi span { font-size: 10.5px; color: var(--isl-ink-soft); }
+
+.hark-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hark-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hark-checklist-item.is-done span {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.hark-panel-creator {
+  display: flex;
+  gap: 6px;
+}
+
+.hark-panel-creator input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--isl-border);
+  background: var(--hark-glass-strong);
+  color: var(--isl-ink);
+  font-size: 12px;
+  outline: 0;
+}
+
+/* ── Chat Frame ── */
+.hark-chat-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 1020px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.hark-chat-shell .agent-conversation {
+  height: 100%;
+}
+
+/* ── Projects, Handoff & Vault Grids ── */
+.hark-project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.hark-project-card {
+  border-radius: 18px;
+  padding: 15px;
+  background: var(--hark-card-fill);
+  box-shadow: inset 0 1px 0 var(--hark-glass-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hark-project-card.is-active {
+  box-shadow: inset 0 0 0 1.5px var(--isl-mint), var(--hark-glass-shadow);
+}
+
+.hark-handoff-list,
+.hark-memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hark-handoff-row,
+.hark-memory-row {
+  border-radius: 14px;
+  padding: 11px 13px;
+  background: var(--hark-card-fill);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hark-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.hark-voice-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--isl-ink-soft);
+  cursor: pointer;
+}
+
+.hark-voice-btn:hover {
+  background: var(--isl-surface-2);
+  color: var(--isl-ink);
+}
+
+.hark-voice-btn.is-listening {
+  background: var(--isl-coral);
+  color: #fff;
+  animation: harkPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes harkPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.78; }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .hark-glass-shell::before { background: var(--isl-surface); }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .hark-glass-shell::before { background: var(--isl-surface); box-shadow: inset 0 0 0 1px var(--isl-border-strong); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hark-status-pill[data-state] .hark-status-dot,
+  .hark-circle-btn--listening,
+  .hark-voice-btn.is-listening { animation: none; }
+}
