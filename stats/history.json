@@ -962,6 +962,14 @@
       "watchers": 0,
       "releases": 9,
       "downloads": 44
+    },
+    {
+      "date": "2026-11-28",
+      "stars": 147,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 10,
+      "downloads": 45
     }
   ],
   "releaseAssets": [
@@ -970,6 +978,12 @@
       "name": "Iris_0.1.1_x64-setup.exe",
       "downloads": 8,
       "updatedAt": "2026-11-22T17:00:47Z"
+    },
+    {
+      "release": "v0.1.1",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 3,
+      "updatedAt": "2026-11-22T16:58:27Z"
     },
     {
       "release": "v0.1.1",
@@ -982,12 +996,6 @@
       "name": "Iris_0.1.1_aarch64.dmg",
       "downloads": 2,
       "updatedAt": "2026-11-22T17:00:02Z"
-    },
-    {
-      "release": "v0.1.1",
-      "name": "Iris_0.1.1_amd64.AppImage",
-      "downloads": 2,
-      "updatedAt": "2026-11-22T16:58:27Z"
     },
     {
       "release": "v0.1.1",
@@ -1102,6 +1110,48 @@
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 1,
       "updatedAt": "2026-11-22T16:58:44Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_0.1.1_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:13:37Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_0.1.1_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:15:53Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_0.1.1_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:15:47Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_0.1.1_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:18:19Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_0.1.1_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:21:33Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:13:40Z"
+    },
+    {
+      "release": "nightly-315-f182b1d",
+      "name": "Iris_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-28T03:21:36Z"
     },
     {
       "release": "nightly-314-024a2e9",
@@ -1350,5 +1400,5 @@
       "updatedAt": "2026-11-20T02:10:39Z"
     }
   ],
-  "updatedAt": "2026-11-27T08:45:37.471Z"
+  "updatedAt": "2026-11-28T07:59:45.812Z"
 }
